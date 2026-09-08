@@ -33,3 +33,5 @@ __all__ = [
     "CompanyContextCreate",
     "CompanyContextResponse",
 ]
+
+from app.schemas.article import ArticleCreate, ArticleResponse
