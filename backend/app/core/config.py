@@ -1,35 +1,29 @@
-﻿from functools import lru_cache
+from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ENV_FILE = PROJECT_ROOT / ".env"
+
+
 class Settings(BaseSettings):
     app_name: str = "AI Media Intelligence"
+    app_version: str = "0.1.0"
+
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
 
-    backend_host: str = "127.0.0.1"
-    backend_port: int = 8000
-
-    database_url: str = ""
-    redis_url: str = ""
-
-    llm_provider: str = ""
-    llm_api_key: str = ""
-    llm_model: str = ""
-
-    embedding_provider: str = ""
-    embedding_api_key: str = ""
-    embedding_model: str = ""
-
-    news_api_key: str = ""
-    slack_webhook_url: str = ""
+    database_url: str = (
+        "postgresql+asyncpg://media_user:change_me@localhost:5432/media_intelligence"
+    )
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
-        extra="ignore",
         case_sensitive=False,
+        extra="ignore",
     )
 
 
