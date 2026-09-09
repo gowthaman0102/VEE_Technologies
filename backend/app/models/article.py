@@ -1,5 +1,6 @@
-from datetime import datetime
+﻿from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
     Index,
@@ -25,6 +26,17 @@ class Article(Base):
             unique=True,
             postgresql_where=text(
                 "external_id IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_articles_embedding_hnsw_cosine",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={
+                "embedding": "vector_cosine_ops",
+            },
+            postgresql_where=text(
+                "embedding IS NOT NULL"
             ),
         ),
     )
@@ -131,6 +143,35 @@ class Article(Base):
     )
 
     processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(384),
+        nullable=True,
+    )
+
+    embedding_model: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    embedding_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        index=True,
+    )
+
+    embedding_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    embedded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         index=True,
