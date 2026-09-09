@@ -28,6 +28,7 @@ def make_article(
         description="Test description",
         raw_content=None,
         language="en",
+        extraction_status="pending",
         published_at=datetime(
             2026,
             9,

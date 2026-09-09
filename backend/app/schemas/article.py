@@ -24,3 +24,14 @@ class ArticleResponse(ArticleCreate):
 
     id: int
     collected_at: datetime
+
+    canonical_url: str | None = None
+    extracted_content: str | None = None
+    cleaned_content: str | None = None
+    content_hash: str | None = Field(
+        default=None,
+        max_length=64,
+    )
+    extraction_status: str
+    extraction_error: str | None = None
+    processed_at: datetime | None = None
