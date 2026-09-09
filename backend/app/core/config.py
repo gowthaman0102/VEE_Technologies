@@ -11,13 +11,15 @@ ENV_FILE = PROJECT_ROOT / ".env"
 class Settings(BaseSettings):
     app_name: str = "AI Media Intelligence"
     app_version: str = "0.1.0"
-
     app_env: str = "development"
     debug: bool = False
 
     database_url: str = (
         "postgresql+asyncpg://media_user:change_me@localhost:5432/media_intelligence"
     )
+
+    newsapi_api_key: str | None = None
+    newsapi_base_url: str = "https://newsapi.org/v2"
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
