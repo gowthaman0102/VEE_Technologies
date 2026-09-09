@@ -1,8 +1,8 @@
-import asyncio
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
 import feedparser
+import httpx
 
 from app.ingestion.collectors.base import BaseCollector
 from app.ingestion.types import CollectedArticle
@@ -14,22 +14,51 @@ class RSSCollector(BaseCollector):
         feed_url: str,
         source_name: str,
         language: str | None = None,
+        timeout: float = 15.0,
     ) -> None:
+        if not feed_url.strip():
+            raise ValueError("RSS feed URL is required")
+
+        if not source_name.strip():
+            raise ValueError("RSS source name is required")
+
+        if timeout <= 0:
+            raise ValueError(
+                "RSS timeout must be greater than zero"
+            )
+
         self.feed_url = feed_url
         self.source_name = source_name
         self.language = language
+        self.timeout = timeout
 
     async def collect(self) -> list[CollectedArticle]:
-        feed = await asyncio.to_thread(
-            feedparser.parse,
-            self.feed_url,
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+        ) as client:
+            response = await client.get(
+                self.feed_url,
+            )
+
+            response.raise_for_status()
+
+        feed = feedparser.parse(
+            response.content
         )
 
         articles: list[CollectedArticle] = []
 
         for entry in feed.entries:
-            title = entry.get("title", "").strip()
-            url = entry.get("link", "").strip()
+            title = entry.get(
+                "title",
+                "",
+            ).strip()
+
+            url = entry.get(
+                "link",
+                "",
+            ).strip()
 
             if not title or not url:
                 continue
@@ -38,15 +67,22 @@ class RSSCollector(BaseCollector):
                 CollectedArticle(
                     source_name=self.source_name,
                     source_type="rss",
-                    external_id=entry.get("id") or url,
+                    external_id=(
+                        entry.get("id")
+                        or url
+                    ),
                     title=title,
                     url=url,
                     author=entry.get("author"),
-                    description=entry.get("summary"),
+                    description=entry.get(
+                        "summary"
+                    ),
                     raw_content=None,
                     language=self.language,
-                    published_at=self._parse_published_at(
-                        entry
+                    published_at=(
+                        self._parse_published_at(
+                            entry
+                        )
                     ),
                 )
             )
@@ -54,7 +90,9 @@ class RSSCollector(BaseCollector):
         return articles
 
     @staticmethod
-    def _parse_published_at(entry) -> datetime | None:
+    def _parse_published_at(
+        entry,
+    ) -> datetime | None:
         published = (
             entry.get("published")
             or entry.get("updated")
@@ -64,7 +102,9 @@ class RSSCollector(BaseCollector):
             return None
 
         try:
-            value = parsedate_to_datetime(published)
+            value = parsedate_to_datetime(
+                published
+            )
 
             if value.tzinfo is None:
                 value = value.replace(
@@ -72,6 +112,7 @@ class RSSCollector(BaseCollector):
                 )
 
             return value
+
         except (
             TypeError,
             ValueError,

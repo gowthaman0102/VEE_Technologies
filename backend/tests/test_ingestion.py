@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from app.ingestion.collectors.base import BaseCollector
@@ -42,7 +43,9 @@ async def test_fake_collector_returns_articles():
 
 
 @pytest.mark.asyncio
-async def test_run_collector_counts_inserted_and_skipped(monkeypatch):
+async def test_run_collector_counts_inserted_and_skipped(
+    monkeypatch,
+):
     collector = FakeCollector()
 
     save_mock = AsyncMock(
@@ -71,7 +74,9 @@ async def test_run_collector_counts_inserted_and_skipped(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_collector_respects_limit(monkeypatch):
+async def test_run_collector_respects_limit(
+    monkeypatch,
+):
     collector = FakeCollector()
 
     save_mock = AsyncMock(
@@ -96,30 +101,48 @@ async def test_run_collector_respects_limit(monkeypatch):
     assert result.skipped == 0
     assert save_mock.await_count == 1
 
+
 @pytest.mark.asyncio
-async def test_rss_collector_parses_valid_entries(monkeypatch):
+async def test_rss_collector_parses_valid_entries(
+    monkeypatch,
+):
     from app.ingestion.collectors.rss import RSSCollector
 
-    fake_feed = type(
-        "FakeFeed",
-        (),
-        {
-            "entries": [
-                {
-                    "id": "rss-001",
-                    "title": " PayU regulatory update ",
-                    "link": "https://example.com/rss-001",
-                    "author": "Reporter",
-                    "summary": "Summary",
-                    "published": "Mon, 31 Aug 2026 06:18:00 GMT",
-                }
-            ]
-        },
-    )()
+    rss_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example RSS</title>
+    <link>https://example.com</link>
+    <description>Example feed</description>
+    <item>
+      <guid>rss-001</guid>
+      <title> PayU regulatory update </title>
+      <link>https://example.com/rss-001</link>
+      <author>Reporter</author>
+      <description>Summary</description>
+      <pubDate>Mon, 31 Aug 2026 06:18:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
+    request = httpx.Request(
+        "GET",
+        "https://example.com/feed.xml",
+    )
+
+    response = httpx.Response(
+        status_code=200,
+        content=rss_xml,
+        request=request,
+    )
 
     monkeypatch.setattr(
-        "app.ingestion.collectors.rss.feedparser.parse",
-        lambda url: fake_feed,
+        httpx.AsyncClient,
+        "get",
+        AsyncMock(
+            return_value=response
+        ),
     )
 
     collector = RSSCollector(
@@ -132,39 +155,65 @@ async def test_rss_collector_parses_valid_entries(monkeypatch):
 
     assert len(articles) == 1
     assert articles[0].external_id == "rss-001"
-    assert articles[0].title == "PayU regulatory update"
-    assert articles[0].url == "https://example.com/rss-001"
+    assert (
+        articles[0].title
+        == "PayU regulatory update"
+    )
+    assert (
+        articles[0].url
+        == "https://example.com/rss-001"
+    )
     assert articles[0].published_at is not None
 
 
 @pytest.mark.asyncio
-async def test_rss_collector_skips_invalid_entries(monkeypatch):
+async def test_rss_collector_skips_invalid_entries(
+    monkeypatch,
+):
     from app.ingestion.collectors.rss import RSSCollector
 
-    fake_feed = type(
-        "FakeFeed",
-        (),
-        {
-            "entries": [
-                {
-                    "title": "",
-                    "link": "https://example.com/missing-title",
-                },
-                {
-                    "title": "Missing URL",
-                    "link": "",
-                },
-                {
-                    "title": "Valid article",
-                    "link": "https://example.com/valid",
-                },
-            ]
-        },
-    )()
+    rss_xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example RSS</title>
+    <link>https://example.com</link>
+    <description>Example feed</description>
+
+    <item>
+      <title></title>
+      <link>https://example.com/missing-title</link>
+    </item>
+
+    <item>
+      <title>Missing URL</title>
+      <link></link>
+    </item>
+
+    <item>
+      <title>Valid article</title>
+      <link>https://example.com/valid</link>
+    </item>
+  </channel>
+</rss>
+"""
+
+    request = httpx.Request(
+        "GET",
+        "https://example.com/feed.xml",
+    )
+
+    response = httpx.Response(
+        status_code=200,
+        content=rss_xml,
+        request=request,
+    )
 
     monkeypatch.setattr(
-        "app.ingestion.collectors.rss.feedparser.parse",
-        lambda url: fake_feed,
+        httpx.AsyncClient,
+        "get",
+        AsyncMock(
+            return_value=response
+        ),
     )
 
     collector = RSSCollector(
@@ -176,4 +225,7 @@ async def test_rss_collector_skips_invalid_entries(monkeypatch):
 
     assert len(articles) == 1
     assert articles[0].title == "Valid article"
-    assert articles[0].url == "https://example.com/valid"
+    assert (
+        articles[0].url
+        == "https://example.com/valid"
+    )
