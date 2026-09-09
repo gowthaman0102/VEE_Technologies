@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.types import CollectedArticle
@@ -50,10 +51,34 @@ async def save_collected_article(
     if existing is not None:
         return existing, False
 
-    article_data = ArticleCreate(**data.model_dump())
-    article = await create_article(db, article_data)
+    article_data = ArticleCreate(
+        **data.model_dump()
+    )
 
-    return article, True
+    try:
+        article = await create_article(
+            db,
+            article_data,
+        )
+
+        return article, True
+
+    except IntegrityError:
+        await db.rollback()
+
+        if data.external_id is None:
+            raise
+
+        existing = await find_existing_article(
+            db,
+            source_name=data.source_name,
+            external_id=data.external_id,
+        )
+
+        if existing is None:
+            raise
+
+        return existing, False
 
 
 async def get_article(
@@ -61,8 +86,11 @@ async def get_article(
     article_id: int,
 ) -> Article | None:
     result = await db.execute(
-        select(Article).where(Article.id == article_id)
+        select(Article).where(
+            Article.id == article_id
+        )
     )
+
     return result.scalar_one_or_none()
 
 
