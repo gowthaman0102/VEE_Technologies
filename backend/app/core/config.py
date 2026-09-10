@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
     semantic_relevance_threshold: float = 0.45
+
+    llm_provider: str = "ollama"
+    llm_model: str = "qwen2.5:7b"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    llm_timeout_seconds: float = 120.0
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

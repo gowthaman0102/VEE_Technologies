@@ -8,6 +8,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.ingestion import router as ingestion_router
 from app.api.v1.processing import router as processing_router
 from app.api.v1.semantic_search import router as semantic_search_router
+from app.api.v1.triage import router as triage_router
 
 
 api_router = APIRouter()
@@ -44,4 +45,8 @@ api_router.include_router(
 
 api_router.include_router(
     semantic_search_router
+)
+
+api_router.include_router(
+    triage_router
 )

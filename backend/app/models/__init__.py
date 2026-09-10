@@ -1,4 +1,5 @@
-from app.models.article import Article
+﻿from app.models.article import Article
+from app.models.article_triage import ArticleTriage
 from app.models.client import Client
 from app.models.company import Company
 from app.models.company_alias import CompanyAlias
@@ -10,6 +11,7 @@ from app.models.system_event import SystemEvent
 
 __all__ = [
     "Article",
+    "ArticleTriage",
     "Client",
     "Company",
     "CompanyAlias",

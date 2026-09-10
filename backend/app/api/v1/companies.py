@@ -188,4 +188,4 @@ async def get_company_semantic_relevance_endpoint(
             )
             for item in result.results
         ],
-    )`n
+    )
