@@ -7,6 +7,8 @@ from app.models.company_geography import CompanyGeography
 from app.models.company_regulator import CompanyRegulator
 from app.models.company_relationship import CompanyRelationship
 from app.models.monitoring_topic import MonitoringTopic
+from app.models.risk_assessment import RiskAssessment
+from app.models.risk_insight import RiskInsight
 from app.models.system_event import SystemEvent
 
 __all__ = [
@@ -19,5 +21,7 @@ __all__ = [
     "CompanyRegulator",
     "CompanyRelationship",
     "MonitoringTopic",
+    "RiskAssessment",
+    "RiskInsight",
     "SystemEvent",
 ]
