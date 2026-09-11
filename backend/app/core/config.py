@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     llm_timeout_seconds: float = 120.0
 
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    celery_broker_url: str = "redis://127.0.0.1:6379/0"
+    celery_result_backend: str = "redis://127.0.0.1:6379/1"
+    celery_task_default_queue: str = "media-intelligence"
+    celery_task_time_limit_seconds: int = 300
+    celery_task_soft_time_limit_seconds: int = 270
+
+    alert_delivery_provider: str = "slack"
+    alert_delivery_timeout_seconds: float = 10.0
+    alert_delivery_max_retries: int = 3
+    slack_webhook_url: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

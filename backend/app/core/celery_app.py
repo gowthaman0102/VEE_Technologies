@@ -1,0 +1,34 @@
+﻿from celery import Celery
+
+from app.core.config import settings
+
+
+celery_app = Celery(
+    "media_intelligence",
+    broker=settings.celery_broker_url,
+    backend=settings.celery_result_backend,
+)
+
+celery_app.conf.imports = (
+    "app.tasks.system_tasks",
+    "app.tasks.intelligence_tasks",
+    "app.tasks.alert_tasks",
+    "app.tasks.sla_tasks",
+)
+
+celery_app.conf.update(
+    task_default_queue=settings.celery_task_default_queue,
+    task_track_started=True,
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    timezone="UTC",
+    enable_utc=True,
+    task_time_limit=(
+        settings.celery_task_time_limit_seconds
+    ),
+    task_soft_time_limit=(
+        settings.celery_task_soft_time_limit_seconds
+    ),
+    broker_connection_retry_on_startup=True,
+)
