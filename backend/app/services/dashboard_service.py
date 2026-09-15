@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 
@@ -37,7 +37,19 @@ async def get_dashboard_overview(
 
     total_articles = await db.scalar(
         select(
-            func.count(Article.id)
+            func.count(
+                func.distinct(
+                    ArticleTriage.article_id
+                )
+            )
+        )
+        .join(
+            Company,
+            Company.id
+            == ArticleTriage.company_id,
+        )
+        .where(
+            Company.is_active.is_(True)
         )
     )
 
@@ -49,11 +61,22 @@ async def get_dashboard_overview(
                 )
             )
         )
+        .join(
+            Company,
+            Company.id
+            == ArticleTriage.company_id,
+        )
+        .where(
+            Company.is_active.is_(True)
+        )
     )
 
     total_companies = await db.scalar(
         select(
             func.count(Company.id)
+        )
+        .where(
+            Company.is_active.is_(True)
         )
     )
 
@@ -61,8 +84,13 @@ async def get_dashboard_overview(
         select(
             func.count(RiskAssessment.id)
         ).where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            ),
             RiskAssessment.risk_level
-            == "high"
+            == "high",
         )
     )
 
@@ -70,8 +98,13 @@ async def get_dashboard_overview(
         select(
             func.count(RiskAssessment.id)
         ).where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            ),
             RiskAssessment.risk_level
-            == "critical"
+            == "critical",
         )
     )
 
@@ -79,7 +112,12 @@ async def get_dashboard_overview(
         select(
             func.count(Alert.id)
         ).where(
-            Alert.delivered_at.is_(None)
+            Alert.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            ),
+            Alert.delivered_at.is_(None),
         )
     )
 
@@ -87,6 +125,11 @@ async def get_dashboard_overview(
         select(
             func.count(Alert.id)
         ).where(
+            Alert.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            ),
             Alert.delivered_at.is_(None),
             Alert.sla_due_at.is_not(None),
             Alert.sla_due_at < now,
@@ -177,6 +220,11 @@ async def get_dashboard_intelligence(
             == Article.id,
         )
         .join(
+            Company,
+            Company.id
+            == ArticleTriage.company_id,
+        )
+        .join(
             RiskAssessment,
             RiskAssessment.triage_id
             == ArticleTriage.id,
@@ -185,6 +233,9 @@ async def get_dashboard_intelligence(
             RiskInsight,
             RiskInsight.risk_assessment_id
             == RiskAssessment.id,
+        )
+        .where(
+            Company.is_active.is_(True)
         )
         .order_by(
             RiskInsight.updated_at.desc()
@@ -215,12 +266,26 @@ async def get_dashboard_risk_analytics(
         select(
             func.count(RiskAssessment.id)
         )
+        .where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            )
+        )
     )
 
     average_risk_score = await db.scalar(
         select(
             func.avg(
                 RiskAssessment.risk_score
+            )
+        )
+        .where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
             )
         )
     )
@@ -231,14 +296,26 @@ async def get_dashboard_risk_analytics(
                 RiskAssessment.risk_score
             )
         )
+        .where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            )
+        )
     )
 
     human_review_count = await db.scalar(
         select(
             func.count(RiskAssessment.id)
         ).where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            ),
             RiskAssessment.requires_human_review
-            .is_(True)
+            .is_(True),
         )
     )
 
@@ -246,8 +323,13 @@ async def get_dashboard_risk_analytics(
         select(
             func.count(RiskAssessment.id)
         ).where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            ),
             RiskAssessment.requires_immediate_alert
-            .is_(True)
+            .is_(True),
         )
     )
 
@@ -257,6 +339,13 @@ async def get_dashboard_risk_analytics(
             func.count(
                 RiskAssessment.id
             ).label("count"),
+        )
+        .where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            )
         )
         .group_by(
             RiskAssessment.risk_level
@@ -272,6 +361,13 @@ async def get_dashboard_risk_analytics(
             func.count(
                 RiskAssessment.id
             ).label("count"),
+        )
+        .where(
+            RiskAssessment.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            )
         )
         .group_by(
             RiskAssessment.event_type
@@ -419,6 +515,9 @@ async def get_dashboard_companies(
 ) -> DashboardCompaniesResponse:
     company_result = await db.execute(
         select(Company)
+        .where(
+            Company.is_active.is_(True)
+        )
         .order_by(
             Company.name.asc()
         )
