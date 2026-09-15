@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from typing import Literal
 
 
@@ -19,12 +19,12 @@ class NewsSource:
 
 NEWS_SOURCES: tuple[NewsSource, ...] = (
     NewsSource(
-        key="google_news_payu",
-        name="Google News - PayU India",
+        key="google_news_vee",
+        name="Google News - VEE Technologies",
         source_type="rss",
         url=(
             "https://news.google.com/rss/search"
-            "?q=PayU+India"
+            "?q=%22VEE+Technologies%22"
             "&hl=en-IN"
             "&gl=IN"
             "&ceid=IN:en"
@@ -33,50 +33,12 @@ NEWS_SOURCES: tuple[NewsSource, ...] = (
         category="company",
     ),
     NewsSource(
-        key="newsapi_payu",
-        name="NewsAPI - PayU India",
+        key="newsapi_vee",
+        name="NewsAPI - VEE Technologies",
         source_type="newsapi",
-        query='"PayU" AND India',
+        query="VEE Technologies",
         language="en",
         category="company",
-    ),
-    NewsSource(
-        key="et_government_digital_payments",
-        name="ET Government - Digital Payments",
-        source_type="rss",
-        url=(
-            "https://government.economictimes.indiatimes.com/"
-            "rss/digital-payments"
-        ),
-        language="en",
-        category="payments",
-    ),
-    NewsSource(
-        key="et_government_policy",
-        name="ET Government - Policy",
-        source_type="rss",
-        url=(
-            "https://government.economictimes.indiatimes.com/"
-            "rss/policy"
-        ),
-        language="en",
-        category="regulatory",
-    ),
-    NewsSource(
-        key="rbi_press_releases",
-        name="RBI - Press Releases",
-        source_type="rss",
-        url="https://rbi.org.in/pressreleases_rss.xml",
-        language="en",
-        category="regulatory",
-    ),
-    NewsSource(
-        key="rbi_notifications",
-        name="RBI - Notifications",
-        source_type="rss",
-        url="https://rbi.org.in/notifications_rss.xml",
-        language="en",
-        category="regulatory",
     ),
 )
 
@@ -89,7 +51,9 @@ def get_enabled_sources() -> list[NewsSource]:
     ]
 
 
-def get_source(key: str) -> NewsSource | None:
+def get_source(
+    key: str,
+) -> NewsSource | None:
     return next(
         (
             source
@@ -98,3 +62,4 @@ def get_source(key: str) -> NewsSource | None:
         ),
         None,
     )
+

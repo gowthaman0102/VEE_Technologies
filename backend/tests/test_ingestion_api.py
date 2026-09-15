@@ -1,10 +1,10 @@
-from unittest.mock import AsyncMock
+﻿from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
 from app.api.v1 import ingestion
-from app.main import app
 from app.ingestion.multi_runner import SourceIngestionResult
+from app.main import app
 
 
 client = TestClient(app)
@@ -19,17 +19,17 @@ def test_list_ingestion_sources():
 
     data = response.json()
 
-    assert len(data) == 6
+    assert len(data) == 2
 
     keys = {
         source["key"]
         for source in data
     }
 
-    assert "google_news_payu" in keys
-    assert "newsapi_payu" in keys
-    assert "rbi_press_releases" in keys
-    assert "rbi_notifications" in keys
+    assert keys == {
+        "google_news_vee",
+        "newsapi_vee",
+    }
 
 
 def test_run_selected_sources(
@@ -38,9 +38,9 @@ def test_run_selected_sources(
     run_mock = AsyncMock(
         return_value=[
             SourceIngestionResult(
-                source_key="google_news_payu",
+                source_key="google_news_vee",
                 source_name=(
-                    "Google News - PayU India"
+                    "Google News - VEE Technologies"
                 ),
                 collected=3,
                 inserted=1,
@@ -59,7 +59,7 @@ def test_run_selected_sources(
         "/api/v1/ingestion/run",
         json={
             "source_keys": [
-                "google_news_payu"
+                "google_news_vee"
             ],
             "per_source_limit": 3,
         },
@@ -77,7 +77,7 @@ def test_run_selected_sources(
 
     assert (
         data["sources"][0]["source_key"]
-        == "google_news_payu"
+        == "google_news_vee"
     )
 
     run_mock.assert_awaited_once()
@@ -106,8 +106,10 @@ def test_run_single_source(
     run_mock = AsyncMock(
         return_value=[
             SourceIngestionResult(
-                source_key="rbi_press_releases",
-                source_name="RBI - Press Releases",
+                source_key="newsapi_vee",
+                source_name=(
+                    "NewsAPI - VEE Technologies"
+                ),
                 collected=2,
                 inserted=0,
                 skipped=2,
@@ -123,7 +125,7 @@ def test_run_single_source(
 
     response = client.post(
         "/api/v1/ingestion/run/"
-        "rbi_press_releases",
+        "newsapi_vee",
         json={
             "per_source_limit": 2,
         },

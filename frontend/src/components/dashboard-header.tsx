@@ -19,10 +19,11 @@
           </span>
 
           <div className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
-            PayU Monitoring
+            VEE Technologies Monitoring
           </div>
         </div>
       </div>
     </header>
   );
 }
+

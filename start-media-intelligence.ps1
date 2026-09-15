@@ -1,4 +1,4 @@
-﻿$root = "D:\VEE_Technologies"
+$root = "D:\VEE_Technologies"
 $backend = Join-Path $root "backend"
 $frontend = Join-Path $root "frontend"
 $activate = Join-Path $root ".venv\Scripts\Activate.ps1"
@@ -58,18 +58,19 @@ else {
 }
 
 
-# Celery
-$celery = @(
+# Celery Worker
+$celeryWorker = @(
     Get-CimInstance Win32_Process |
     Where-Object {
         $_.CommandLine -and
         $_.CommandLine -match "celery" -and
-        $_.CommandLine -match "app\.core\.celery_app"
+        $_.CommandLine -match "app\.core\.celery_app" -and
+        $_.CommandLine -match "\bworker\b"
     }
 )
 
-if ($celery.Count -eq 0) {
-    Write-Host "Starting Celery..." -ForegroundColor Yellow
+if ($celeryWorker.Count -eq 0) {
+    Write-Host "Starting Celery worker..." -ForegroundColor Yellow
 
     Start-Process powershell -ArgumentList @(
         "-NoExit",
@@ -81,7 +82,35 @@ if ($celery.Count -eq 0) {
     Start-Sleep -Seconds 2
 }
 else {
-    Write-Host "Celery already running." -ForegroundColor Green
+    Write-Host "Celery worker already running." -ForegroundColor Green
+}
+
+
+# Celery Beat
+$celeryBeat = @(
+    Get-CimInstance Win32_Process |
+    Where-Object {
+        $_.CommandLine -and
+        $_.CommandLine -match "celery" -and
+        $_.CommandLine -match "app\.core\.celery_app" -and
+        $_.CommandLine -match "\bbeat\b"
+    }
+)
+
+if ($celeryBeat.Count -eq 0) {
+    Write-Host "Starting Celery Beat..." -ForegroundColor Yellow
+
+    Start-Process powershell -ArgumentList @(
+        "-NoExit",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        "& '$activate'; cd '$backend'; celery -A app.core.celery_app:celery_app beat --loglevel=info"
+    )
+
+    Start-Sleep -Seconds 2
+}
+else {
+    Write-Host "Celery Beat already running." -ForegroundColor Green
 }
 
 

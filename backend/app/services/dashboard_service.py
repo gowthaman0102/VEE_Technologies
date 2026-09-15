@@ -427,6 +427,13 @@ async def get_dashboard_alerts(
 
     result = await db.execute(
         select(Alert)
+        .where(
+            Alert.company_id.in_(
+                select(Company.id).where(
+                    Company.is_active.is_(True)
+                )
+            )
+        )
         .order_by(
             Alert.created_at.desc()
         )

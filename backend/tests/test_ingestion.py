@@ -6,6 +6,33 @@ import pytest
 from app.ingestion.collectors.base import BaseCollector
 from app.ingestion.runner import run_collector
 from app.ingestion.types import CollectedArticle
+from app.services.active_company_profile_service import (
+    ActiveCompanyProfile,
+)
+from app.services.pre_ingestion_validation_service import (
+    PreIngestionValidationResult,
+)
+
+
+TEST_PROFILE = ActiveCompanyProfile(
+    company_id=2,
+    company_name="VEE Technologies",
+    aliases=[
+        "VEE Technologies",
+    ],
+)
+
+
+async def accept_all_validator(
+    article,
+    profile,
+):
+    return PreIngestionValidationResult(
+        accepted=True,
+        reason="accepted",
+        resolved_url=article.url,
+        extracted_content=None,
+    )
 
 
 class FakeCollector(BaseCollector):
@@ -60,11 +87,19 @@ async def test_run_collector_counts_inserted_and_skipped(
         save_mock,
     )
 
+    monkeypatch.setattr(
+        "app.ingestion.runner.get_active_company_profile",
+        AsyncMock(
+            return_value=TEST_PROFILE
+        ),
+    )
+
     db = AsyncMock()
 
     result = await run_collector(
         db,
         collector,
+        validator=accept_all_validator,
     )
 
     assert result.collected == 2
@@ -88,12 +123,20 @@ async def test_run_collector_respects_limit(
         save_mock,
     )
 
+    monkeypatch.setattr(
+        "app.ingestion.runner.get_active_company_profile",
+        AsyncMock(
+            return_value=TEST_PROFILE
+        ),
+    )
+
     db = AsyncMock()
 
     result = await run_collector(
         db,
         collector,
         limit=1,
+        validator=accept_all_validator,
     )
 
     assert result.collected == 1

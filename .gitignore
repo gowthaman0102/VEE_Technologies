@@ -45,3 +45,6 @@ htmlcov/
 # Temporary
 tmp/
 temp/
+
+# Celery Beat
+celerybeat-schedule*

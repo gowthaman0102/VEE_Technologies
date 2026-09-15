@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 
 from app.ingestion.collectors import (
     NewsAPICollector,
@@ -19,25 +19,26 @@ def test_registry_contains_expected_sources():
         for source in NEWS_SOURCES
     }
 
-    assert "google_news_payu" in keys
-    assert "newsapi_payu" in keys
-    assert "et_government_digital_payments" in keys
-    assert "et_government_policy" in keys
-    assert "rbi_press_releases" in keys
-    assert "rbi_notifications" in keys
+    assert keys == {
+        "google_news_vee",
+        "newsapi_vee",
+    }
 
 
 def test_get_source():
-    source = get_source("google_news_payu")
+    source = get_source(
+        "google_news_vee"
+    )
 
     assert source is not None
     assert source.source_type == "rss"
+    assert source.category == "company"
 
 
 def test_get_enabled_sources():
     sources = get_enabled_sources()
 
-    assert len(sources) == 6
+    assert len(sources) == 2
     assert all(
         source.enabled
         for source in sources
@@ -65,7 +66,7 @@ def test_build_newsapi_collector():
         key="newsapi_test",
         name="NewsAPI Test",
         source_type="newsapi",
-        query="PayU",
+        query='"VEE Technologies"',
     )
 
     collector = build_collector(
@@ -79,32 +80,27 @@ def test_build_newsapi_collector():
     )
 
 
-def test_rbi_press_release_source():
+def test_google_news_vee_source():
     source = get_source(
-        "rbi_press_releases"
+        "google_news_vee"
     )
 
     assert source is not None
     assert source.source_type == "rss"
-    assert (
-        source.url
-        == "https://rbi.org.in/pressreleases_rss.xml"
-    )
-    assert source.category == "regulatory"
+    assert source.url is not None
+    assert "news.google.com/rss/search" in source.url
+    assert source.category == "company"
 
 
-def test_rbi_notifications_source():
+def test_newsapi_vee_source():
     source = get_source(
-        "rbi_notifications"
+        "newsapi_vee"
     )
 
     assert source is not None
-    assert source.source_type == "rss"
-    assert (
-        source.url
-        == "https://rbi.org.in/notifications_rss.xml"
-    )
-    assert source.category == "regulatory"
+    assert source.source_type == "newsapi"
+    assert source.query == "VEE Technologies"
+    assert source.category == "company"
 
 
 def test_rss_source_requires_url():
@@ -143,7 +139,7 @@ def test_newsapi_source_requires_api_key():
         key="newsapi_no_key",
         name="NewsAPI No Key",
         source_type="newsapi",
-        query="PayU",
+        query='"VEE Technologies"',
     )
 
     with pytest.raises(
@@ -151,3 +147,4 @@ def test_newsapi_source_requires_api_key():
         match="API key is required",
     ):
         build_collector(source)
+
