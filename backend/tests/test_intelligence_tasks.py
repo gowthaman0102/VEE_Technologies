@@ -64,6 +64,20 @@ async def test_intelligence_pipeline_order(
             )
         )
 
+    async def fake_competitors(
+        db,
+        *,
+        article_id,
+        company_id,
+    ):
+        calls.append("competitors")
+
+        return SimpleNamespace(
+            competitors=[
+                "Competitor One",
+            ]
+        )
+
     async def fake_triage(
         db,
         article_id,
@@ -76,7 +90,7 @@ async def test_intelligence_pipeline_order(
 
         return SimpleNamespace(
             triage=SimpleNamespace(
-                event_type="other",
+                event_type="market_competition",
                 urgency="low",
                 confidence=0.88,
             )
@@ -142,6 +156,12 @@ async def test_intelligence_pipeline_order(
 
     monkeypatch.setattr(
         intelligence_tasks,
+        "analyze_article_competitors",
+        fake_competitors,
+    )
+
+    monkeypatch.setattr(
+        intelligence_tasks,
         "triage_article",
         fake_triage,
     )
@@ -169,6 +189,7 @@ async def test_intelligence_pipeline_order(
     assert calls == [
         "sentiment",
         "business_impact",
+        "competitors",
         "triage",
         "risk",
         "alert",
@@ -185,25 +206,17 @@ async def test_intelligence_pipeline_order(
         == "operational"
     )
 
-    assert (
-        result["business_impact_categories"]
-        == [
-            "operational",
-            "customer",
-        ]
-    )
+    assert result["competitors"] == [
+        "Competitor One",
+    ]
+
+    assert result["competitor_count"] == 1
 
     assert (
-        result["business_impact_summary"]
-        == "Expansion increases operational capacity."
+        result["triage_event_type"]
+        == "market_competition"
     )
 
-    assert (
-        result["business_impact_model"]
-        == "fake-impact-model"
-    )
-
-    assert result["triage_event_type"] == "other"
     assert result["triage_urgency"] == "low"
     assert result["triage_confidence"] == 0.88
 

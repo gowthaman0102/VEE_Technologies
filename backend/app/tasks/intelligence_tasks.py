@@ -13,6 +13,9 @@ from app.services.article_sentiment_service import (
 from app.services.article_business_impact_service import (
     analyze_article_business_impact,
 )
+from app.services.article_competitor_analysis_service import (
+    analyze_article_competitors,
+)
 from app.services.article_triage_service import (
     triage_article,
 )
@@ -37,6 +40,14 @@ async def _process_article_intelligence(
 
         business_impact_result = (
             await analyze_article_business_impact(
+                db,
+                article_id=article_id,
+                company_id=company_id,
+            )
+        )
+
+        competitor_result = (
+            await analyze_article_competitors(
                 db,
                 article_id=article_id,
                 company_id=company_id,
@@ -99,6 +110,12 @@ async def _process_article_intelligence(
                 business_impact_result
                 .impact
                 .model
+            ),
+            "competitors": (
+                competitor_result.competitors
+            ),
+            "competitor_count": len(
+                competitor_result.competitors
             ),
             "triage_event_type": (
                 triage_result.triage.event_type
