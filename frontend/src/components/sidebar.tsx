@@ -93,7 +93,7 @@ export function Sidebar() {
 
         <div className="border-t border-slate-800 px-6 py-5">
           <p className="text-xs text-slate-500">
-            AI Agents & Real-Time Intelligence
+            AI Agents & Near Real-Time Intelligence
           </p>
         </div>
       </div>

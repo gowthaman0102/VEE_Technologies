@@ -107,6 +107,27 @@ def test_semantic_search_api_default_values(
     assert kwargs["minimum_similarity"] is None
 
 
+def test_semantic_search_api_no_active_company(monkeypatch):
+    async def fake_get_active_company_profile(db):
+        return None
+
+    monkeypatch.setattr(
+        semantic_search,
+        "get_active_company_profile",
+        fake_get_active_company_profile,
+    )
+
+    response = client.post(
+        "/api/v1/semantic-search",
+        json={
+            "query": "PayU",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No active company configured."
+
+
 def test_semantic_search_api_rejects_empty_query():
     response = client.post(
         "/api/v1/semantic-search?company_id=1",
