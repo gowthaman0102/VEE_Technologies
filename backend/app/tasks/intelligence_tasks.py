@@ -10,6 +10,9 @@ from app.services.alert_service import (
 from app.services.article_sentiment_service import (
     analyze_article_sentiment,
 )
+from app.services.article_business_impact_service import (
+    analyze_article_business_impact,
+)
 from app.services.article_triage_service import (
     triage_article,
 )
@@ -26,6 +29,14 @@ async def _process_article_intelligence(
     async with CeleryAsyncSessionLocal() as db:
         sentiment_result = (
             await analyze_article_sentiment(
+                db,
+                article_id=article_id,
+                company_id=company_id,
+            )
+        )
+
+        business_impact_result = (
+            await analyze_article_business_impact(
                 db,
                 article_id=article_id,
                 company_id=company_id,
@@ -68,6 +79,26 @@ async def _process_article_intelligence(
             ),
             "sentiment_model": (
                 sentiment_result.sentiment.model
+            ),
+            "business_impact_primary": (
+                business_impact_result
+                .impact
+                .primary_category
+            ),
+            "business_impact_categories": (
+                business_impact_result
+                .impact
+                .categories
+            ),
+            "business_impact_summary": (
+                business_impact_result
+                .impact
+                .impact_summary
+            ),
+            "business_impact_model": (
+                business_impact_result
+                .impact
+                .model
             ),
             "triage_event_type": (
                 triage_result.triage.event_type

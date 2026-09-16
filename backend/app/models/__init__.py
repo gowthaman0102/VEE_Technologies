@@ -1,5 +1,6 @@
 from app.models.alert import Alert
 from app.models.article import Article
+from app.models.article_business_impact import ArticleBusinessImpact
 from app.models.article_triage import ArticleTriage
 from app.models.article_sentiment import ArticleSentiment
 from app.models.client import Client
@@ -16,6 +17,7 @@ from app.models.system_event import SystemEvent
 __all__ = [
     "Alert",
     "Article",
+    "ArticleBusinessImpact",
     "ArticleTriage",
     "ArticleSentiment",
     "Client",

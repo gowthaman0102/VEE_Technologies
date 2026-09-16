@@ -41,6 +41,29 @@ async def test_intelligence_pipeline_order(
             )
         )
 
+    async def fake_business_impact(
+        db,
+        *,
+        article_id,
+        company_id,
+    ):
+        calls.append("business_impact")
+
+        return SimpleNamespace(
+            impact=SimpleNamespace(
+                primary_category="operational",
+                categories=[
+                    "operational",
+                    "customer",
+                ],
+                impact_summary=(
+                    "Expansion increases "
+                    "operational capacity."
+                ),
+                model="fake-impact-model",
+            )
+        )
+
     async def fake_triage(
         db,
         article_id,
@@ -113,6 +136,12 @@ async def test_intelligence_pipeline_order(
 
     monkeypatch.setattr(
         intelligence_tasks,
+        "analyze_article_business_impact",
+        fake_business_impact,
+    )
+
+    monkeypatch.setattr(
+        intelligence_tasks,
         "triage_article",
         fake_triage,
     )
@@ -139,6 +168,7 @@ async def test_intelligence_pipeline_order(
 
     assert calls == [
         "sentiment",
+        "business_impact",
         "triage",
         "risk",
         "alert",
@@ -149,6 +179,29 @@ async def test_intelligence_pipeline_order(
 
     assert result["sentiment_label"] == "positive"
     assert result["sentiment_score"] == 0.91
+
+    assert (
+        result["business_impact_primary"]
+        == "operational"
+    )
+
+    assert (
+        result["business_impact_categories"]
+        == [
+            "operational",
+            "customer",
+        ]
+    )
+
+    assert (
+        result["business_impact_summary"]
+        == "Expansion increases operational capacity."
+    )
+
+    assert (
+        result["business_impact_model"]
+        == "fake-impact-model"
+    )
 
     assert result["triage_event_type"] == "other"
     assert result["triage_urgency"] == "low"
