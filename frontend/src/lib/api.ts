@@ -204,6 +204,42 @@ export type DashboardCompaniesResponse = {
   items: DashboardCompanyItem[];
 };
 
+export type WatchlistItem = {
+  id: number;
+  company_id: number;
+  item_type: string;
+  item_name: string;
+  value: string;
+  is_active: boolean;
+};
+
+export type WatchlistResponse = {
+  count: number;
+  items: WatchlistItem[];
+};
+
+export type ReportMetric = {
+  label: string;
+  value: string | number;
+};
+
+export type ReportSummary = {
+  company_id: number;
+  start_date: string;
+  end_date: string;
+  total_articles: number;
+  total_events: number;
+  high_risk_count: number;
+  medium_risk_count: number;
+  low_risk_count: number;
+  sentiment_balance: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+  metrics: ReportMetric[];
+};
+
 export async function getDashboardCompanies(): Promise<DashboardCompaniesResponse> {
   const response = await fetch(
     `${API_BASE_URL}/dashboard/companies`,
@@ -215,6 +251,52 @@ export async function getDashboardCompanies(): Promise<DashboardCompaniesRespons
   if (!response.ok) {
     throw new Error(
       `Companies API failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function getWatchlist(
+  companyId: number,
+): Promise<WatchlistResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/watchlist?company_id=${companyId}`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Watchlist API failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function getReportSummary(args: {
+  company_id: number;
+  start_date: string;
+  end_date: string;
+}): Promise<ReportSummary> {
+  const params = new URLSearchParams({
+    company_id: String(args.company_id),
+    start_date: args.start_date,
+    end_date: args.end_date,
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/reports?${params.toString()}`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Reports API failed with status ${response.status}`,
     );
   }
 

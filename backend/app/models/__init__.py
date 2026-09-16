@@ -18,6 +18,7 @@ from app.models.monitoring_topic import MonitoringTopic
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
 from app.models.system_event import SystemEvent
+from app.models.watchlist import WatchlistItem
 
 __all__ = [
     "Alert",
@@ -38,4 +39,5 @@ __all__ = [
     "RiskAssessment",
     "RiskInsight",
     "SystemEvent",
+    "WatchlistItem",
 ]

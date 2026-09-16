@@ -27,6 +27,14 @@ const navigation = [
     label: "Companies",
     href: "/companies",
   },
+  {
+    label: "Watchlist",
+    href: "/watchlist",
+  },
+  {
+    label: "Reports",
+    href: "/reports",
+  },
 ];
 
 
