@@ -236,8 +236,20 @@ async def read_business_impact(
     )
     return BusinessImpactResponse(
         company_id=company_id,
-        items=data.get("items", data),
+        items=data.get("items", {}),
+        primary_distribution=data.get(
+            "primary_distribution",
+            data.get("items", {}),
+        ),
+        category_distribution=data.get(
+            "category_distribution",
+            {},
+        ),
         series=data.get("series", []),
+        category_series=data.get(
+            "category_series",
+            [],
+        ),
     )
 
 

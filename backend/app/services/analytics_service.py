@@ -200,15 +200,24 @@ async def get_sentiment_distribution(
 ) -> dict:
     start, end = validate_time_window(start, end)
 
+    article_time = func.coalesce(
+        Article.published_at,
+        Article.collected_at,
+    )
+
     stmt = (
         select(
             ArticleSentiment.label,
             func.count(ArticleSentiment.id).label("count"),
         )
+        .join(
+            Article,
+            Article.id == ArticleSentiment.article_id,
+        )
         .where(
             ArticleSentiment.company_id == company_id,
-            ArticleSentiment.created_at >= start,
-            ArticleSentiment.created_at <= end,
+            article_time >= start,
+            article_time <= end,
         )
         .group_by(ArticleSentiment.label)
     )
@@ -216,20 +225,27 @@ async def get_sentiment_distribution(
     result = await db.execute(stmt)
     summary = {row.label: int(row.count) for row in result.all()}
     rows = (await db.execute(
-        select(ArticleSentiment.label, ArticleSentiment.created_at)
+        select(
+            ArticleSentiment.label,
+            article_time.label("article_time"),
+        )
+        .join(
+            Article,
+            Article.id == ArticleSentiment.article_id,
+        )
         .where(
             ArticleSentiment.company_id == company_id,
-            ArticleSentiment.created_at >= start,
-            ArticleSentiment.created_at <= end,
+            article_time >= start,
+            article_time <= end,
         )
     )).all()
     bucket = _series_bucket(start, end, "auto")
     series_map: dict[str, dict[str, int]] = defaultdict(
         lambda: {"positive": 0, "neutral": 0, "negative": 0}
     )
-    for label, created_at in rows:
-        series_map[_time_bucket(created_at, bucket)][label] = (
-            series_map[_time_bucket(created_at, bucket)].get(label, 0) + 1
+    for label, article_time_value in rows:
+        series_map[_time_bucket(article_time_value, bucket)][label] = (
+            series_map[_time_bucket(article_time_value, bucket)].get(label, 0) + 1
         )
     summary_payload = {
         "positive": summary.get("positive", 0),
@@ -257,33 +273,42 @@ async def get_risk_summary(
 ) -> dict:
     start, end = validate_time_window(start, end)
 
+    article_time = func.coalesce(
+        Article.published_at,
+        Article.collected_at,
+    )
+
     stmt = (
         select(
             func.avg(RiskAssessment.risk_score).label("average_risk_score"),
             func.max(RiskAssessment.risk_score).label("highest_risk_score"),
             func.count(
-                func.case(
+                case(
                     (RiskAssessment.risk_level == "high", 1),
                     else_=None,
                 )
             ).label("high_risk_count"),
             func.count(
-                func.case(
+                case(
                     (RiskAssessment.risk_level == "medium", 1),
                     else_=None,
                 )
             ).label("medium_risk_count"),
             func.count(
-                func.case(
+                case(
                     (RiskAssessment.risk_level == "low", 1),
                     else_=None,
                 )
             ).label("low_risk_count"),
         )
+        .join(
+            Article,
+            Article.id == RiskAssessment.article_id,
+        )
         .where(
             RiskAssessment.company_id == company_id,
-            RiskAssessment.created_at >= start,
-            RiskAssessment.created_at <= end,
+            article_time >= start,
+            article_time <= end,
         )
     )
 
@@ -319,22 +344,32 @@ async def get_risk_summary(
 
 
 async def _get_risk_series(db, *, company_id: int, start: datetime, end: datetime) -> list[dict]:
+    article_time = func.coalesce(
+        Article.published_at,
+        Article.collected_at,
+    )
+
     rows = (await db.execute(
         select(
-            RiskAssessment.created_at,
+            article_time.label("article_time"),
             RiskAssessment.risk_score,
             RiskAssessment.risk_level,
             RiskAssessment.escalation_action,
-        ).where(
+        )
+        .join(
+            Article,
+            Article.id == RiskAssessment.article_id,
+        )
+        .where(
             RiskAssessment.company_id == company_id,
-            RiskAssessment.created_at >= start,
-            RiskAssessment.created_at <= end,
+            article_time >= start,
+            article_time <= end,
         )
     )).all()
     bucket = _series_bucket(start, end, "auto")
     grouped: dict[str, list] = defaultdict(list)
     for row in rows:
-        grouped[_time_bucket(row.created_at, bucket)].append(row)
+        grouped[_time_bucket(row.article_time, bucket)].append(row)
     return [
         {
             "period": period,
@@ -358,42 +393,100 @@ async def get_business_impact_distribution(
 ) -> dict:
     start, end = validate_time_window(start, end)
 
-    stmt = (
-        select(
-            ArticleBusinessImpact.primary_category,
-            func.count(ArticleBusinessImpact.id).label("count"),
-        )
-        .where(
-            ArticleBusinessImpact.company_id == company_id,
-            ArticleBusinessImpact.created_at >= start,
-            ArticleBusinessImpact.created_at <= end,
-        )
-        .group_by(ArticleBusinessImpact.primary_category)
+    article_time = func.coalesce(
+        Article.published_at,
+        Article.collected_at,
     )
 
-    rows = (await db.execute(stmt)).all()
-    counts = {row.primary_category: int(row.count) for row in rows}
-    items = {
-        category: counts.get(category, 0)
+    rows = (
+        await db.execute(
+            select(
+                ArticleBusinessImpact.primary_category,
+                ArticleBusinessImpact.categories,
+                article_time.label("article_time"),
+            )
+            .join(
+                Article,
+                Article.id == ArticleBusinessImpact.article_id,
+            )
+            .where(
+                ArticleBusinessImpact.company_id == company_id,
+                article_time >= start,
+                article_time <= end,
+            )
+        )
+    ).all()
+
+    primary_counts = {
+        category: 0
         for category in SUPPORTED_IMPACT_CATEGORIES
     }
-    series_rows = (await db.execute(
-        select(ArticleBusinessImpact.primary_category, ArticleBusinessImpact.created_at)
-        .where(
-            ArticleBusinessImpact.company_id == company_id,
-            ArticleBusinessImpact.created_at >= start,
-            ArticleBusinessImpact.created_at <= end,
-        )
-    )).all()
+
+    category_counts = {
+        category: 0
+        for category in SUPPORTED_IMPACT_CATEGORIES
+    }
+
     bucket = _series_bucket(start, end, "auto")
-    series_map: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for category, created_at in series_rows:
-        series_map[_time_bucket(created_at, bucket)][category] += 1
+
+    primary_series: dict[str, dict[str, int]] = defaultdict(
+        lambda: defaultdict(int)
+    )
+
+    category_series: dict[str, dict[str, int]] = defaultdict(
+        lambda: defaultdict(int)
+    )
+
+    for row in rows:
+        primary = row.primary_category
+
+        if primary in primary_counts:
+            primary_counts[primary] += 1
+
+        period = _time_bucket(
+            row.article_time,
+            bucket,
+        )
+
+        if primary in primary_counts:
+            primary_series[period][primary] += 1
+
+        categories = row.categories or []
+
+        # Defensive de-duplication within a single article.
+        # One article should count at most once per category.
+        unique_categories = {
+            category
+            for category in categories
+            if category in SUPPORTED_IMPACT_CATEGORIES
+        }
+
+        for category in unique_categories:
+            category_counts[category] += 1
+            category_series[period][category] += 1
+
     return {
-        "items": items,
+        # Preserve "items" for existing frontend/API compatibility.
+        "items": primary_counts,
+        "primary_distribution": primary_counts,
+        "category_distribution": category_counts,
         "series": [
-            {"period": period, "categories": dict(values)}
-            for period, values in sorted(series_map.items())
+            {
+                "period": period,
+                "categories": dict(values),
+            }
+            for period, values in sorted(
+                primary_series.items()
+            )
+        ],
+        "category_series": [
+            {
+                "period": period,
+                "categories": dict(values),
+            }
+            for period, values in sorted(
+                category_series.items()
+            )
         ],
     }
 

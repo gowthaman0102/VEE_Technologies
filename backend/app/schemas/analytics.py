@@ -43,7 +43,14 @@ class RiskTrendResponse(BaseModel):
 class BusinessImpactResponse(BaseModel):
     company_id: int
     items: dict[str, int] = Field(default_factory=dict)
+    primary_distribution: dict[str, int] = Field(
+        default_factory=dict
+    )
+    category_distribution: dict[str, int] = Field(
+        default_factory=dict
+    )
     series: list[dict] = Field(default_factory=list)
+    category_series: list[dict] = Field(default_factory=list)
 
 
 class EventAnalyticsResponse(BaseModel):
