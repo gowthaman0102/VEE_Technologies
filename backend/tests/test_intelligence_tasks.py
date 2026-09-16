@@ -24,6 +24,20 @@ async def test_intelligence_pipeline_order(
 ):
     calls = []
 
+    async def fake_cluster(
+        db,
+        *,
+        article_id,
+        company_id,
+    ):
+        calls.append("cluster")
+
+        return SimpleNamespace(
+            cluster_id=12,
+            created_new_cluster=True,
+            similarity=1.0,
+        )
+
     async def fake_sentiment(
         db,
         *,
@@ -144,6 +158,12 @@ async def test_intelligence_pipeline_order(
 
     monkeypatch.setattr(
         intelligence_tasks,
+        "assign_article_to_event_cluster",
+        fake_cluster,
+    )
+
+    monkeypatch.setattr(
+        intelligence_tasks,
         "analyze_article_sentiment",
         fake_sentiment,
     )
@@ -187,6 +207,7 @@ async def test_intelligence_pipeline_order(
     )
 
     assert calls == [
+        "cluster",
         "sentiment",
         "business_impact",
         "competitors",
@@ -197,6 +218,10 @@ async def test_intelligence_pipeline_order(
 
     assert result["article_id"] == 701
     assert result["company_id"] == 2
+
+    assert result["event_cluster_id"] == 12
+    assert result["event_cluster_created"] is True
+    assert result["event_cluster_similarity"] == 1.0
 
     assert result["sentiment_label"] == "positive"
     assert result["sentiment_score"] == 0.91

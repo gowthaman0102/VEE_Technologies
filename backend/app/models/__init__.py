@@ -10,6 +10,10 @@ from app.models.company_alias import CompanyAlias
 from app.models.company_geography import CompanyGeography
 from app.models.company_regulator import CompanyRegulator
 from app.models.company_relationship import CompanyRelationship
+from app.models.event_cluster import (
+    EventCluster,
+    EventClusterMembership,
+)
 from app.models.monitoring_topic import MonitoringTopic
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
@@ -28,6 +32,8 @@ __all__ = [
     "CompanyGeography",
     "CompanyRegulator",
     "CompanyRelationship",
+    "EventCluster",
+    "EventClusterMembership",
     "MonitoringTopic",
     "RiskAssessment",
     "RiskInsight",

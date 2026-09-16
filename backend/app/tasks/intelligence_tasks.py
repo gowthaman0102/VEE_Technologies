@@ -7,6 +7,9 @@ from app.db.celery_session import (
 from app.services.alert_service import (
     create_alert_for_intelligence,
 )
+from app.services.event_cluster_assignment_service import (
+    assign_article_to_event_cluster,
+)
 from app.services.article_sentiment_service import (
     analyze_article_sentiment,
 )
@@ -30,6 +33,14 @@ async def _process_article_intelligence(
     company_id: int,
 ) -> dict:
     async with CeleryAsyncSessionLocal() as db:
+        cluster_result = (
+            await assign_article_to_event_cluster(
+                db,
+                article_id=article_id,
+                company_id=company_id,
+            )
+        )
+
         sentiment_result = (
             await analyze_article_sentiment(
                 db,
@@ -79,6 +90,21 @@ async def _process_article_intelligence(
         return {
             "article_id": result.article_id,
             "company_id": result.company_id,
+            "event_cluster_id": (
+                cluster_result.cluster_id
+                if cluster_result is not None
+                else None
+            ),
+            "event_cluster_created": (
+                cluster_result.created_new_cluster
+                if cluster_result is not None
+                else False
+            ),
+            "event_cluster_similarity": (
+                cluster_result.similarity
+                if cluster_result is not None
+                else None
+            ),
             "sentiment_label": (
                 sentiment_result.sentiment.label
             ),
