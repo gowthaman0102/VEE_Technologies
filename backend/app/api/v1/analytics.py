@@ -15,6 +15,7 @@ from app.schemas.analytics import (
     SourceAnalyticsResponse,
 )
 from app.services.analytics_service import (
+    get_article_count,
     get_article_volume_over_time,
     get_business_impact_distribution,
     get_competitor_summary,
@@ -71,12 +72,18 @@ async def read_analytics_overview(
         start=start,
         end=end,
     )
+    total_articles = await get_article_count(
+        db,
+        company_id=company_id,
+        start=start,
+        end=end,
+    )
 
     return AnalyticsOverviewResponse(
         company_id=company_id,
         start=start,
         end=end,
-        total_articles=0,
+        total_articles=total_articles,
         total_events=events["total_events"],
         sentiment=sentiment,
         risk=risk,

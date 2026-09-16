@@ -1,10 +1,14 @@
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 class ReportRequest(BaseModel):
     company_id: int = Field(gt=0)
-    start_date: str = Field(min_length=1)
-    end_date: str = Field(min_length=1)
+    start_date: datetime
+    end_date: datetime
+    format: Literal["pdf", "xlsx", "csv"] = "pdf"
     include_details: bool = True
 
 
@@ -20,8 +24,8 @@ class ReportRow(BaseModel):
 
 class ReportSummaryResponse(BaseModel):
     company_id: int
-    start_date: str
-    end_date: str
+    start_date: datetime
+    end_date: datetime
     total_articles: int
     total_events: int
     high_risk_count: int
@@ -31,9 +35,18 @@ class ReportSummaryResponse(BaseModel):
     metrics: list[ReportMetric]
 
 
-class ReportExportResponse(BaseModel):
+class ReportHistoryItem(BaseModel):
+    id: int
     company_id: int
-    format: str
+    report_type: str
+    file_format: str
     filename: str
     content_type: str
-    rows: list[ReportRow]
+    period_start: datetime
+    period_end: datetime
+    created_at: datetime
+
+
+class ReportHistoryResponse(BaseModel):
+    count: int
+    items: list[ReportHistoryItem]

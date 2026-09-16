@@ -1,7 +1,7 @@
 import { getReportSummary } from "@/lib/api";
 
 export default async function ReportsPage() {
-  const report = await getReportSummary({ company_id: 1, start_date: "2026-01-01T00:00:00+00:00", end_date: "2026-12-31T23:59:59+00:00" });
+  const report = await getReportSummary({ company_id: 1, start_date: "2026-01-01T00:00:00+00:00", end_date: "2026-09-15T23:59:59+00:00" });
 
   return (
     <main className="px-6 py-8">

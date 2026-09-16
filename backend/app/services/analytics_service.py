@@ -29,6 +29,26 @@ SUPPORTED_IMPACT_CATEGORIES = [
 ]
 
 
+async def get_article_count(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    start: datetime,
+    end: datetime,
+) -> int:
+    start, end = validate_time_window(start, end)
+    stmt = (
+        select(func.count(func.distinct(Article.id)))
+        .join(ArticleTriage, ArticleTriage.article_id == Article.id)
+        .where(
+            ArticleTriage.company_id == company_id,
+            Article.published_at >= start,
+            Article.published_at <= end,
+        )
+    )
+    return int((await db.scalar(stmt)) or 0)
+
+
 def validate_time_window(
     start: datetime,
     end: datetime,

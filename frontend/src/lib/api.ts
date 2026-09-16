@@ -240,6 +240,47 @@ export type ReportSummary = {
   metrics: ReportMetric[];
 };
 
+export type AnalyticsOverview = {
+  company_id: number;
+  start: string;
+  end: string;
+  total_articles: number;
+  total_events: number;
+  sentiment: Record<string, number>;
+  risk: Record<string, number>;
+  business_impact: Record<string, number>;
+  competitors: Array<{ name: string; mention_count: number }>;
+};
+
+export type EventCluster = {
+  id: number;
+  company_id: number;
+  title: string | null;
+  representative_article_id: number | null;
+  first_published_at: string | null;
+  last_published_at: string | null;
+  article_count: number;
+};
+
+export type EventClusterResponse = {
+  count: number;
+  items: EventCluster[];
+};
+
+export type KeywordSearchResult = {
+  article_id: number;
+  title: string;
+  source_name: string;
+  url: string;
+  published_at: string | null;
+};
+
+export type KeywordSearchResponse = {
+  query: string;
+  count: number;
+  results: KeywordSearchResult[];
+};
+
 export async function getDashboardCompanies(): Promise<DashboardCompaniesResponse> {
   const response = await fetch(
     `${API_BASE_URL}/dashboard/companies`,
@@ -300,5 +341,30 @@ export async function getReportSummary(args: {
     );
   }
 
+  return response.json();
+}
+
+export async function getAnalyticsOverview(
+  companyId: number,
+  start: string,
+  end: string,
+): Promise<AnalyticsOverview> {
+  const params = new URLSearchParams({
+    company_id: String(companyId),
+    start,
+    end,
+  });
+  const response = await fetch(`${API_BASE_URL}/analytics/overview?${params}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Analytics API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function getEventClusters(companyId: number): Promise<EventClusterResponse> {
+  const response = await fetch(`${API_BASE_URL}/event-clusters?company_id=${companyId}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Event cluster API failed with status ${response.status}`);
+  }
   return response.json();
 }

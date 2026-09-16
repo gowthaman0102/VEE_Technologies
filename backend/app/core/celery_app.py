@@ -16,6 +16,7 @@ celery_app.conf.imports = (
     "app.tasks.sla_tasks",
     "app.tasks.ingestion_tasks",
     "app.tasks.processing_tasks",
+    "app.tasks.report_tasks",
 )
 
 celery_app.conf.update(
@@ -39,5 +40,9 @@ celery_app.conf.beat_schedule = {
     "live-news-poll-every-5-minutes": {
         "task": "ingestion.live_poll",
         "schedule": 300.0,
+    },
+    "generate-weekly-intelligence-reports": {
+        "task": "reports.generate_weekly",
+        "schedule": 604800.0,
     },
 }

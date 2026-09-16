@@ -20,6 +20,10 @@ const navigation = [
     href: "/risk",
   },
   {
+    label: "Analytics",
+    href: "/analytics",
+  },
+  {
     label: "Alerts & SLA",
     href: "/alerts",
   },
@@ -34,6 +38,14 @@ const navigation = [
   {
     label: "Reports",
     href: "/reports",
+  },
+  {
+    label: "Search",
+    href: "/search",
+  },
+  {
+    label: "Event Clusters",
+    href: "/event-clusters",
   },
 ];
 
