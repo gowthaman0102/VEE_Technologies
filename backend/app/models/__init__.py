@@ -1,6 +1,7 @@
-﻿from app.models.alert import Alert
+from app.models.alert import Alert
 from app.models.article import Article
 from app.models.article_triage import ArticleTriage
+from app.models.article_sentiment import ArticleSentiment
 from app.models.client import Client
 from app.models.company import Company
 from app.models.company_alias import CompanyAlias
@@ -16,6 +17,7 @@ __all__ = [
     "Alert",
     "Article",
     "ArticleTriage",
+    "ArticleSentiment",
     "Client",
     "Company",
     "CompanyAlias",

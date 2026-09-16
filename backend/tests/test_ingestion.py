@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
@@ -77,8 +78,8 @@ async def test_run_collector_counts_inserted_and_skipped(
 
     save_mock = AsyncMock(
         side_effect=[
-            (object(), True),
-            (object(), False),
+            (SimpleNamespace(id=101), True),
+            (SimpleNamespace(id=102), False),
         ]
     )
 
@@ -105,6 +106,7 @@ async def test_run_collector_counts_inserted_and_skipped(
     assert result.collected == 2
     assert result.inserted == 1
     assert result.skipped == 1
+    assert result.inserted_article_ids == [101]
     assert save_mock.await_count == 2
 
 
@@ -115,7 +117,7 @@ async def test_run_collector_respects_limit(
     collector = FakeCollector()
 
     save_mock = AsyncMock(
-        return_value=(object(), True)
+        return_value=(SimpleNamespace(id=103), True)
     )
 
     monkeypatch.setattr(
@@ -142,6 +144,7 @@ async def test_run_collector_respects_limit(
     assert result.collected == 1
     assert result.inserted == 1
     assert result.skipped == 0
+    assert result.inserted_article_ids == [103]
     assert save_mock.await_count == 1
 
 

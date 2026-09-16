@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 from app.core.celery_app import celery_app
 from app.db.celery_session import (
@@ -6,6 +6,12 @@ from app.db.celery_session import (
 )
 from app.services.alert_service import (
     create_alert_for_intelligence,
+)
+from app.services.article_sentiment_service import (
+    analyze_article_sentiment,
+)
+from app.services.article_triage_service import (
+    triage_article,
 )
 from app.services.risk_insight_service import (
     generate_risk_insight,
@@ -18,6 +24,20 @@ async def _process_article_intelligence(
     company_id: int,
 ) -> dict:
     async with CeleryAsyncSessionLocal() as db:
+        sentiment_result = (
+            await analyze_article_sentiment(
+                db,
+                article_id=article_id,
+                company_id=company_id,
+            )
+        )
+
+        triage_result = await triage_article(
+            db,
+            article_id=article_id,
+            company_id=company_id,
+        )
+
         result = await generate_risk_insight(
             db,
             article_id=article_id,
@@ -37,6 +57,27 @@ async def _process_article_intelligence(
         return {
             "article_id": result.article_id,
             "company_id": result.company_id,
+            "sentiment_label": (
+                sentiment_result.sentiment.label
+            ),
+            "sentiment_score": (
+                sentiment_result.sentiment.score
+            ),
+            "sentiment_reason": (
+                sentiment_result.sentiment.reason
+            ),
+            "sentiment_model": (
+                sentiment_result.sentiment.model
+            ),
+            "triage_event_type": (
+                triage_result.triage.event_type
+            ),
+            "triage_urgency": (
+                triage_result.triage.urgency
+            ),
+            "triage_confidence": (
+                triage_result.triage.confidence
+            ),
             "model": result.model,
             "risk_score": (
                 result.assessment.risk.risk_score

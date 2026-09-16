@@ -37,6 +37,11 @@ async def test_run_sources_collects_results(monkeypatch):
             collected=5,
             inserted=3,
             skipped=2,
+            inserted_article_ids=[
+                301,
+                302,
+                303,
+            ],
         )
 
     monkeypatch.setattr(
@@ -61,6 +66,11 @@ async def test_run_sources_collects_results(monkeypatch):
     assert results[0].collected == 5
     assert results[0].inserted == 3
     assert results[0].skipped == 2
+    assert results[0].inserted_article_ids == [
+        301,
+        302,
+        303,
+    ]
     assert results[0].error is None
 
 
@@ -96,6 +106,10 @@ async def test_run_sources_continues_after_failure(monkeypatch):
             collected=2,
             inserted=2,
             skipped=0,
+            inserted_article_ids=[
+                401,
+                402,
+            ],
         )
 
     monkeypatch.setattr(
@@ -120,4 +134,8 @@ async def test_run_sources_continues_after_failure(monkeypatch):
 
     assert results[1].source_key == "good_source"
     assert results[1].inserted == 2
+    assert results[1].inserted_article_ids == [
+        401,
+        402,
+    ]
     assert results[1].error is None

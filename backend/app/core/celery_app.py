@@ -15,6 +15,7 @@ celery_app.conf.imports = (
     "app.tasks.alert_tasks",
     "app.tasks.sla_tasks",
     "app.tasks.ingestion_tasks",
+    "app.tasks.processing_tasks",
 )
 
 celery_app.conf.update(

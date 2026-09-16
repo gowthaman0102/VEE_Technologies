@@ -1,4 +1,5 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -74,7 +75,7 @@ async def test_runner_saves_only_accepted_articles(
 
     save_mock = AsyncMock(
         return_value=(
-            object(),
+            SimpleNamespace(id=201),
             True,
         )
     )
@@ -100,6 +101,7 @@ async def test_runner_saves_only_accepted_articles(
     assert result.collected == 2
     assert result.inserted == 1
     assert result.skipped == 1
+    assert result.inserted_article_ids == [201]
 
     assert save_mock.await_count == 1
 
@@ -156,8 +158,8 @@ async def test_runner_duplicate_is_skipped_on_second_run(
 
     save_mock = AsyncMock(
         side_effect=[
-            (object(), True),
-            (object(), False),
+            (SimpleNamespace(id=202), True),
+            (SimpleNamespace(id=202), False),
         ]
     )
 
@@ -190,9 +192,11 @@ async def test_runner_duplicate_is_skipped_on_second_run(
     assert first.collected == 1
     assert first.inserted == 1
     assert first.skipped == 0
+    assert first.inserted_article_ids == [202]
 
     assert second.collected == 1
     assert second.inserted == 0
     assert second.skipped == 1
+    assert second.inserted_article_ids == []
 
     assert save_mock.await_count == 2

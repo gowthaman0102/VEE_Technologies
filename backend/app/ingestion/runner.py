@@ -1,5 +1,5 @@
-﻿from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +32,9 @@ class IngestionResult:
     collected: int
     inserted: int
     skipped: int
+    inserted_article_ids: list[int] = field(
+        default_factory=list
+    )
 
 
 async def run_collector(
@@ -63,6 +66,7 @@ async def run_collector(
 
     inserted = 0
     skipped = 0
+    inserted_article_ids: list[int] = []
 
     for article in articles:
         validation = await resolved_validator(
@@ -74,13 +78,18 @@ async def run_collector(
             skipped += 1
             continue
 
-        _, created = await save_collected_article(
-            db,
-            article,
+        saved_article, created = (
+            await save_collected_article(
+                db,
+                article,
+            )
         )
 
         if created:
             inserted += 1
+            inserted_article_ids.append(
+                saved_article.id
+            )
         else:
             skipped += 1
 
@@ -88,4 +97,7 @@ async def run_collector(
         collected=len(articles),
         inserted=inserted,
         skipped=skipped,
+        inserted_article_ids=(
+            inserted_article_ids
+        ),
     )

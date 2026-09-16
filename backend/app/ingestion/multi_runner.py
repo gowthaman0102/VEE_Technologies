@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,9 @@ class SourceIngestionResult:
     collected: int
     inserted: int
     skipped: int
+    inserted_article_ids: list[int] = field(
+        default_factory=list
+    )
     error: str | None = None
 
 
@@ -50,6 +53,9 @@ async def run_sources(
                     collected=result.collected,
                     inserted=result.inserted,
                     skipped=result.skipped,
+                    inserted_article_ids=(
+                        result.inserted_article_ids
+                    ),
                 )
             )
 
