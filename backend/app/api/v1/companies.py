@@ -3,7 +3,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.schemas.company import CompanyCreate, CompanyResponse
+from app.schemas.company import (
+    ActiveCompanyResponse,
+    CompanyCreate,
+    CompanyResponse,
+)
 from app.schemas.company_context import (
     CompanyContextCreate,
     CompanyContextResponse,
@@ -14,6 +18,9 @@ from app.schemas.company_relevance import (
     CompanySemanticRelevanceResponse,
 )
 from app.services.client_service import get_client
+from app.services.active_company_profile_service import (
+    get_active_company_profile,
+)
 from app.services.company_context_service import (
     create_company_context,
     get_company_context,
@@ -29,6 +36,22 @@ from app.services.company_relevance_service import (
 
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
+
+
+@router.get("/active", response_model=ActiveCompanyResponse)
+async def get_active_company_endpoint(
+    db: AsyncSession = Depends(get_db),
+) -> ActiveCompanyResponse:
+    profile = await get_active_company_profile(db)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active company configured.",
+        )
+    return ActiveCompanyResponse(
+        id=profile.company_id,
+        name=profile.company_name,
+    )
 
 
 @router.post(

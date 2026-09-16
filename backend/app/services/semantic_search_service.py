@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.embeddings import EmbeddingProvider
 from app.embeddings.factory import get_embedding_provider
 from app.models.article import Article
+from app.models.article_triage import ArticleTriage
 
 
 @dataclass
@@ -26,6 +27,7 @@ async def semantic_search(
     *,
     limit: int = 10,
     minimum_similarity: float | None = None,
+    company_id: int | None = None,
     provider: EmbeddingProvider | None = None,
 ) -> list[SemanticSearchResult]:
     normalized_query = query.strip()
@@ -83,6 +85,12 @@ async def semantic_search(
         )
         .limit(limit)
     )
+
+    if company_id is not None:
+        statement = statement.join(
+            ArticleTriage,
+            ArticleTriage.article_id == Article.id,
+        ).where(ArticleTriage.company_id == company_id)
 
     result = await db.execute(statement)
 

@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -47,11 +48,12 @@ async def export_report(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     try:
+        start_date, end_date = _resolve_period(payload)
         report = await build_company_report(
             db,
             company_id=payload.company_id,
-            start_date=payload.start_date,
-            end_date=payload.end_date,
+            start_date=start_date,
+            end_date=end_date,
         )
         content = render_report(report, payload.format)
         record = await persist_generated_report(
@@ -59,7 +61,11 @@ async def export_report(
             report_data=report,
             file_format=payload.format,
             content=content,
+            report_type=payload.report_type,
         )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Report already exists for this period and format.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -71,6 +77,34 @@ async def export_report(
             "X-Report-Id": str(record.id),
         },
     )
+
+
+def _resolve_period(payload: ReportRequest) -> tuple[datetime, datetime]:
+    end = payload.end_date or datetime.now(timezone.utc)
+    if payload.report_type == "daily":
+        start = end - timedelta(days=1)
+    elif payload.report_type == "weekly":
+        start = end - timedelta(days=7)
+    elif payload.report_type == "monthly":
+        start = end - timedelta(days=30)
+    else:
+        if payload.start_date is None:
+            raise HTTPException(status_code=422, detail="start_date is required for custom reports.")
+        start = payload.start_date
+    return start, end
+
+
+@router.post("/generate")
+async def generate_report(
+    payload: ReportRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    response = await export_report(payload, db)
+    return {
+        "status": "success",
+        "filename": response.headers.get("content-disposition"),
+        "report_id": response.headers.get("x-report-id"),
+    }
 
 
 @router.get("/history", response_model=ReportHistoryResponse)

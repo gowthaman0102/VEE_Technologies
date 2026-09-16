@@ -1,7 +1,10 @@
-﻿from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.active_company_profile_service import (
+    get_active_company_profile,
+)
 from app.schemas.semantic_search import (
     SemanticSearchRequest,
     SemanticSearchResponse,
@@ -24,8 +27,15 @@ router = APIRouter(
 )
 async def search_articles(
     request: SemanticSearchRequest,
+    company_id: int | None = Query(default=None, ge=1),
     db: AsyncSession = Depends(get_db),
 ) -> SemanticSearchResponse:
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
+
     results = await semantic_search(
         db,
         request.query,
@@ -33,6 +43,7 @@ async def search_articles(
         minimum_similarity=(
             request.minimum_similarity
         ),
+        company_id=company_id,
     )
 
     return SemanticSearchResponse(

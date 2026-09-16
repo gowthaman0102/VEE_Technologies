@@ -73,3 +73,26 @@ async def delete_watchlist_item(
     await db.delete(item)
     await db.commit()
     return True
+
+
+async def update_watchlist_item(
+    db: AsyncSession,
+    *,
+    item_id: int,
+    values: dict,
+) -> dict | None:
+    item = await db.get(WatchlistItem, item_id)
+    if item is None:
+        return None
+    for key, value in values.items():
+        setattr(item, key, value)
+    await db.commit()
+    await db.refresh(item)
+    return {
+        "id": item.id,
+        "company_id": item.company_id,
+        "item_type": item.item_type,
+        "item_name": item.item_name,
+        "value": item.value,
+        "is_active": item.is_active,
+    }

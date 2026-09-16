@@ -1,14 +1,22 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.services.active_company_profile_service import (
+    get_active_company_profile,
+)
 from app.schemas.discovery import (
     EventClusterItem,
     EventClusterResponse,
     KeywordSearchResponse,
     KeywordSearchResult,
 )
-from app.services.discovery_service import keyword_search, list_event_clusters
+from app.schemas.event_clusters import EventClusterDetailResponse
+from app.services.discovery_service import (
+    get_event_cluster_detail,
+    keyword_search,
+    list_event_clusters,
+)
 
 router = APIRouter(tags=["Discovery"])
 
@@ -16,10 +24,22 @@ router = APIRouter(tags=["Discovery"])
 @router.get("/search/keyword", response_model=KeywordSearchResponse)
 async def search_keyword(
     q: str = Query(..., min_length=1, max_length=500),
+    company_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ) -> KeywordSearchResponse:
-    articles = await keyword_search(db, query=q, limit=limit)
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
+
+    articles = await keyword_search(
+        db,
+        query=q,
+        company_id=company_id,
+        limit=limit,
+    )
     return KeywordSearchResponse(
         query=q.strip(),
         count=len(articles),
@@ -47,3 +67,19 @@ async def read_event_clusters(
         count=len(items),
         items=[EventClusterItem(**item) for item in items],
     )
+
+
+@router.get("/event-clusters/{cluster_id}", response_model=EventClusterDetailResponse)
+async def read_event_cluster_detail(
+    cluster_id: int,
+    company_id: int | None = Query(default=None, ge=1),
+    db: AsyncSession = Depends(get_db),
+) -> EventClusterDetailResponse:
+    detail = await get_event_cluster_detail(
+        db,
+        cluster_id=cluster_id,
+        company_id=company_id,
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Event cluster not found.")
+    return EventClusterDetailResponse(**detail)

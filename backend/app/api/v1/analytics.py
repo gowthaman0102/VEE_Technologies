@@ -16,6 +16,7 @@ from app.schemas.analytics import (
 )
 from app.services.analytics_service import (
     get_article_count,
+    get_period_comparison,
     get_article_volume_over_time,
     get_business_impact_distribution,
     get_competitor_summary,
@@ -78,6 +79,12 @@ async def read_analytics_overview(
         start=start,
         end=end,
     )
+    comparison = await get_period_comparison(
+        db,
+        company_id=company_id,
+        start=start,
+        end=end,
+    )
 
     return AnalyticsOverviewResponse(
         company_id=company_id,
@@ -85,10 +92,23 @@ async def read_analytics_overview(
         end=end,
         total_articles=total_articles,
         total_events=events["total_events"],
-        sentiment=sentiment,
-        risk=risk,
-        business_impact=businesses,
+        sentiment={
+            key: sentiment[key]
+            for key in ("positive", "neutral", "negative")
+        },
+        risk={
+            key: risk[key]
+            for key in (
+                "average_risk_score",
+                "highest_risk_score",
+                "high_risk_count",
+                "medium_risk_count",
+                "low_risk_count",
+            )
+        },
+        business_impact=businesses.get("items", businesses),
         competitors=competitors.get("competitors", []),
+        comparison=comparison,
     )
 
 
@@ -171,7 +191,8 @@ async def read_business_impact(
     )
     return BusinessImpactResponse(
         company_id=company_id,
-        items=data,
+        items=data.get("items", data),
+        series=data.get("series", []),
     )
 
 

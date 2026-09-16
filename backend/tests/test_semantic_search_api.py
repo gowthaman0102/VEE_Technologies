@@ -51,7 +51,7 @@ def test_semantic_search_api(
     )
 
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": "  PayU RBI regulation  ",
             "limit": 5,
@@ -92,7 +92,7 @@ def test_semantic_search_api_default_values(
     )
 
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": "PayU"
         },
@@ -109,7 +109,7 @@ def test_semantic_search_api_default_values(
 
 def test_semantic_search_api_rejects_empty_query():
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": ""
         },
@@ -120,7 +120,7 @@ def test_semantic_search_api_rejects_empty_query():
 
 def test_semantic_search_api_rejects_limit_too_small():
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": "PayU",
             "limit": 0,
@@ -132,7 +132,7 @@ def test_semantic_search_api_rejects_limit_too_small():
 
 def test_semantic_search_api_rejects_limit_too_large():
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": "PayU",
             "limit": 101,
@@ -144,7 +144,7 @@ def test_semantic_search_api_rejects_limit_too_large():
 
 def test_semantic_search_api_rejects_similarity_above_one():
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": "PayU",
             "minimum_similarity": 1.1,
@@ -156,7 +156,7 @@ def test_semantic_search_api_rejects_similarity_above_one():
 
 def test_semantic_search_api_rejects_similarity_below_minus_one():
     response = client.post(
-        "/api/v1/semantic-search",
+        "/api/v1/semantic-search?company_id=1",
         json={
             "query": "PayU",
             "minimum_similarity": -1.1,

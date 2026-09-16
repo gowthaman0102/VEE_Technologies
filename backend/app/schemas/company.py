@@ -21,3 +21,8 @@ class CompanyResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class ActiveCompanyResponse(BaseModel):
+    id: int
+    name: str

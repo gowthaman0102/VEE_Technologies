@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.celery_app import celery_app
 from app.db.celery_session import CeleryAsyncSessionLocal
@@ -13,9 +14,11 @@ from app.services.report_service import (
 )
 
 
-async def _generate_scheduled_reports() -> dict:
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=7)
+async def _generate_scheduled_reports(report_type: str, days: int) -> dict:
+    end = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    start = end - timedelta(days=days)
     generated = []
 
     async with CeleryAsyncSessionLocal() as db:
@@ -30,17 +33,32 @@ async def _generate_scheduled_reports() -> dict:
                 end_date=end,
             )
             content = render_report(report, "pdf")
-            record = await persist_generated_report(
-                db,
-                report_data=report,
-                file_format="pdf",
-                content=content,
-            )
+            try:
+                record = await persist_generated_report(
+                    db,
+                    report_data=report,
+                    file_format="pdf",
+                    content=content,
+                    report_type=report_type,
+                )
+            except IntegrityError:
+                await db.rollback()
+                continue
             generated.append(record.id)
 
     return {"generated_report_ids": generated, "count": len(generated)}
 
 
+@celery_app.task(name="reports.generate_daily")
+def generate_daily_reports_task() -> dict:
+    return asyncio.run(_generate_scheduled_reports("daily", 1))
+
+
 @celery_app.task(name="reports.generate_weekly")
 def generate_weekly_reports_task() -> dict:
-    return asyncio.run(_generate_scheduled_reports())
+    return asyncio.run(_generate_scheduled_reports("weekly", 7))
+
+
+@celery_app.task(name="reports.generate_monthly")
+def generate_monthly_reports_task() -> dict:
+    return asyncio.run(_generate_scheduled_reports("monthly", 30))

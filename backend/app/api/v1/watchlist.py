@@ -5,6 +5,7 @@ from app.db.session import get_db
 from app.schemas.watchlist import (
     WatchlistDeleteResponse,
     WatchlistItemCreate,
+    WatchlistItemUpdate,
     WatchlistItemResponse,
     WatchlistListResponse,
 )
@@ -12,6 +13,7 @@ from app.services.watchlist_service import (
     create_watchlist_item,
     delete_watchlist_item,
     list_watchlist_items,
+    update_watchlist_item,
 )
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
@@ -63,3 +65,19 @@ async def delete_watchlist_entry(
             detail="Watchlist item not found.",
         )
     return WatchlistDeleteResponse(deleted=True)
+
+
+@router.patch("/{item_id}", response_model=WatchlistItemResponse)
+async def update_watchlist_entry(
+    item_id: int,
+    payload: WatchlistItemUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> WatchlistItemResponse:
+    data = await update_watchlist_item(
+        db,
+        item_id=item_id,
+        values=payload.model_dump(exclude_unset=True),
+    )
+    if data is None:
+        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    return WatchlistItemResponse(**data)

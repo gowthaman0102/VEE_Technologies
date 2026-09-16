@@ -19,6 +19,7 @@ class SentimentTrendResponse(BaseModel):
     positive: int = 0
     neutral: int = 0
     negative: int = 0
+    series: list[dict] = Field(default_factory=list)
 
 
 class RiskTrendResponse(BaseModel):
@@ -28,11 +29,13 @@ class RiskTrendResponse(BaseModel):
     high_risk_count: int = 0
     medium_risk_count: int = 0
     low_risk_count: int = 0
+    series: list[dict] = Field(default_factory=list)
 
 
 class BusinessImpactResponse(BaseModel):
     company_id: int
     items: dict[str, int] = Field(default_factory=dict)
+    series: list[dict] = Field(default_factory=list)
 
 
 class EventAnalyticsResponse(BaseModel):
@@ -61,3 +64,4 @@ class AnalyticsOverviewResponse(BaseModel):
     risk: dict[str, float | int] = Field(default_factory=dict)
     business_impact: dict[str, int] = Field(default_factory=dict)
     competitors: list[dict] = Field(default_factory=list)
+    comparison: dict[str, float | int] = Field(default_factory=dict)

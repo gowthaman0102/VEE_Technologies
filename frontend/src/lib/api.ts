@@ -47,6 +47,21 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   "http://127.0.0.1:8000/api/v1";
 
+export type ActiveCompany = {
+  id: number;
+  name: string;
+};
+
+export async function getActiveCompany(): Promise<ActiveCompany> {
+  const response = await fetch(`${API_BASE_URL}/companies/active`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Active company API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function getDashboardOverview(): Promise<DashboardOverview> {
   const response = await fetch(
     `${API_BASE_URL}/dashboard/overview`,
@@ -240,6 +255,20 @@ export type ReportSummary = {
   metrics: ReportMetric[];
 };
 
+export type ReportHistoryItem = {
+  id: number;
+  company_id: number;
+  report_type: string;
+  file_format: string;
+  filename: string;
+  content_type: string;
+  period_start: string;
+  period_end: string;
+  status: string;
+  generated_at: string | null;
+  error: string | null;
+};
+
 export type AnalyticsOverview = {
   company_id: number;
   start: string;
@@ -265,6 +294,17 @@ export type EventCluster = {
 export type EventClusterResponse = {
   count: number;
   items: EventCluster[];
+};
+
+export type EventClusterDetail = EventCluster & {
+  members: Array<{
+    article_id: number;
+    title: string;
+    source_name: string;
+    url: string;
+    published_at: string | null;
+    similarity: number | null;
+  }>;
 };
 
 export type KeywordSearchResult = {
@@ -344,6 +384,58 @@ export async function getReportSummary(args: {
   return response.json();
 }
 
+export async function getReportHistory(companyId: number): Promise<{ count: number; items: ReportHistoryItem[] }> {
+  const response = await fetch(`${API_BASE_URL}/reports/history?company_id=${companyId}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Report history API failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function generateReport(args: {
+  company_id: number;
+  report_type: "daily" | "weekly" | "monthly" | "custom";
+  format: "pdf" | "xlsx" | "csv";
+  start_date?: string;
+  end_date?: string;
+}): Promise<{ status: string; report_id: string; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}/reports/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!response.ok) throw new Error(`Report generation failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function createWatchlistItem(args: {
+  company_id: number;
+  item_type: string;
+  item_name: string;
+  value: string;
+}): Promise<WatchlistItem> {
+  const response = await fetch(`${API_BASE_URL}/watchlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!response.ok) throw new Error(`Watchlist create failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function updateWatchlistItem(id: number, values: Partial<WatchlistItem>): Promise<WatchlistItem> {
+  const response = await fetch(`${API_BASE_URL}/watchlist/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(values),
+  });
+  if (!response.ok) throw new Error(`Watchlist update failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function deleteWatchlistItem(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/watchlist/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(`Watchlist delete failed with status ${response.status}`);
+}
+
 export async function getAnalyticsOverview(
   companyId: number,
   start: string,
@@ -365,6 +457,29 @@ export async function getEventClusters(companyId: number): Promise<EventClusterR
   const response = await fetch(`${API_BASE_URL}/event-clusters?company_id=${companyId}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Event cluster API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function getEventClusterDetail(companyId: number, clusterId: number): Promise<EventClusterDetail> {
+  const response = await fetch(`${API_BASE_URL}/event-clusters/${clusterId}?company_id=${companyId}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Event detail API failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function searchKeyword(
+  companyId: number,
+  query: string,
+): Promise<KeywordSearchResponse> {
+  const params = new URLSearchParams({
+    company_id: String(companyId),
+    q: query,
+  });
+  const response = await fetch(`${API_BASE_URL}/search/keyword?${params}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Keyword search API failed with status ${response.status}`);
   }
   return response.json();
 }

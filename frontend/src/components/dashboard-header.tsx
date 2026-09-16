@@ -4,7 +4,7 @@
       <div className="mx-auto flex max-w-7xl items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Real-Time Monitoring
+            Near Real-Time Monitoring
           </p>
 
           <h1 className="mt-1 text-lg font-semibold text-white">

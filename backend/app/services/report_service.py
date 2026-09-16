@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import copy
 import io
 from datetime import datetime
 
@@ -111,13 +112,34 @@ def export_report_csv(report_data: dict) -> bytes:
 
 def export_report_xlsx(report_data: dict) -> bytes:
     workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Media Intelligence"
-    sheet.append(("Metric", "Value"))
-    for row in report_rows(report_data):
-        sheet.append(row)
-    sheet.column_dimensions["A"].width = 28
-    sheet.column_dimensions["B"].width = 42
+    sheet_names = (
+        "Summary",
+        "Articles",
+        "Sentiment",
+        "Risk",
+        "Business Impact",
+        "Events",
+        "Sources",
+        "Competitors",
+        "Alerts",
+    )
+    for index, name in enumerate(sheet_names):
+        sheet = workbook.active if index == 0 else workbook.create_sheet()
+        sheet.title = name
+        sheet.append(("Metric", "Value"))
+        if name == "Summary":
+            for row in report_rows(report_data):
+                sheet.append(row)
+        else:
+            sheet.append(("status", "No rows included in this summary export"))
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        sheet.column_dimensions["A"].width = 28
+        sheet.column_dimensions["B"].width = 42
+        for cell in sheet[1]:
+            font = copy.copy(cell.font)
+            font.bold = True
+            cell.font = font
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -150,6 +172,7 @@ async def persist_generated_report(
     report_data: dict,
     file_format: str,
     content: bytes,
+    report_type: str = "custom",
 ) -> GeneratedReport:
     extensions = {"pdf": "pdf", "xlsx": "xlsx", "csv": "csv"}
     content_types = {
@@ -159,13 +182,15 @@ async def persist_generated_report(
     }
     record = GeneratedReport(
         company_id=report_data["company_id"],
-        report_type="company_intelligence",
+        report_type=report_type,
         file_format=file_format,
         filename=f"company-{report_data['company_id']}-report.{extensions[file_format]}",
         content_type=content_types[file_format],
         period_start=report_data["start_date"],
         period_end=report_data["end_date"],
         content=content,
+        status="success",
+        generated_at=datetime.now(report_data["end_date"].tzinfo),
     )
     db.add(record)
     await db.commit()

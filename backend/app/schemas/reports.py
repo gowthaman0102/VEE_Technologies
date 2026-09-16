@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 
 class ReportRequest(BaseModel):
     company_id: int = Field(gt=0)
-    start_date: datetime
-    end_date: datetime
+    report_type: Literal["daily", "weekly", "monthly", "custom"] = "custom"
+    start_date: datetime | None = None
+    end_date: datetime | None = None
     format: Literal["pdf", "xlsx", "csv"] = "pdf"
     include_details: bool = True
 
@@ -44,6 +45,9 @@ class ReportHistoryItem(BaseModel):
     content_type: str
     period_start: datetime
     period_end: datetime
+    status: str
+    generated_at: datetime | None
+    error: str | None
     created_at: datetime
 
 

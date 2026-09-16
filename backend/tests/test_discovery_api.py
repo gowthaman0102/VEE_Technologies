@@ -12,7 +12,7 @@ def test_keyword_search(monkeypatch):
         "app.api.v1.discovery.keyword_search",
         AsyncMock(return_value=[]),
     )
-    response = client.get("/api/v1/search/keyword?q=regulatory")
+    response = client.get("/api/v1/search/keyword?q=regulatory&company_id=1")
     assert response.status_code == 200
     assert response.json() == {
         "query": "regulatory",

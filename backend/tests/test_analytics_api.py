@@ -33,6 +33,14 @@ def test_get_analytics_overview(monkeypatch):
         "app.api.v1.analytics.get_event_summary",
         AsyncMock(return_value={"total_events": 2, "largest_events": [{"cluster_id": 1, "article_count": 3}]}),
     )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_article_count",
+        AsyncMock(return_value=7),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_period_comparison",
+        AsyncMock(return_value={"article_volume_change_percent": 0.0}),
+    )
 
     start = datetime.now(timezone.utc) - timedelta(days=7)
     end = datetime.now(timezone.utc)

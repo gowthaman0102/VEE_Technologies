@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.article import Article
 from app.models.article_business_impact import ArticleBusinessImpact
+from app.models.article_competitor_mention import ArticleCompetitorMention
 from app.models.article_sentiment import ArticleSentiment
 from app.models.article_triage import ArticleTriage
 from app.models.company import Company
@@ -67,6 +69,76 @@ def validate_time_window(
             raise ValueError("end date cannot be in the future")
 
     return start, end
+
+
+def _time_bucket(value: datetime, bucket: str) -> str:
+    if bucket == "hour":
+        value = value.replace(minute=0, second=0, microsecond=0)
+    elif bucket == "week":
+        value = value.replace(hour=0, minute=0, second=0, microsecond=0)
+        value = value - timedelta(days=value.weekday())
+    elif bucket == "month":
+        value = value.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        value = value.replace(hour=0, minute=0, second=0, microsecond=0)
+    return value.isoformat()
+
+
+def _series_bucket(start: datetime, end: datetime, bucket: str) -> str:
+    duration = end - start
+    if bucket == "auto":
+        if duration <= timedelta(days=1):
+            return "hour"
+        if duration >= timedelta(days=60):
+            return "week"
+        return "day"
+    return bucket
+
+
+def percentage_change(current: float, previous: float) -> float:
+    if previous == 0:
+        return 0.0 if current == 0 else 100.0
+    return round(((current - previous) / previous) * 100, 2)
+
+
+async def get_period_comparison(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    start: datetime,
+    end: datetime,
+) -> dict[str, float | int]:
+    start, end = validate_time_window(start, end)
+    duration = end - start
+    previous_end = start
+    previous_start = start - duration
+    current_articles = await get_article_count(
+        db, company_id=company_id, start=start, end=end
+    )
+    previous_articles = await get_article_count(
+        db, company_id=company_id, start=previous_start, end=previous_end
+    )
+    current_risk = await get_risk_summary(
+        db, company_id=company_id, start=start, end=end
+    )
+    previous_risk = await get_risk_summary(
+        db, company_id=company_id, start=previous_start, end=previous_end
+    )
+    current_events = await get_event_summary(
+        db, company_id=company_id, start=start, end=end
+    )
+    previous_events = await get_event_summary(
+        db, company_id=company_id, start=previous_start, end=previous_end
+    )
+    return {
+        "article_volume_change_percent": percentage_change(current_articles, previous_articles),
+        "risk_average_change_percent": percentage_change(
+            current_risk["average_risk_score"], previous_risk["average_risk_score"]
+        ),
+        "event_count_change_percent": percentage_change(
+            current_events["total_events"], previous_events["total_events"]
+        ),
+    }
 
 
 async def get_article_volume_over_time(
@@ -143,10 +215,30 @@ async def get_sentiment_distribution(
 
     result = await db.execute(stmt)
     summary = {row.label: int(row.count) for row in result.all()}
+    rows = (await db.execute(
+        select(ArticleSentiment.label, ArticleSentiment.created_at)
+        .where(
+            ArticleSentiment.company_id == company_id,
+            ArticleSentiment.created_at >= start,
+            ArticleSentiment.created_at <= end,
+        )
+    )).all()
+    bucket = _series_bucket(start, end, "auto")
+    series_map: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"positive": 0, "neutral": 0, "negative": 0}
+    )
+    for label, created_at in rows:
+        series_map[_time_bucket(created_at, bucket)][label] = (
+            series_map[_time_bucket(created_at, bucket)].get(label, 0) + 1
+        )
     return {
         "positive": summary.get("positive", 0),
         "neutral": summary.get("neutral", 0),
         "negative": summary.get("negative", 0),
+        "series": [
+            {"period": period, **values}
+            for period, values in sorted(series_map.items())
+        ],
     }
 
 
@@ -205,7 +297,41 @@ async def get_risk_summary(
         "high_risk_count": int(row.high_risk_count or 0),
         "medium_risk_count": int(row.medium_risk_count or 0),
         "low_risk_count": int(row.low_risk_count or 0),
+        "series": await _get_risk_series(
+            db, company_id=company_id, start=start, end=end
+        ),
     }
+
+
+async def _get_risk_series(db, *, company_id: int, start: datetime, end: datetime) -> list[dict]:
+    rows = (await db.execute(
+        select(
+            RiskAssessment.created_at,
+            RiskAssessment.risk_score,
+            RiskAssessment.risk_level,
+            RiskAssessment.escalation_action,
+        ).where(
+            RiskAssessment.company_id == company_id,
+            RiskAssessment.created_at >= start,
+            RiskAssessment.created_at <= end,
+        )
+    )).all()
+    bucket = _series_bucket(start, end, "auto")
+    grouped: dict[str, list] = defaultdict(list)
+    for row in rows:
+        grouped[_time_bucket(row.created_at, bucket)].append(row)
+    return [
+        {
+            "period": period,
+            "average_risk_score": sum(float(item.risk_score) for item in values) / len(values),
+            "maximum_risk_score": max(float(item.risk_score) for item in values),
+            "low_count": sum(item.risk_level == "low" for item in values),
+            "medium_count": sum(item.risk_level == "medium" for item in values),
+            "high_count": sum(item.risk_level == "high" for item in values),
+            "escalation_count": sum(item.escalation_action not in {"none", "monitor"} for item in values),
+        }
+        for period, values in sorted(grouped.items())
+    ]
 
 
 async def get_business_impact_distribution(
@@ -231,7 +357,30 @@ async def get_business_impact_distribution(
     )
 
     rows = (await db.execute(stmt)).all()
-    return {row.primary_category: int(row.count) for row in rows}
+    counts = {row.primary_category: int(row.count) for row in rows}
+    items = {
+        category: counts.get(category, 0)
+        for category in SUPPORTED_IMPACT_CATEGORIES
+    }
+    series_rows = (await db.execute(
+        select(ArticleBusinessImpact.primary_category, ArticleBusinessImpact.created_at)
+        .where(
+            ArticleBusinessImpact.company_id == company_id,
+            ArticleBusinessImpact.created_at >= start,
+            ArticleBusinessImpact.created_at <= end,
+        )
+    )).all()
+    bucket = _series_bucket(start, end, "auto")
+    series_map: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for category, created_at in series_rows:
+        series_map[_time_bucket(created_at, bucket)][category] += 1
+    return {
+        "items": items,
+        "series": [
+            {"period": period, "categories": dict(values)}
+            for period, values in sorted(series_map.items())
+        ],
+    }
 
 
 async def get_event_summary(
@@ -257,8 +406,8 @@ async def get_event_summary(
         )
         .where(
             EventCluster.company_id == company_id,
-            EventCluster.first_published_at >= start,
-            EventCluster.last_published_at <= end,
+            EventCluster.last_published_at >= start,
+            EventCluster.first_published_at <= end,
         )
         .group_by(
             EventCluster.id,
@@ -300,11 +449,26 @@ async def get_source_summary(
     stmt = (
         select(
             Article.source_name,
-            func.count(Article.id).label("article_count"),
+            ArticleSentiment.label,
+            RiskAssessment.risk_score,
+            RiskAssessment.risk_level,
+            EventClusterMembership.cluster_id,
         )
-        .join(
-            ArticleTriage,
-            ArticleTriage.article_id == Article.id,
+        .join(ArticleTriage, ArticleTriage.article_id == Article.id)
+        .outerjoin(
+            ArticleSentiment,
+            (ArticleSentiment.article_id == Article.id)
+            & (ArticleSentiment.company_id == company_id),
+        )
+        .outerjoin(
+            RiskAssessment,
+            (RiskAssessment.article_id == Article.id)
+            & (RiskAssessment.company_id == company_id),
+        )
+        .outerjoin(
+            EventClusterMembership,
+            (EventClusterMembership.article_id == Article.id)
+            & (EventClusterMembership.company_id == company_id),
         )
         .where(
             ArticleTriage.company_id == company_id,
@@ -312,15 +476,51 @@ async def get_source_summary(
             Article.published_at >= start,
             Article.published_at <= end,
         )
-        .group_by(Article.source_name)
-        .order_by(func.count(Article.id).desc())
     )
-
     rows = (await db.execute(stmt)).all()
+    aggregates: dict[str, dict] = {}
+    for source, sentiment, risk_score, risk_level, cluster_id in rows:
+        item = aggregates.setdefault(
+            source,
+            {
+                "source_name": source,
+                "article_count": 0,
+                "sentiment": defaultdict(int),
+                "average_risk_score": [],
+                "high_risk_count": 0,
+                "event_count": set(),
+            },
+        )
+        item["article_count"] += 1
+        if sentiment:
+            item["sentiment"][sentiment] += 1
+        if risk_score is not None:
+            item["average_risk_score"].append(float(risk_score))
+        if risk_level == "high":
+            item["high_risk_count"] += 1
+        if cluster_id is not None:
+            item["event_count"].add(cluster_id)
     return {
         "sources": [
-            {"source_name": row.source_name, "article_count": int(row.article_count)}
-            for row in rows
+            {
+                "source_name": item["source_name"],
+                "article_count": item["article_count"],
+                "sentiment": dict(item["sentiment"]),
+                "average_risk_score": round(
+                    sum(item["average_risk_score"])
+                    / len(item["average_risk_score"]),
+                    2,
+                )
+                if item["average_risk_score"]
+                else 0.0,
+                "high_risk_count": item["high_risk_count"],
+                "event_count": len(item["event_count"]),
+            }
+            for item in sorted(
+                aggregates.values(),
+                key=lambda value: value["article_count"],
+                reverse=True,
+            )
         ]
     }
 
@@ -334,25 +534,67 @@ async def get_competitor_summary(
 ) -> dict:
     start, end = validate_time_window(start, end)
 
-    stmt = (
-        select(
-            CompanyRelationship.related_company_name.label("competitor"),
-            func.count(CompanyRelationship.id).label("mention_count"),
-        )
-        .where(
+    configured = (await db.execute(
+        select(CompanyRelationship.related_company_name).where(
             CompanyRelationship.company_id == company_id,
             CompanyRelationship.relationship_type == "competitor",
         )
-        .group_by(CompanyRelationship.related_company_name)
-    )
-
-    rows = (await db.execute(stmt)).all()
-    competitors = [
-        {"name": row.competitor, "mention_count": int(row.mention_count)}
-        for row in rows
-    ]
-
-    if not competitors:
+    )).scalars().all()
+    if not configured:
         return {"competitors": []}
 
-    return {"competitors": competitors}
+    rows = (await db.execute(
+        select(
+            ArticleCompetitorMention.competitors,
+            Article.published_at,
+            Article.source_name,
+            ArticleSentiment.label,
+            RiskAssessment.risk_level,
+            ArticleBusinessImpact.primary_category,
+        )
+        .join(Article, Article.id == ArticleCompetitorMention.article_id)
+        .outerjoin(ArticleSentiment, (ArticleSentiment.article_id == Article.id) & (ArticleSentiment.company_id == company_id))
+        .outerjoin(RiskAssessment, (RiskAssessment.article_id == Article.id) & (RiskAssessment.company_id == company_id))
+        .outerjoin(ArticleBusinessImpact, (ArticleBusinessImpact.article_id == Article.id) & (ArticleBusinessImpact.company_id == company_id))
+        .where(
+            ArticleCompetitorMention.company_id == company_id,
+            Article.published_at >= start,
+            Article.published_at <= end,
+        )
+    )).all()
+    aggregates = {
+        name: {
+            "name": name,
+            "mention_count": 0,
+            "mentions_by_period": defaultdict(int),
+            "sentiment": defaultdict(int),
+            "risk": defaultdict(int),
+            "business_impact": defaultdict(int),
+            "sources": defaultdict(int),
+        }
+        for name in configured
+    }
+    bucket = _series_bucket(start, end, "auto")
+    for competitors, published_at, source_name, sentiment, risk, impact in rows:
+        for name in competitors or []:
+            if name not in aggregates:
+                continue
+            item = aggregates[name]
+            item["mention_count"] += 1
+            if published_at:
+                item["mentions_by_period"][_time_bucket(published_at, bucket)] += 1
+            if sentiment:
+                item["sentiment"][sentiment] += 1
+            if risk:
+                item["risk"][risk] += 1
+            if impact:
+                item["business_impact"][impact] += 1
+            if source_name:
+                item["sources"][source_name] += 1
+    for item in aggregates.values():
+        item["mentions_by_period"] = dict(sorted(item["mentions_by_period"].items()))
+        item["sentiment"] = dict(item["sentiment"])
+        item["risk"] = dict(item["risk"])
+        item["business_impact"] = dict(item["business_impact"])
+        item["sources"] = dict(item["sources"])
+    return {"competitors": list(aggregates.values())}

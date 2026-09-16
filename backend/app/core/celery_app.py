@@ -41,8 +41,16 @@ celery_app.conf.beat_schedule = {
         "task": "ingestion.live_poll",
         "schedule": 300.0,
     },
+    "generate-daily-intelligence-reports": {
+        "task": "reports.generate_daily",
+        "schedule": 86400.0,
+    },
     "generate-weekly-intelligence-reports": {
         "task": "reports.generate_weekly",
         "schedule": 604800.0,
+    },
+    "generate-monthly-intelligence-reports": {
+        "task": "reports.generate_monthly",
+        "schedule": 2592000.0,
     },
 }

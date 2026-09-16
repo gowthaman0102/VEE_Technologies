@@ -1,10 +1,13 @@
-import { getAnalyticsOverview } from "@/lib/api";
+import { getActiveCompany, getAnalyticsOverview } from "@/lib/api";
 
 export default async function AnalyticsPage() {
+  const company = await getActiveCompany();
+  const end = new Date();
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
   const data = await getAnalyticsOverview(
-    1,
-    "2026-01-01T00:00:00+00:00",
-    "2026-09-15T23:59:59+00:00",
+    company.id,
+    start.toISOString(),
+    end.toISOString(),
   );
 
   return (
@@ -12,7 +15,7 @@ export default async function AnalyticsPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">Analytics</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">Intelligence Trends</h2>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">{company.name} Intelligence Trends</h2>
         </div>
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[

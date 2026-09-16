@@ -8,6 +8,13 @@ class WatchlistItemCreate(BaseModel):
     value: str = Field(min_length=1, max_length=500)
 
 
+class WatchlistItemUpdate(BaseModel):
+    item_type: str | None = Field(default=None, min_length=1, max_length=50)
+    item_name: str | None = Field(default=None, min_length=1, max_length=200)
+    value: str | None = Field(default=None, min_length=1, max_length=500)
+    is_active: bool | None = None
+
+
 class WatchlistItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
