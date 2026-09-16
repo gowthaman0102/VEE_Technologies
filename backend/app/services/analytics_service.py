@@ -231,10 +231,16 @@ async def get_sentiment_distribution(
         series_map[_time_bucket(created_at, bucket)][label] = (
             series_map[_time_bucket(created_at, bucket)].get(label, 0) + 1
         )
-    return {
+    summary_payload = {
         "positive": summary.get("positive", 0),
         "neutral": summary.get("neutral", 0),
         "negative": summary.get("negative", 0),
+    }
+    return {
+        "summary": summary_payload,
+        "positive": summary_payload["positive"],
+        "neutral": summary_payload["neutral"],
+        "negative": summary_payload["negative"],
         "series": [
             {"period": period, **values}
             for period, values in sorted(series_map.items())
@@ -291,15 +297,24 @@ async def get_risk_summary(
             "low_risk_count": 0,
         }
 
-    return {
+    summary_payload = {
         "average_risk_score": float(row.average_risk_score or 0.0),
         "highest_risk_score": float(row.highest_risk_score or 0.0),
         "high_risk_count": int(row.high_risk_count or 0),
         "medium_risk_count": int(row.medium_risk_count or 0),
         "low_risk_count": int(row.low_risk_count or 0),
-        "series": await _get_risk_series(
-            db, company_id=company_id, start=start, end=end
-        ),
+    }
+    series = await _get_risk_series(
+        db, company_id=company_id, start=start, end=end
+    )
+    return {
+        "summary": summary_payload,
+        "average_risk_score": summary_payload["average_risk_score"],
+        "highest_risk_score": summary_payload["highest_risk_score"],
+        "high_risk_count": summary_payload["high_risk_count"],
+        "medium_risk_count": summary_payload["medium_risk_count"],
+        "low_risk_count": summary_payload["low_risk_count"],
+        "series": series,
     }
 
 

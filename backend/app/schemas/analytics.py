@@ -16,6 +16,7 @@ class ArticleTrendResponse(BaseModel):
 
 class SentimentTrendResponse(BaseModel):
     company_id: int
+    summary: dict[str, int] = Field(default_factory=lambda: {"positive": 0, "neutral": 0, "negative": 0})
     positive: int = 0
     neutral: int = 0
     negative: int = 0
@@ -24,6 +25,13 @@ class SentimentTrendResponse(BaseModel):
 
 class RiskTrendResponse(BaseModel):
     company_id: int
+    summary: dict[str, float | int] = Field(default_factory=lambda: {
+        "average_risk_score": 0.0,
+        "highest_risk_score": 0.0,
+        "high_risk_count": 0,
+        "medium_risk_count": 0,
+        "low_risk_count": 0,
+    })
     average_risk_score: float = 0.0
     highest_risk_score: float = 0.0
     high_risk_count: int = 0

@@ -82,3 +82,83 @@ def test_get_article_trend(monkeypatch):
     assert data["company_id"] == 1
     assert data["bucket"] == "day"
     assert data["points"][0]["article_count"] == 5
+
+
+def test_get_analytics_overview_uses_active_company_when_not_provided(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.v1.analytics.validate_time_window",
+        lambda start, end: (start, end),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_active_company_profile",
+        AsyncMock(return_value=type("Profile", (), {"company_id": 42, "company_name": "VEE Technologies"})()),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_sentiment_distribution",
+        AsyncMock(return_value={"positive": 4, "neutral": 2, "negative": 1, "summary": {"positive": 4, "neutral": 2, "negative": 1}}),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_risk_summary",
+        AsyncMock(return_value={"average_risk_score": 65.5, "highest_risk_score": 92.0, "high_risk_count": 2, "medium_risk_count": 3, "low_risk_count": 1, "summary": {"average_risk_score": 65.5, "highest_risk_score": 92.0, "high_risk_count": 2, "medium_risk_count": 3, "low_risk_count": 1}}),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_business_impact_distribution",
+        AsyncMock(return_value={"items": {"reputation": 3, "financial": 1}, "summary": {"reputation": 3, "financial": 1}}),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_competitor_summary",
+        AsyncMock(return_value={"competitors": []}),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_event_summary",
+        AsyncMock(return_value={"total_events": 2, "largest_events": []}),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_article_count",
+        AsyncMock(return_value=7),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_period_comparison",
+        AsyncMock(return_value={"article_volume_change_percent": 0.0}),
+    )
+
+    start = datetime.now(timezone.utc) - timedelta(days=7)
+    end = datetime.now(timezone.utc)
+
+    response = client.get(
+        "/api/v1/analytics/overview",
+        params={"start": start.isoformat(), "end": end.isoformat()},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["company_id"] == 42
+
+
+def test_sentiment_trend_response_includes_summary_and_series(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.v1.analytics.validate_time_window",
+        lambda start, end: (start, end),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.analytics.get_sentiment_distribution",
+        AsyncMock(return_value={
+            "summary": {"positive": 6, "neutral": 2, "negative": 1},
+            "positive": 6,
+            "neutral": 2,
+            "negative": 1,
+            "series": [{"period": "2026-09-10T00:00:00+00:00", "positive": 3, "neutral": 1, "negative": 0}],
+        }),
+    )
+
+    start = datetime.now(timezone.utc) - timedelta(days=7)
+    end = datetime.now(timezone.utc)
+
+    response = client.get(
+        "/api/v1/analytics/sentiment/trend",
+        params={"company_id": 1, "start": start.isoformat(), "end": end.isoformat()},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["positive"] == 6
+    assert data["series"][0]["positive"] == 3

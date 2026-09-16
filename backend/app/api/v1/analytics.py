@@ -14,6 +14,7 @@ from app.schemas.analytics import (
     SentimentTrendResponse,
     SourceAnalyticsResponse,
 )
+from app.services.active_company_profile_service import get_active_company_profile
 from app.services.analytics_service import (
     get_article_count,
     get_period_comparison,
@@ -33,11 +34,17 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 @router.get("/overview", response_model=AnalyticsOverviewResponse)
 async def read_analytics_overview(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime | None = None,
     end: datetime | None = None,
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
+
     if start is None or end is None:
         raise HTTPException(status_code=400, detail="start and end are required")
 
@@ -93,11 +100,11 @@ async def read_analytics_overview(
         total_articles=total_articles,
         total_events=events["total_events"],
         sentiment={
-            key: sentiment[key]
+            key: sentiment.get("summary", sentiment).get(key, sentiment.get(key, 0))
             for key in ("positive", "neutral", "negative")
         },
         risk={
-            key: risk[key]
+            key: risk.get("summary", risk).get(key, risk.get(key, 0))
             for key in (
                 "average_risk_score",
                 "highest_risk_score",
@@ -114,12 +121,17 @@ async def read_analytics_overview(
 
 @router.get("/articles/trend", response_model=ArticleTrendResponse)
 async def read_article_trend(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     bucket: str = Query("day", pattern="^(hour|day|week|month)$"),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     points = await get_article_volume_over_time(
         db,
@@ -137,11 +149,16 @@ async def read_article_trend(
 
 @router.get("/sentiment/trend", response_model=SentimentTrendResponse)
 async def read_sentiment_trend(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     data = await get_sentiment_distribution(
         db,
@@ -149,19 +166,29 @@ async def read_sentiment_trend(
         start=start,
         end=end,
     )
+    summary = data.get("summary", {"positive": data.get("positive", 0), "neutral": data.get("neutral", 0), "negative": data.get("negative", 0)})
     return SentimentTrendResponse(
         company_id=company_id,
-        **data,
+        summary=summary,
+        positive=summary.get("positive", 0),
+        neutral=summary.get("neutral", 0),
+        negative=summary.get("negative", 0),
+        series=data.get("series", []),
     )
 
 
 @router.get("/risk/trend", response_model=RiskTrendResponse)
 async def read_risk_trend(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     data = await get_risk_summary(
         db,
@@ -169,19 +196,37 @@ async def read_risk_trend(
         start=start,
         end=end,
     )
+    summary = data.get("summary", {
+        "average_risk_score": data.get("average_risk_score", 0.0),
+        "highest_risk_score": data.get("highest_risk_score", 0.0),
+        "high_risk_count": data.get("high_risk_count", 0),
+        "medium_risk_count": data.get("medium_risk_count", 0),
+        "low_risk_count": data.get("low_risk_count", 0),
+    })
     return RiskTrendResponse(
         company_id=company_id,
-        **data,
+        summary=summary,
+        average_risk_score=summary.get("average_risk_score", 0.0),
+        highest_risk_score=summary.get("highest_risk_score", 0.0),
+        high_risk_count=summary.get("high_risk_count", 0),
+        medium_risk_count=summary.get("medium_risk_count", 0),
+        low_risk_count=summary.get("low_risk_count", 0),
+        series=data.get("series", []),
     )
 
 
 @router.get("/business-impact", response_model=BusinessImpactResponse)
 async def read_business_impact(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     data = await get_business_impact_distribution(
         db,
@@ -198,11 +243,16 @@ async def read_business_impact(
 
 @router.get("/events", response_model=EventAnalyticsResponse)
 async def read_event_analytics(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     data = await get_event_summary(
         db,
@@ -219,11 +269,16 @@ async def read_event_analytics(
 
 @router.get("/sources", response_model=SourceAnalyticsResponse)
 async def read_source_analytics(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     data = await get_source_summary(
         db,
@@ -239,11 +294,16 @@ async def read_source_analytics(
 
 @router.get("/competitors", response_model=CompetitorAnalyticsResponse)
 async def read_competitor_analytics(
-    company_id: int = Query(..., ge=1),
+    company_id: int | None = Query(default=None, ge=1),
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
     start, end = validate_time_window(start, end)
     data = await get_competitor_summary(
         db,
