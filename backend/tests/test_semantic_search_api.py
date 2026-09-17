@@ -185,3 +185,128 @@ def test_semantic_search_api_rejects_similarity_below_minus_one():
     )
 
     assert response.status_code == 422
+
+def test_semantic_search_api_passes_filters(
+    monkeypatch,
+):
+    search_mock = AsyncMock(return_value=[])
+
+    monkeypatch.setattr(
+        semantic_search,
+        "semantic_search",
+        search_mock,
+    )
+
+    response = client.post(
+        (
+            "/api/v1/semantic-search"
+            "?company_id=2"
+            "&start=2026-09-01T00:00:00Z"
+            "&end=2026-09-17T00:00:00Z"
+            "&source_name=Reuters"
+            "&sentiment=negative"
+            "&risk_level=high"
+            "&business_impact=regulatory"
+            "&event_type=enforcement"
+            "&event_cluster_id=7"
+        ),
+        json={
+            "query": "regulatory risk",
+            "limit": 25,
+            "minimum_similarity": 0.7,
+        },
+    )
+
+    assert response.status_code == 200
+
+    kwargs = search_mock.await_args.kwargs
+    filters = kwargs["filters"]
+
+    assert kwargs["company_id"] == 2
+    assert kwargs["limit"] == 25
+    assert kwargs["minimum_similarity"] == 0.7
+
+    assert filters.start is not None
+    assert filters.end is not None
+    assert filters.source_name == "Reuters"
+    assert filters.sentiment == "negative"
+    assert filters.risk_level == "high"
+    assert filters.business_impact == "regulatory"
+    assert filters.event_type == "enforcement"
+    assert filters.event_cluster_id == 7
+
+
+def test_semantic_search_api_rejects_invalid_time_window(
+    monkeypatch,
+):
+    search_mock = AsyncMock(return_value=[])
+
+    monkeypatch.setattr(
+        semantic_search,
+        "semantic_search",
+        search_mock,
+    )
+
+    response = client.post(
+        (
+            "/api/v1/semantic-search"
+            "?company_id=2"
+            "&start=2026-09-17T00:00:00Z"
+            "&end=2026-09-01T00:00:00Z"
+        ),
+        json={
+            "query": "regulatory risk",
+        },
+    )
+
+    assert response.status_code == 422
+    search_mock.assert_not_awaited()
+
+def test_semantic_search_api_returns_enriched_fields(
+    monkeypatch,
+):
+    search_mock = AsyncMock(
+        return_value=[
+            SemanticSearchResult(
+                article_id=10,
+                title="RBI regulatory update",
+                source_name="Reuters",
+                url="https://example.com/10",
+                published_at=None,
+                distance=0.10,
+                similarity=0.90,
+                event_type="regulatory_action",
+                sentiment="negative",
+                risk_level="high",
+                risk_score=82.5,
+                business_impact="regulatory",
+                event_cluster_id=7,
+            )
+        ]
+    )
+
+    monkeypatch.setattr(
+        semantic_search,
+        "semantic_search",
+        search_mock,
+    )
+
+    response = client.post(
+        "/api/v1/semantic-search?company_id=2",
+        json={
+            "query": "RBI regulation",
+        },
+    )
+
+    assert response.status_code == 200
+
+    result = response.json()["results"][0]
+
+    assert result["article_id"] == 10
+    assert result["similarity"] == 0.90
+    assert result["event_type"] == "regulatory_action"
+    assert result["sentiment"] == "negative"
+    assert result["risk_level"] == "high"
+    assert result["risk_score"] == 82.5
+    assert result["business_impact"] == "regulatory"
+    assert result["event_cluster_id"] == 7

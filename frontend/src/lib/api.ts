@@ -233,6 +233,28 @@ export type WatchlistResponse = {
   items: WatchlistItem[];
 };
 
+export type WatchlistMatch = {
+  watchlist_item_id: number;
+  item_type: string;
+  item_name: string;
+  value: string;
+  article_id: number;
+  title: string;
+  source_name: string;
+  url: string;
+  published_at: string | null;
+  event_type: string | null;
+  monitoring_topic: string | null;
+  risk_level: string | null;
+  risk_score: number | null;
+  business_impact: string | null;
+};
+
+export type WatchlistMatchResponse = {
+  count: number;
+  matches: WatchlistMatch[];
+};
+
 export type ReportMetric = {
   label: string;
   value: string | number;
@@ -260,13 +282,14 @@ export type ReportHistoryItem = {
   company_id: number;
   report_type: string;
   file_format: string;
-  filename: string;
-  content_type: string;
+  filename: string | null;
+  content_type: string | null;
   period_start: string;
   period_end: string;
   status: string;
   generated_at: string | null;
   error: string | null;
+  created_at: string;
 };
 
 export type AnalyticsOverview = {
@@ -307,18 +330,45 @@ export type EventClusterDetail = EventCluster & {
   }>;
 };
 
-export type KeywordSearchResult = {
+export type SearchFilters = {
+  start?: string;
+  end?: string;
+  source_name?: string;
+  sentiment?: string;
+  risk_level?: string;
+  business_impact?: string;
+  event_type?: string;
+  event_cluster_id?: number;
+};
+
+export type SearchResult = {
   article_id: number;
   title: string;
   source_name: string;
   url: string;
   published_at: string | null;
+  event_type: string | null;
+  sentiment: string | null;
+  risk_level: string | null;
+  risk_score: number | null;
+  business_impact: string | null;
+  event_cluster_id: number | null;
+  distance?: number;
+  similarity?: number;
 };
+
+export type KeywordSearchResult = SearchResult;
 
 export type KeywordSearchResponse = {
   query: string;
   count: number;
   results: KeywordSearchResult[];
+};
+
+export type SemanticSearchResponse = {
+  query: string;
+  count: number;
+  results: SearchResult[];
 };
 
 export async function getDashboardCompanies(): Promise<DashboardCompaniesResponse> {
@@ -351,6 +401,35 @@ export async function getWatchlist(
   if (!response.ok) {
     throw new Error(
       `Watchlist API failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function getWatchlistMatches(
+  companyId: number,
+  start: string,
+  end: string,
+  limit = 100,
+): Promise<WatchlistMatchResponse> {
+  const params = new URLSearchParams({
+    company_id: String(companyId),
+    start,
+    end,
+    limit: String(limit),
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/watchlist/matches?${params}`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Watchlist matches API failed with status ${response.status}`,
     );
   }
 
@@ -390,13 +469,21 @@ export async function getReportHistory(companyId: number): Promise<{ count: numb
   return response.json();
 }
 
+export type GenerateReportResponse = {
+  report_id: number;
+  status: string;
+  filename: string | null;
+  content_type: string | null;
+  error: string | null;
+};
+
 export async function generateReport(args: {
   company_id: number;
   report_type: "daily" | "weekly" | "monthly" | "custom";
   format: "pdf" | "xlsx" | "csv";
   start_date?: string;
   end_date?: string;
-}): Promise<{ status: string; report_id: string; filename: string }> {
+}): Promise<GenerateReportResponse> {
   const response = await fetch(`${API_BASE_URL}/reports/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -467,19 +554,100 @@ export async function getEventClusterDetail(companyId: number, clusterId: number
   return response.json();
 }
 
+function appendSearchFilters(
+  params: URLSearchParams,
+  filters: SearchFilters,
+): void {
+  if (filters.start) params.set("start", filters.start);
+  if (filters.end) params.set("end", filters.end);
+  if (filters.source_name) params.set("source_name", filters.source_name);
+  if (filters.sentiment) params.set("sentiment", filters.sentiment);
+  if (filters.risk_level) params.set("risk_level", filters.risk_level);
+  if (filters.business_impact) {
+    params.set("business_impact", filters.business_impact);
+  }
+  if (filters.event_type) params.set("event_type", filters.event_type);
+  if (filters.event_cluster_id !== undefined) {
+    params.set(
+      "event_cluster_id",
+      String(filters.event_cluster_id),
+    );
+  }
+}
+
 export async function searchKeyword(
   companyId: number,
   query: string,
+  filters: SearchFilters = {},
+  limit = 50,
 ): Promise<KeywordSearchResponse> {
   const params = new URLSearchParams({
     company_id: String(companyId),
     q: query,
+    limit: String(limit),
   });
-  const response = await fetch(`${API_BASE_URL}/search/keyword?${params}`, {
-    cache: "no-store",
-  });
+
+  appendSearchFilters(params, filters);
+
+  const response = await fetch(
+    `${API_BASE_URL}/search/keyword?${params}`,
+    {
+      cache: "no-store",
+    },
+  );
+
   if (!response.ok) {
-    throw new Error(`Keyword search API failed with status ${response.status}`);
+    throw new Error(
+      `Keyword search API failed with status ${response.status}`,
+    );
   }
+
+  return response.json();
+}
+
+export async function searchSemantic(
+  companyId: number,
+  query: string,
+  filters: SearchFilters = {},
+  limit = 50,
+  minimumSimilarity?: number,
+): Promise<SemanticSearchResponse> {
+  const params = new URLSearchParams({
+    company_id: String(companyId),
+  });
+
+  appendSearchFilters(params, filters);
+
+  const body: {
+    query: string;
+    limit: number;
+    minimum_similarity?: number;
+  } = {
+    query,
+    limit,
+  };
+
+  if (minimumSimilarity !== undefined) {
+    body.minimum_similarity = minimumSimilarity;
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/semantic-search?${params}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Semantic search API failed with status ${response.status}`,
+    );
+  }
+
   return response.json();
 }

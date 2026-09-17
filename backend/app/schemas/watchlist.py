@@ -31,5 +31,27 @@ class WatchlistListResponse(BaseModel):
     items: list[WatchlistItemResponse]
 
 
+class WatchlistMatchResponse(BaseModel):
+    watchlist_item_id: int
+    item_type: str
+    item_name: str
+    value: str
+    article_id: int
+    title: str
+    source_name: str
+    url: str
+    published_at: str | None = None
+    event_type: str | None = None
+    monitoring_topic: str | None = None
+    risk_level: str | None = None
+    risk_score: float | None = None
+    business_impact: str | None = None
+
+
+class WatchlistMatchListResponse(BaseModel):
+    count: int
+    matches: list[WatchlistMatchResponse]
+
+
 class WatchlistDeleteResponse(BaseModel):
     deleted: bool

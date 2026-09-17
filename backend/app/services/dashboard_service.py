@@ -37,19 +37,7 @@ async def get_dashboard_overview(
 
     total_articles = await db.scalar(
         select(
-            func.count(
-                func.distinct(
-                    ArticleTriage.article_id
-                )
-            )
-        )
-        .join(
-            Company,
-            Company.id
-            == ArticleTriage.company_id,
-        )
-        .where(
-            Company.is_active.is_(True)
+            func.count(Article.id)
         )
     )
 

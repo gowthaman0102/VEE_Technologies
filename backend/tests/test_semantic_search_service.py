@@ -210,3 +210,129 @@ async def test_semantic_search_rejects_invalid_similarity():
         )
 
     provider.embed_text.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_semantic_search_returns_company_enrichment(
+    monkeypatch,
+):
+    provider = make_provider()
+
+    rows = [
+        SimpleNamespace(
+            id=10,
+            title="RBI regulatory update",
+            source_name="Reuters",
+            url="https://example.com/10",
+            published_at=None,
+            distance=0.10,
+        ),
+    ]
+
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(
+        all=lambda: rows,
+    )
+
+    enrichment_mock = AsyncMock(
+        return_value={
+            10: SimpleNamespace(
+                event_type="regulatory_action",
+                sentiment="negative",
+                risk_level="high",
+                risk_score=82.5,
+                business_impact="regulatory",
+                event_cluster_id=7,
+            )
+        }
+    )
+
+    monkeypatch.setattr(
+        "app.services.semantic_search_service."
+        "get_search_result_enrichments",
+        enrichment_mock,
+    )
+
+    result = await semantic_search(
+        db,
+        "RBI regulation",
+        company_id=2,
+        provider=provider,
+    )
+
+    assert len(result) == 1
+
+    item = result[0]
+
+    assert item.article_id == 10
+    assert item.similarity == pytest.approx(0.90)
+    assert item.event_type == "regulatory_action"
+    assert item.sentiment == "negative"
+    assert item.risk_level == "high"
+    assert item.risk_score == 82.5
+    assert item.business_impact == "regulatory"
+    assert item.event_cluster_id == 7
+
+    enrichment_mock.assert_awaited_once_with(
+        db,
+        article_ids=[10],
+        company_id=2,
+    )
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_allows_missing_company_enrichment(
+    monkeypatch,
+):
+    provider = make_provider()
+
+    rows = [
+        SimpleNamespace(
+            id=11,
+            title="General payments update",
+            source_name="Example",
+            url="https://example.com/11",
+            published_at=None,
+            distance=0.20,
+        ),
+    ]
+
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(
+        all=lambda: rows,
+    )
+
+    enrichment_mock = AsyncMock(
+        return_value={},
+    )
+
+    monkeypatch.setattr(
+        "app.services.semantic_search_service."
+        "get_search_result_enrichments",
+        enrichment_mock,
+    )
+
+    result = await semantic_search(
+        db,
+        "payments",
+        company_id=2,
+        provider=provider,
+    )
+
+    assert len(result) == 1
+
+    item = result[0]
+
+    assert item.article_id == 11
+    assert item.similarity == pytest.approx(0.80)
+    assert item.event_type is None
+    assert item.sentiment is None
+    assert item.risk_level is None
+    assert item.risk_score is None
+    assert item.business_impact is None
+    assert item.event_cluster_id is None
+
+    enrichment_mock.assert_awaited_once_with(
+        db,
+        article_ids=[11],
+        company_id=2,
+    )

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +10,8 @@ from app.schemas.watchlist import (
     WatchlistItemUpdate,
     WatchlistItemResponse,
     WatchlistListResponse,
+    WatchlistMatchListResponse,
+    WatchlistMatchResponse,
 )
 from app.services.watchlist_service import (
     create_watchlist_item,
@@ -15,8 +19,68 @@ from app.services.watchlist_service import (
     list_watchlist_items,
     update_watchlist_item,
 )
+from app.services.watchlist_matching_service import (
+    match_watchlist_items,
+)
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
+
+
+@router.get(
+    "/matches",
+    response_model=WatchlistMatchListResponse,
+)
+async def read_watchlist_matches(
+    company_id: int = Query(ge=1),
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+) -> WatchlistMatchListResponse:
+    if (
+        start is not None
+        and end is not None
+        and start >= end
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="start must be earlier than end.",
+        )
+
+    matches = await match_watchlist_items(
+        db,
+        company_id=company_id,
+        start=start,
+        end=end,
+        limit=limit,
+    )
+
+    return WatchlistMatchListResponse(
+        count=len(matches),
+        matches=[
+            WatchlistMatchResponse(
+                watchlist_item_id=item.watchlist_item_id,
+                item_type=item.item_type,
+                item_name=item.item_name,
+                value=item.value,
+                article_id=item.article_id,
+                title=item.title,
+                source_name=item.source_name,
+                url=item.url,
+                published_at=(
+                    item.published_at.isoformat()
+                    if item.published_at is not None
+                    else None
+                ),
+                event_type=item.event_type,
+                monitoring_topic=item.monitoring_topic,
+                risk_level=item.risk_level,
+                risk_score=item.risk_score,
+                business_impact=item.business_impact,
+            )
+            for item in matches
+        ],
+    )
 
 
 @router.get("", response_model=WatchlistListResponse)

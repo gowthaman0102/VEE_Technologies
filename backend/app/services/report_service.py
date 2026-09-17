@@ -6,6 +6,7 @@ import io
 from xml.sax.saxutils import escape
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 from openpyxl.styles import (
@@ -47,6 +48,24 @@ from app.models.event_cluster import (
 from app.models.generated_report import GeneratedReport
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
+REPORT_DISPLAY_TIMEZONE = ZoneInfo(
+    "Asia/Kolkata"
+)
+
+
+def _report_display_time(
+    value: datetime,
+) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(
+            tzinfo=timezone.utc
+        )
+
+    return value.astimezone(
+        REPORT_DISPLAY_TIMEZONE
+    )
+
+
 from app.services.analytics_service import (
     get_business_impact_distribution,
     get_event_summary,
@@ -2475,8 +2494,10 @@ def export_report_pdf(
         "report_type"
     )
 
-    generated_at = datetime.now(
-        timezone.utc
+    generated_at = _report_display_time(
+        datetime.now(
+            timezone.utc
+        )
     )
 
     story.append(
@@ -2511,11 +2532,18 @@ def export_report_pdf(
         isinstance(start_date, datetime)
         and isinstance(end_date, datetime)
     ):
+        display_start = _report_display_time(
+            start_date
+        )
+        display_end = _report_display_time(
+            end_date
+        )
+
         period_text = (
             "Reporting Period: "
-            f"{start_date:%d %b %Y %H:%M UTC}"
+            f"{display_start:%d %b %Y %H:%M %Z}"
             " - "
-            f"{end_date:%d %b %Y %H:%M UTC}"
+            f"{display_end:%d %b %Y %H:%M %Z}"
         )
     else:
         period_text = (
@@ -2534,7 +2562,7 @@ def export_report_pdf(
         _pdf_paragraph(
             (
                 "Generated: "
-                f"{generated_at:%d %b %Y %H:%M UTC}"
+                f"{generated_at:%d %b %Y %H:%M %Z}"
             ),
             styles["small"],
         )

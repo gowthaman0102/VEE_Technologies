@@ -1,13 +1,21 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.embeddings import EmbeddingProvider
 from app.embeddings.factory import get_embedding_provider
 from app.models.article import Article
+from app.models.article_business_impact import ArticleBusinessImpact
+from app.models.article_sentiment import ArticleSentiment
 from app.models.article_triage import ArticleTriage
+from app.models.event_cluster import EventClusterMembership
+from app.models.risk_assessment import RiskAssessment
+from app.schemas.search_filters import SearchFilters
+from app.services.search_enrichment_service import (
+    get_search_result_enrichments,
+)
 
 
 @dataclass
@@ -19,6 +27,12 @@ class SemanticSearchResult:
     published_at: datetime | None
     distance: float
     similarity: float
+    event_type: str | None = None
+    sentiment: str | None = None
+    risk_level: str | None = None
+    risk_score: float | None = None
+    business_impact: str | None = None
+    event_cluster_id: int | None = None
 
 
 async def semantic_search(
@@ -29,6 +43,7 @@ async def semantic_search(
     minimum_similarity: float | None = None,
     company_id: int | None = None,
     provider: EmbeddingProvider | None = None,
+    filters: SearchFilters | None = None,
 ) -> list[SemanticSearchResult]:
     normalized_query = query.strip()
 
@@ -47,6 +62,28 @@ async def semantic_search(
     ):
         raise ValueError(
             "Minimum similarity must be between -1 and 1."
+        )
+
+    filters = filters or SearchFilters()
+
+    company_scoped_filter_requested = any(
+        value is not None
+        for value in (
+            filters.sentiment,
+            filters.risk_level,
+            filters.business_impact,
+            filters.event_type,
+            filters.event_cluster_id,
+        )
+    )
+
+    if (
+        company_scoped_filter_requested
+        and company_id is None
+    ):
+        raise ValueError(
+            "company_id is required for company-scoped "
+            "semantic search filters."
         )
 
     embedding_provider = (
@@ -80,17 +117,113 @@ async def semantic_search(
             Article.embedding_status == "success",
             Article.embedding.is_not(None),
         )
-        .order_by(
-            distance_expression.asc()
-        )
-        .limit(limit)
     )
 
     if company_id is not None:
         statement = statement.join(
             ArticleTriage,
             ArticleTriage.article_id == Article.id,
-        ).where(ArticleTriage.company_id == company_id)
+        ).where(
+            ArticleTriage.company_id == company_id
+        )
+
+    if filters.start is not None:
+        statement = statement.where(
+            Article.published_at >= filters.start
+        )
+
+    if filters.end is not None:
+        statement = statement.where(
+            Article.published_at <= filters.end
+        )
+
+    if filters.source_name is not None:
+        statement = statement.where(
+            func.lower(Article.source_name)
+            == filters.source_name.lower()
+        )
+
+    if filters.event_type is not None:
+        statement = statement.where(
+            func.lower(ArticleTriage.event_type)
+            == filters.event_type.lower()
+        )
+
+    if filters.sentiment is not None:
+        statement = statement.join(
+            ArticleSentiment,
+            (
+                (ArticleSentiment.article_id == Article.id)
+                & (
+                    ArticleSentiment.company_id
+                    == company_id
+                )
+            ),
+        ).where(
+            func.lower(ArticleSentiment.label)
+            == filters.sentiment.lower()
+        )
+
+    if filters.risk_level is not None:
+        statement = statement.join(
+            RiskAssessment,
+            (
+                (RiskAssessment.article_id == Article.id)
+                & (
+                    RiskAssessment.company_id
+                    == company_id
+                )
+            ),
+        ).where(
+            func.lower(RiskAssessment.risk_level)
+            == filters.risk_level.lower()
+        )
+
+    if filters.business_impact is not None:
+        statement = statement.join(
+            ArticleBusinessImpact,
+            (
+                (
+                    ArticleBusinessImpact.article_id
+                    == Article.id
+                )
+                & (
+                    ArticleBusinessImpact.company_id
+                    == company_id
+                )
+            ),
+        ).where(
+            func.lower(
+                ArticleBusinessImpact.primary_category
+            )
+            == filters.business_impact.lower()
+        )
+
+    if filters.event_cluster_id is not None:
+        statement = statement.join(
+            EventClusterMembership,
+            (
+                (
+                    EventClusterMembership.article_id
+                    == Article.id
+                )
+                & (
+                    EventClusterMembership.company_id
+                    == company_id
+                )
+            ),
+        ).where(
+            EventClusterMembership.cluster_id
+            == filters.event_cluster_id
+        )
+
+    statement = (
+        statement
+        .order_by(
+            distance_expression.asc()
+        )
+        .limit(limit)
+    )
 
     result = await db.execute(statement)
 
@@ -120,4 +253,57 @@ async def semantic_search(
             )
         )
 
-    return search_results
+    if company_id is None or not search_results:
+        return search_results
+
+    enrichments = await get_search_result_enrichments(
+        db,
+        article_ids=[
+            item.article_id
+            for item in search_results
+        ],
+        company_id=company_id,
+    )
+
+    return [
+        SemanticSearchResult(
+            article_id=item.article_id,
+            title=item.title,
+            source_name=item.source_name,
+            url=item.url,
+            published_at=item.published_at,
+            distance=item.distance,
+            similarity=item.similarity,
+            event_type=(
+                enrichments[item.article_id].event_type
+                if item.article_id in enrichments
+                else None
+            ),
+            sentiment=(
+                enrichments[item.article_id].sentiment
+                if item.article_id in enrichments
+                else None
+            ),
+            risk_level=(
+                enrichments[item.article_id].risk_level
+                if item.article_id in enrichments
+                else None
+            ),
+            risk_score=(
+                enrichments[item.article_id].risk_score
+                if item.article_id in enrichments
+                else None
+            ),
+            business_impact=(
+                enrichments[item.article_id].business_impact
+                if item.article_id in enrichments
+                else None
+            ),
+            event_cluster_id=(
+                enrichments[item.article_id].event_cluster_id
+                if item.article_id in enrichments
+                else None
+            ),
+        )
+        for item in search_results
+    ]

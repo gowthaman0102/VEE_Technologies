@@ -9,6 +9,12 @@ class KeywordSearchResult(BaseModel):
     source_name: str
     url: str
     published_at: datetime | None
+    event_type: str | None = None
+    sentiment: str | None = None
+    risk_level: str | None = None
+    risk_score: float | None = None
+    business_impact: str | None = None
+    event_cluster_id: int | None = None
 
 
 class KeywordSearchResponse(BaseModel):

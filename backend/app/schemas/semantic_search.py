@@ -30,6 +30,12 @@ class SemanticSearchResultResponse(BaseModel):
     published_at: datetime | None = None
     distance: float
     similarity: float
+    event_type: str | None = None
+    sentiment: str | None = None
+    risk_level: str | None = None
+    risk_score: float | None = None
+    business_impact: str | None = None
+    event_cluster_id: int | None = None
 
 
 class SemanticSearchResponse(BaseModel):
