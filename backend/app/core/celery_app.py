@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -43,14 +44,25 @@ celery_app.conf.beat_schedule = {
     },
     "generate-daily-intelligence-reports": {
         "task": "reports.generate_daily",
-        "schedule": 86400.0,
+        "schedule": crontab(
+            minute=10,
+            hour=0,
+        ),
     },
     "generate-weekly-intelligence-reports": {
         "task": "reports.generate_weekly",
-        "schedule": 604800.0,
+        "schedule": crontab(
+            minute=20,
+            hour=0,
+            day_of_week="monday",
+        ),
     },
     "generate-monthly-intelligence-reports": {
         "task": "reports.generate_monthly",
-        "schedule": 2592000.0,
+        "schedule": crontab(
+            minute=30,
+            hour=0,
+            day_of_month="1",
+        ),
     },
 }

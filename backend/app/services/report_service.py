@@ -1,19 +1,52 @@
 from __future__ import annotations
 
-import csv
 import copy
+import csv
 import io
-from datetime import datetime
+from xml.sax.saxutils import escape
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
 
 from openpyxl import Workbook
+from openpyxl.styles import (
+    Alignment,
+    Border,
+    Font,
+    PatternFill,
+    Side,
+)
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen.canvas import Canvas
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    KeepTogether,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.alert import Alert
 from app.models.article import Article
+from app.models.article_business_impact import ArticleBusinessImpact
+from app.models.article_competitor_mention import ArticleCompetitorMention
+from app.models.article_sentiment import ArticleSentiment
 from app.models.article_triage import ArticleTriage
+from app.models.company import Company
+from app.models.company_relationship import CompanyRelationship
+from app.models.event_cluster import (
+    EventCluster,
+    EventClusterMembership,
+)
 from app.models.generated_report import GeneratedReport
+from app.models.risk_assessment import RiskAssessment
+from app.models.risk_insight import RiskInsight
 from app.services.analytics_service import (
     get_business_impact_distribution,
     get_event_summary,
@@ -23,6 +56,504 @@ from app.services.analytics_service import (
 )
 
 
+REPORT_FORMATS = {"pdf", "xlsx", "csv"}
+
+REPORT_CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "xlsx": (
+        "application/vnd.openxmlformats-officedocument."
+        "spreadsheetml.sheet"
+    ),
+    "csv": "text/csv",
+}
+
+REPORT_EXTENSIONS = {
+    "pdf": "pdf",
+    "xlsx": "xlsx",
+    "csv": "csv",
+}
+
+
+def _article_timestamp(article: Article) -> datetime:
+    return article.published_at or article.collected_at
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+async def _get_company(
+    db: AsyncSession,
+    company_id: int,
+) -> Company:
+    company = await db.get(Company, company_id)
+
+    if company is None:
+        raise ValueError(
+            f"Company {company_id} was not found."
+        )
+
+    return company
+
+
+async def _get_report_articles(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+) -> list[Article]:
+    article_time = func.coalesce(
+        Article.published_at,
+        Article.collected_at,
+    )
+
+    stmt = (
+        select(Article)
+        .join(
+            ArticleTriage,
+            ArticleTriage.article_id == Article.id,
+        )
+        .where(
+            ArticleTriage.company_id == company_id,
+            article_time >= start_date,
+            article_time <= end_date,
+        )
+        .order_by(
+            article_time.desc(),
+            Article.id.desc(),
+        )
+    )
+
+    return list(
+        (
+            await db.execute(stmt)
+        ).scalars().all()
+    )
+
+
+async def _fetch_by_article_ids(
+    db: AsyncSession,
+    model,
+    *,
+    company_id: int,
+    article_ids: list[int],
+):
+    if not article_ids:
+        return []
+
+    stmt = select(model).where(
+        model.company_id == company_id,
+        model.article_id.in_(article_ids),
+    )
+
+    return list(
+        (
+            await db.execute(stmt)
+        ).scalars().all()
+    )
+
+
+async def _get_event_memberships(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    article_ids: list[int],
+) -> tuple[
+    dict[int, EventClusterMembership],
+    dict[int, EventCluster],
+]:
+    if not article_ids:
+        return {}, {}
+
+    memberships = list(
+        (
+            await db.execute(
+                select(EventClusterMembership).where(
+                    EventClusterMembership.company_id
+                    == company_id,
+                    EventClusterMembership.article_id.in_(
+                        article_ids
+                    ),
+                )
+            )
+        ).scalars().all()
+    )
+
+    cluster_ids = {
+        item.cluster_id
+        for item in memberships
+    }
+
+    clusters: list[EventCluster] = []
+
+    if cluster_ids:
+        clusters = list(
+            (
+                await db.execute(
+                    select(EventCluster).where(
+                        EventCluster.company_id
+                        == company_id,
+                        EventCluster.id.in_(cluster_ids),
+                    )
+                )
+            ).scalars().all()
+        )
+
+    return (
+        {
+            item.article_id: item
+            for item in memberships
+        },
+        {
+            item.id: item
+            for item in clusters
+        },
+    )
+
+
+async def _configured_competitor_names(
+    db: AsyncSession,
+    company_id: int,
+) -> list[str]:
+    stmt = (
+        select(
+            CompanyRelationship.related_company_name
+        )
+        .where(
+            CompanyRelationship.company_id == company_id,
+            CompanyRelationship.relationship_type
+            == "competitor",
+        )
+        .order_by(
+            CompanyRelationship.related_company_name.asc()
+        )
+    )
+
+    return list(
+        (
+            await db.execute(stmt)
+        ).scalars().all()
+    )
+
+
+def _index_by_article(rows) -> dict[int, object]:
+    return {
+        row.article_id: row
+        for row in rows
+    }
+
+
+def _alerts_by_article(
+    rows: list[Alert],
+) -> dict[int, list[Alert]]:
+    result: dict[int, list[Alert]] = defaultdict(list)
+
+    for row in rows:
+        result[row.article_id].append(row)
+
+    return result
+
+
+def _article_trend(
+    articles: list[Article],
+) -> list[dict]:
+    counts: Counter[str] = Counter()
+
+    for article in articles:
+        period = _article_timestamp(
+            article
+        ).date().isoformat()
+
+        counts[period] += 1
+
+    return [
+        {
+            "period": period,
+            "count": count,
+        }
+        for period, count in sorted(counts.items())
+    ]
+
+
+def _source_summary(
+    article_rows: list[dict],
+) -> list[dict]:
+    counts: Counter[str] = Counter(
+        row["source_name"]
+        for row in article_rows
+    )
+
+    return [
+        {
+            "source_name": source,
+            "article_count": count,
+        }
+        for source, count in counts.most_common()
+    ]
+
+
+def _competitor_summary(
+    configured_names: list[str],
+    article_rows: list[dict],
+) -> list[dict]:
+    result = []
+
+    for name in configured_names:
+        matching = [
+            row
+            for row in article_rows
+            if name in row["competitors"]
+        ]
+
+        source_counts = Counter(
+            row["source_name"]
+            for row in matching
+        )
+
+        sentiment_counts = Counter(
+            row["sentiment"]
+            for row in matching
+            if row["sentiment"]
+        )
+
+        unique_events = {
+            row["event_cluster_id"]
+            for row in matching
+            if row["event_cluster_id"] is not None
+        }
+
+        result.append(
+            {
+                "name": name,
+                "mention_count": len(matching),
+                "article_count": len(matching),
+                "event_count": len(unique_events),
+                "sentiment": {
+                    "positive": sentiment_counts.get(
+                        "positive",
+                        0,
+                    ),
+                    "neutral": sentiment_counts.get(
+                        "neutral",
+                        0,
+                    ),
+                    "negative": sentiment_counts.get(
+                        "negative",
+                        0,
+                    ),
+                },
+                "sources": [
+                    {
+                        "source_name": source,
+                        "count": count,
+                    }
+                    for source, count
+                    in source_counts.most_common()
+                ],
+            }
+        )
+
+    return result
+
+
+
+def build_deterministic_executive_summary(
+    report_data: dict,
+) -> str:
+    company_name = report_data.get(
+        "company_name",
+        "the company",
+    )
+
+    total_articles = int(
+        report_data.get(
+            "total_articles",
+            0,
+        )
+    )
+
+    total_events = int(
+        report_data.get(
+            "total_events",
+            0,
+        )
+    )
+
+    high_risk_count = int(
+        report_data.get(
+            "high_risk_count",
+            0,
+        )
+    )
+
+    sentiment = report_data.get(
+        "sentiment_balance",
+        {},
+    )
+
+    positive = int(
+        sentiment.get(
+            "positive",
+            0,
+        )
+    )
+
+    neutral = int(
+        sentiment.get(
+            "neutral",
+            0,
+        )
+    )
+
+    negative = int(
+        sentiment.get(
+            "negative",
+            0,
+        )
+    )
+
+    alerts = report_data.get(
+        "alerts",
+        [],
+    )
+
+    configured_competitors = (
+        report_data.get(
+            "competitors",
+            [],
+        )
+    )
+
+    if total_articles == 0:
+        return (
+            f"No qualifying media articles were found for "
+            f"{company_name} during the selected reporting "
+            f"period. As a result, no media-driven sentiment, "
+            f"risk, business-impact, event, competitor, or "
+            f"alert conclusions are reported for this period."
+        )
+
+    sentiment_total = (
+        positive
+        + neutral
+        + negative
+    )
+
+    if sentiment_total == 0:
+        sentiment_text = (
+            "No sentiment classifications were available."
+        )
+    else:
+        dominant_label, dominant_count = max(
+            (
+                ("positive", positive),
+                ("neutral", neutral),
+                ("negative", negative),
+            ),
+            key=lambda item: item[1],
+        )
+
+        sentiment_text = (
+            f"Media tone was predominantly "
+            f"{dominant_label}, with "
+            f"{dominant_count} of "
+            f"{sentiment_total} classified articles."
+        )
+
+    if high_risk_count > 0:
+        risk_text = (
+            f"{high_risk_count} article"
+            f"{'s' if high_risk_count != 1 else ''} "
+            f"{'was' if high_risk_count == 1 else 'were'} "
+            f"classified as high risk."
+        )
+    else:
+        risk_text = (
+            "No high-risk articles were identified."
+        )
+
+    if total_events > 0:
+        event_text = (
+            f"The coverage was grouped into "
+            f"{total_events} tracked event"
+            f"{'s' if total_events != 1 else ''}."
+        )
+    else:
+        event_text = (
+            "No qualifying event clusters were identified."
+        )
+
+    if alerts:
+        alert_text = (
+            f"{len(alerts)} alert"
+            f"{'s' if len(alerts) != 1 else ''} "
+            f"were generated from the monitored coverage."
+        )
+    else:
+        alert_text = (
+            "No alerts were generated during the period."
+        )
+
+    if configured_competitors:
+        competitor_mentions = sum(
+            int(
+                item.get(
+                    "mention_count",
+                    0,
+                )
+            )
+            for item in configured_competitors
+        )
+
+        competitor_text = (
+            f"Configured competitors accounted for "
+            f"{competitor_mentions} detected mention"
+            f"{'s' if competitor_mentions != 1 else ''}."
+        )
+    else:
+        competitor_text = (
+            "No competitors are currently configured "
+            "for comparison."
+        )
+
+    return " ".join(
+        (
+            f"{company_name} had "
+            f"{total_articles} qualifying media article"
+            f"{'s' if total_articles != 1 else ''} "
+            f"during the selected reporting period.",
+            sentiment_text,
+            risk_text,
+            event_text,
+            alert_text,
+            competitor_text,
+        )
+    )
+
+
+def _highest_risk_stories(
+    article_rows: list[dict],
+    *,
+    limit: int = 10,
+) -> list[dict]:
+    ranked = [
+        row
+        for row in article_rows
+        if row["risk_score"] is not None
+    ]
+
+    ranked.sort(
+        key=lambda item: (
+            item["risk_score"],
+            item["published_at"] or "",
+        ),
+        reverse=True,
+    )
+
+    return ranked[:limit]
+
+
 async def build_company_report(
     db: AsyncSession,
     *,
@@ -30,90 +561,735 @@ async def build_company_report(
     start_date: datetime,
     end_date: datetime,
 ) -> dict:
-    start_date, end_date = validate_time_window(start_date, end_date)
-    article_count_stmt = (
-        select(func.count(func.distinct(Article.id)))
-        .join(ArticleTriage, ArticleTriage.article_id == Article.id)
-        .where(
-            ArticleTriage.company_id == company_id,
-            Article.published_at >= start_date,
-            Article.published_at <= end_date,
+    start_date, end_date = validate_time_window(
+        start_date,
+        end_date,
+    )
+
+    company = await _get_company(
+        db,
+        company_id,
+    )
+
+    articles = await _get_report_articles(
+        db,
+        company_id=company_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    article_ids = [
+        article.id
+        for article in articles
+    ]
+
+    sentiments = await _fetch_by_article_ids(
+        db,
+        ArticleSentiment,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
+
+    impacts = await _fetch_by_article_ids(
+        db,
+        ArticleBusinessImpact,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
+
+    competitor_mentions = await _fetch_by_article_ids(
+        db,
+        ArticleCompetitorMention,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
+
+    risks = await _fetch_by_article_ids(
+        db,
+        RiskAssessment,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
+
+    risk_insights = await _fetch_by_article_ids(
+        db,
+        RiskInsight,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
+
+    alerts = await _fetch_by_article_ids(
+        db,
+        Alert,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
+
+    membership_by_article, cluster_by_id = (
+        await _get_event_memberships(
+            db,
+            company_id=company_id,
+            article_ids=article_ids,
         )
     )
-    total_articles = int((await db.scalar(article_count_stmt)) or 0)
 
-    sentiment = await get_sentiment_distribution(
-        db, company_id=company_id, start=start_date, end=end_date
+    sentiment_by_article = _index_by_article(
+        sentiments
     )
-    risk = await get_risk_summary(
-        db, company_id=company_id, start=start_date, end=end_date
+    impact_by_article = _index_by_article(
+        impacts
     )
-    business = await get_business_impact_distribution(
-        db, company_id=company_id, start=start_date, end=end_date
+    competitors_by_article = _index_by_article(
+        competitor_mentions
     )
-    events = await get_event_summary(
-        db, company_id=company_id, start=start_date, end=end_date
+    risk_by_article = _index_by_article(
+        risks
     )
+    insight_by_article = _index_by_article(
+        risk_insights
+    )
+    alerts_by_article = _alerts_by_article(
+        alerts
+    )
+
+    article_rows: list[dict] = []
+
+    for article in articles:
+        sentiment = sentiment_by_article.get(
+            article.id
+        )
+        impact = impact_by_article.get(
+            article.id
+        )
+        competitor = competitors_by_article.get(
+            article.id
+        )
+        risk = risk_by_article.get(
+            article.id
+        )
+        insight = insight_by_article.get(
+            article.id
+        )
+        membership = membership_by_article.get(
+            article.id
+        )
+
+        cluster = (
+            cluster_by_id.get(
+                membership.cluster_id
+            )
+            if membership is not None
+            else None
+        )
+
+        article_alerts = alerts_by_article.get(
+            article.id,
+            [],
+        )
+
+        article_rows.append(
+            {
+                "article_id": article.id,
+                "title": article.title,
+                "source_name": article.source_name,
+                "url": article.url,
+                "published_at": _iso(
+                    _article_timestamp(article)
+                ),
+                "sentiment": (
+                    sentiment.label
+                    if sentiment is not None
+                    else None
+                ),
+                "sentiment_score": (
+                    float(sentiment.score)
+                    if sentiment is not None
+                    else None
+                ),
+                "business_impact_primary": (
+                    impact.primary_category
+                    if impact is not None
+                    else None
+                ),
+                "business_impact_categories": (
+                    list(impact.categories or [])
+                    if impact is not None
+                    else []
+                ),
+                "business_impact_summary": (
+                    impact.impact_summary
+                    if impact is not None
+                    else None
+                ),
+                "competitors": (
+                    list(
+                        competitor.competitors
+                        or []
+                    )
+                    if competitor is not None
+                    else []
+                ),
+                "risk_score": (
+                    float(risk.risk_score)
+                    if risk is not None
+                    else None
+                ),
+                "risk_level": (
+                    risk.risk_level
+                    if risk is not None
+                    else None
+                ),
+                "escalation_action": (
+                    risk.escalation_action
+                    if risk is not None
+                    else None
+                ),
+                "attention_level": (
+                    insight.attention_level
+                    if insight is not None
+                    else None
+                ),
+                "risk_headline": (
+                    insight.headline
+                    if insight is not None
+                    else None
+                ),
+                "risk_summary": (
+                    insight.executive_summary
+                    if insight is not None
+                    else None
+                ),
+                "event_cluster_id": (
+                    cluster.id
+                    if cluster is not None
+                    else None
+                ),
+                "event_cluster_title": (
+                    cluster.title
+                    if cluster is not None
+                    else None
+                ),
+                "alerts": [
+                    {
+                        "alert_type": item.alert_type,
+                        "severity": item.severity,
+                        "title": item.title,
+                        "delivery_status": (
+                            item.delivery_status
+                        ),
+                        "created_at": _iso(
+                            item.created_at
+                        ),
+                    }
+                    for item in article_alerts
+                ],
+            }
+        )
+
+    sentiment_summary = (
+        await get_sentiment_distribution(
+            db,
+            company_id=company_id,
+            start=start_date,
+            end=end_date,
+        )
+    )
+
+    risk_summary = await get_risk_summary(
+        db,
+        company_id=company_id,
+        start=start_date,
+        end=end_date,
+    )
+
+    business_summary = (
+        await get_business_impact_distribution(
+            db,
+            company_id=company_id,
+            start=start_date,
+            end=end_date,
+        )
+    )
+
+    event_summary = await get_event_summary(
+        db,
+        company_id=company_id,
+        start=start_date,
+        end=end_date,
+    )
+
+    configured_competitors = (
+        await _configured_competitor_names(
+            db,
+            company_id,
+        )
+    )
+
+    sources = _source_summary(
+        article_rows
+    )
+
+    competitors = _competitor_summary(
+        configured_competitors,
+        article_rows,
+    )
+
+    alert_rows = [
+        {
+            "article_id": alert.article_id,
+            "alert_type": alert.alert_type,
+            "severity": alert.severity,
+            "title": alert.title,
+            "message": alert.message,
+            "delivery_status": (
+                alert.delivery_status
+            ),
+            "delivery_channel": (
+                alert.delivery_channel
+            ),
+            "sla_due_at": _iso(
+                alert.sla_due_at
+            ),
+            "delivered_at": _iso(
+                alert.delivered_at
+            ),
+            "created_at": _iso(
+                alert.created_at
+            ),
+        }
+        for alert in alerts
+    ]
 
     metrics = [
-        {"label": "Average risk score", "value": risk["average_risk_score"]},
-        {"label": "Highest risk score", "value": risk["highest_risk_score"]},
-        {"label": "High risk count", "value": risk["high_risk_count"]},
-        {"label": "Medium risk count", "value": risk["medium_risk_count"]},
-        {"label": "Low risk count", "value": risk["low_risk_count"]},
-        {"label": "Positive sentiment", "value": sentiment.get("positive", 0)},
-        {"label": "Neutral sentiment", "value": sentiment.get("neutral", 0)},
-        {"label": "Negative sentiment", "value": sentiment.get("negative", 0)},
+        {
+            "label": "Total articles",
+            "value": len(article_rows),
+        },
+        {
+            "label": "Total events",
+            "value": event_summary.get(
+                "total_events",
+                0,
+            ),
+        },
+        {
+            "label": "Average risk score",
+            "value": risk_summary.get(
+                "average_risk_score",
+                0.0,
+            ),
+        },
+        {
+            "label": "Highest risk score",
+            "value": risk_summary.get(
+                "highest_risk_score",
+                0.0,
+            ),
+        },
+        {
+            "label": "High risk count",
+            "value": risk_summary.get(
+                "high_risk_count",
+                0,
+            ),
+        },
+        {
+            "label": "Positive sentiment",
+            "value": sentiment_summary.get(
+                "positive",
+                0,
+            ),
+        },
+        {
+            "label": "Neutral sentiment",
+            "value": sentiment_summary.get(
+                "neutral",
+                0,
+            ),
+        },
+        {
+            "label": "Negative sentiment",
+            "value": sentiment_summary.get(
+                "negative",
+                0,
+            ),
+        },
+        {
+            "label": "Alerts",
+            "value": len(alert_rows),
+        },
     ]
 
-    return {
+    report_data = {
         "company_id": company_id,
+        "company_name": company.name,
         "start_date": start_date,
         "end_date": end_date,
-        "total_articles": total_articles,
-        "total_events": events.get("total_events", 0),
-        "high_risk_count": risk["high_risk_count"],
-        "medium_risk_count": risk["medium_risk_count"],
-        "low_risk_count": risk["low_risk_count"],
+        "total_articles": len(article_rows),
+        "total_events": event_summary.get(
+            "total_events",
+            0,
+        ),
+        "high_risk_count": risk_summary.get(
+            "high_risk_count",
+            0,
+        ),
+        "medium_risk_count": risk_summary.get(
+            "medium_risk_count",
+            0,
+        ),
+        "low_risk_count": risk_summary.get(
+            "low_risk_count",
+            0,
+        ),
         "sentiment_balance": {
-            "positive": sentiment.get("positive", 0),
-            "neutral": sentiment.get("neutral", 0),
-            "negative": sentiment.get("negative", 0),
+            "positive": sentiment_summary.get(
+                "positive",
+                0,
+            ),
+            "neutral": sentiment_summary.get(
+                "neutral",
+                0,
+            ),
+            "negative": sentiment_summary.get(
+                "negative",
+                0,
+            ),
         },
         "metrics": metrics,
+        "overview": {
+            "total_articles": len(
+                article_rows
+            ),
+            "total_events": event_summary.get(
+                "total_events",
+                0,
+            ),
+            "total_alerts": len(
+                alert_rows
+            ),
+        },
+        "article_trend": _article_trend(
+            articles
+        ),
+        "articles": article_rows,
+        "sentiment": sentiment_summary,
+        "risk": risk_summary,
+        "business_impact": business_summary,
+        "events": event_summary,
+        "sources": sources,
+        "competitors": competitors,
+        "alerts": alert_rows,
+        "highest_risk_stories": (
+            _highest_risk_stories(
+                article_rows
+            )
+        ),
     }
 
+    report_data["executive_summary"] = (
+        build_deterministic_executive_summary(
+            report_data
+        )
+    )
 
-def report_rows(report_data: dict) -> list[tuple[str, str]]:
+    return report_data
+
+
+def report_rows(
+    report_data: dict,
+) -> list[tuple[str, str]]:
     rows = [
-        ("company_id", str(report_data["company_id"])),
-        ("start_date", report_data["start_date"].isoformat()),
-        ("end_date", report_data["end_date"].isoformat()),
-        ("total_articles", str(report_data["total_articles"])),
-        ("total_events", str(report_data["total_events"])),
-        ("high_risk_count", str(report_data["high_risk_count"])),
-        ("medium_risk_count", str(report_data["medium_risk_count"])),
-        ("low_risk_count", str(report_data["low_risk_count"])),
-        ("positive_sentiment", str(report_data["sentiment_balance"]["positive"])),
-        ("neutral_sentiment", str(report_data["sentiment_balance"]["neutral"])),
-        ("negative_sentiment", str(report_data["sentiment_balance"]["negative"])),
+        (
+            "company",
+            report_data.get(
+                "company_name",
+                str(
+                    report_data[
+                        "company_id"
+                    ]
+                ),
+            ),
+        ),
+        (
+            "start_date",
+            report_data[
+                "start_date"
+            ].isoformat(),
+        ),
+        (
+            "end_date",
+            report_data[
+                "end_date"
+            ].isoformat(),
+        ),
+        (
+            "total_articles",
+            str(
+                report_data[
+                    "total_articles"
+                ]
+            ),
+        ),
+        (
+            "total_events",
+            str(
+                report_data[
+                    "total_events"
+                ]
+            ),
+        ),
+        (
+            "high_risk_count",
+            str(
+                report_data[
+                    "high_risk_count"
+                ]
+            ),
+        ),
+        (
+            "medium_risk_count",
+            str(
+                report_data[
+                    "medium_risk_count"
+                ]
+            ),
+        ),
+        (
+            "low_risk_count",
+            str(
+                report_data[
+                    "low_risk_count"
+                ]
+            ),
+        ),
+        (
+            "positive_sentiment",
+            str(
+                report_data[
+                    "sentiment_balance"
+                ]["positive"]
+            ),
+        ),
+        (
+            "neutral_sentiment",
+            str(
+                report_data[
+                    "sentiment_balance"
+                ]["neutral"]
+            ),
+        ),
+        (
+            "negative_sentiment",
+            str(
+                report_data[
+                    "sentiment_balance"
+                ]["negative"]
+            ),
+        ),
     ]
-    rows.extend((item["label"], str(item["value"])) for item in report_data["metrics"])
+
     return rows
 
 
-def export_report_csv(report_data: dict) -> bytes:
-    output = io.StringIO(newline="")
-    writer = csv.writer(output)
-    writer.writerow(("metric", "value"))
-    writer.writerows(report_rows(report_data))
-    return output.getvalue().encode("utf-8")
+def export_report_csv(
+    report_data: dict,
+) -> bytes:
+    output = io.StringIO(
+        newline=""
+    )
+    writer = csv.writer(
+        output
+    )
+
+    writer.writerow(
+        (
+            "metric",
+            "value",
+        )
+    )
+
+    writer.writerows(
+        report_rows(
+            report_data
+        )
+    )
+
+    return output.getvalue().encode(
+        "utf-8"
+    )
 
 
-def export_report_xlsx(report_data: dict) -> bytes:
+def _xlsx_header_style(
+    cell,
+) -> None:
+    cell.fill = PatternFill(
+        "solid",
+        fgColor="16324F",
+    )
+    cell.font = Font(
+        color="FFFFFF",
+        bold=True,
+    )
+    cell.alignment = Alignment(
+        vertical="center",
+        wrap_text=True,
+    )
+
+    thin = Side(
+        style="thin",
+        color="D1D5DB",
+    )
+
+    cell.border = Border(
+        left=thin,
+        right=thin,
+        top=thin,
+        bottom=thin,
+    )
+
+
+def _xlsx_body_style(
+    cell,
+    *,
+    wrap: bool = True,
+) -> None:
+    cell.alignment = Alignment(
+        vertical="top",
+        wrap_text=wrap,
+    )
+
+    thin = Side(
+        style="thin",
+        color="E5E7EB",
+    )
+
+    cell.border = Border(
+        left=thin,
+        right=thin,
+        top=thin,
+        bottom=thin,
+    )
+
+
+def _xlsx_title_style(
+    cell,
+) -> None:
+    cell.font = Font(
+        size=18,
+        bold=True,
+        color="16324F",
+    )
+
+    cell.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+
+
+def _xlsx_section_style(
+    cell,
+) -> None:
+    cell.font = Font(
+        size=12,
+        bold=True,
+        color="16324F",
+    )
+
+    cell.fill = PatternFill(
+        "solid",
+        fgColor="EAF0F6",
+    )
+
+    cell.alignment = Alignment(
+        vertical="center",
+    )
+
+
+def _xlsx_format_timestamp(
+    value: object | None,
+) -> str:
+    if isinstance(value, datetime):
+        return value.strftime(
+            "%d %b %Y %H:%M UTC"
+        )
+
+    if value is None:
+        return "Not available"
+
+    text = str(value).strip()
+
+    return text or "Not available"
+
+
+def _xlsx_add_table(
+    sheet,
+    headers: list[str],
+    rows: list[list],
+    *,
+    widths: list[float],
+    empty_message: str | None = None,
+) -> None:
+    sheet.append(headers)
+
+    for cell in sheet[1]:
+        _xlsx_header_style(cell)
+
+    if rows:
+        for row in rows:
+            sheet.append(row)
+    elif empty_message:
+        sheet.append(
+            [
+                empty_message,
+                *(
+                    ""
+                    for _ in range(
+                        max(
+                            len(headers) - 1,
+                            0,
+                        )
+                    )
+                ),
+            ]
+        )
+
+    for row in sheet.iter_rows(
+        min_row=2,
+        max_row=sheet.max_row,
+    ):
+        for cell in row:
+            _xlsx_body_style(cell)
+
+    sheet.freeze_panes = "A2"
+
+    if sheet.max_row >= 1:
+        sheet.auto_filter.ref = (
+            f"A1:"
+            f"{sheet.cell(1, len(headers)).coordinate}"
+        )
+
+    for index, width in enumerate(
+        widths,
+        start=1,
+    ):
+        sheet.column_dimensions[
+            sheet.cell(
+                1,
+                index,
+            ).column_letter
+        ].width = width
+
+
+def export_report_xlsx(
+    report_data: dict,
+) -> bytes:
     workbook = Workbook()
-    sheet_names = (
-        "Summary",
+
+    summary = workbook.active
+    summary.title = "Summary"
+
+    for name in (
         "Articles",
         "Sentiment",
         "Risk",
@@ -122,48 +1298,3443 @@ def export_report_xlsx(report_data: dict) -> bytes:
         "Sources",
         "Competitors",
         "Alerts",
+    ):
+        workbook.create_sheet(
+            title=name
+        )
+
+    company_name = report_data.get(
+        "company_name",
+        "VEE Technologies",
     )
-    for index, name in enumerate(sheet_names):
-        sheet = workbook.active if index == 0 else workbook.create_sheet()
-        sheet.title = name
-        sheet.append(("Metric", "Value"))
-        if name == "Summary":
-            for row in report_rows(report_data):
-                sheet.append(row)
-        else:
-            sheet.append(("status", "No rows included in this summary export"))
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
-        sheet.column_dimensions["A"].width = 28
-        sheet.column_dimensions["B"].width = 42
-        for cell in sheet[1]:
-            font = copy.copy(cell.font)
-            font.bold = True
-            cell.font = font
+
+    start_date = report_data.get(
+        "start_date"
+    )
+    end_date = report_data.get(
+        "end_date"
+    )
+
+    executive_summary = report_data.get(
+        "executive_summary",
+        "No executive summary is available.",
+    )
+
+    summary.merge_cells(
+        "A1:D1"
+    )
+    summary["A1"] = (
+        "VEE Technologies "
+        "Media Intelligence Report"
+    )
+    _xlsx_title_style(
+        summary["A1"]
+    )
+
+    summary.merge_cells(
+        "A2:D2"
+    )
+    summary["A2"] = company_name
+    summary["A2"].font = Font(
+        size=12,
+        bold=True,
+        color="4B5563",
+    )
+    summary["A2"].alignment = Alignment(
+        horizontal="center",
+    )
+
+    summary["A4"] = "Reporting Period"
+    summary["B4"] = (
+        f"{_xlsx_format_timestamp(start_date)}"
+        " - "
+        f"{_xlsx_format_timestamp(end_date)}"
+    )
+
+    summary["A5"] = "Generated"
+    summary["B5"] = _xlsx_format_timestamp(
+        datetime.now(timezone.utc)
+    )
+
+    summary["A7"] = "Executive Summary"
+    summary.merge_cells(
+        "A7:D7"
+    )
+    _xlsx_section_style(
+        summary["A7"]
+    )
+
+    summary.merge_cells(
+        "A8:D10"
+    )
+    summary["A8"] = executive_summary
+    summary["A8"].alignment = Alignment(
+        vertical="top",
+        wrap_text=True,
+    )
+
+    summary["A12"] = "KPI Summary"
+    summary.merge_cells(
+        "A12:D12"
+    )
+    _xlsx_section_style(
+        summary["A12"]
+    )
+
+    sentiment_balance = report_data.get(
+        "sentiment_balance",
+        {},
+    )
+
+    risk = report_data.get(
+        "risk",
+        {},
+    )
+
+    kpis = [
+        (
+            "Total Articles",
+            report_data.get(
+                "total_articles",
+                0,
+            ),
+        ),
+        (
+            "Total Events",
+            report_data.get(
+                "total_events",
+                0,
+            ),
+        ),
+        (
+            "High Risk",
+            report_data.get(
+                "high_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Medium Risk",
+            report_data.get(
+                "medium_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Low Risk",
+            report_data.get(
+                "low_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Positive Sentiment",
+            sentiment_balance.get(
+                "positive",
+                0,
+            ),
+        ),
+        (
+            "Neutral Sentiment",
+            sentiment_balance.get(
+                "neutral",
+                0,
+            ),
+        ),
+        (
+            "Negative Sentiment",
+            sentiment_balance.get(
+                "negative",
+                0,
+            ),
+        ),
+        (
+            "Alerts",
+            len(
+                report_data.get(
+                    "alerts",
+                    [],
+                )
+            ),
+        ),
+        (
+            "Average Risk Score",
+            risk.get(
+                "average_risk_score",
+                0.0,
+            ),
+        ),
+        (
+            "Highest Risk Score",
+            risk.get(
+                "highest_risk_score",
+                0.0,
+            ),
+        ),
+    ]
+
+    summary.append(
+        [
+            "Metric",
+            "Value",
+        ]
+    )
+
+    header_row = summary.max_row
+
+    for cell in summary[
+        header_row
+    ]:
+        if cell.column <= 2:
+            _xlsx_header_style(cell)
+
+    for label, value in kpis:
+        summary.append(
+            [
+                label,
+                value,
+            ]
+        )
+
+    for row in summary.iter_rows(
+        min_row=header_row + 1,
+        max_row=summary.max_row,
+        min_col=1,
+        max_col=2,
+    ):
+        for cell in row:
+            _xlsx_body_style(cell)
+
+    summary.column_dimensions[
+        "A"
+    ].width = 28
+    summary.column_dimensions[
+        "B"
+    ].width = 30
+    summary.column_dimensions[
+        "C"
+    ].width = 24
+    summary.column_dimensions[
+        "D"
+    ].width = 24
+
+    summary.row_dimensions[
+        1
+    ].height = 28
+
+    summary.row_dimensions[
+        8
+    ].height = 50
+
+    summary.sheet_view.showGridLines = False
+
+    articles_sheet = workbook["Articles"]
+
+    article_rows = []
+
+    for item in report_data.get(
+        "articles",
+        [],
+    ):
+        competitors = item.get(
+            "competitors",
+            [],
+        )
+
+        impact_categories = item.get(
+            "business_impact_categories",
+            [],
+        )
+
+        nested_alerts = item.get(
+            "alerts",
+            [],
+        )
+
+        article_rows.append(
+            [
+                item.get("article_id"),
+                item.get("title"),
+                item.get("source_name"),
+                item.get("published_at"),
+                item.get("url"),
+                item.get("sentiment"),
+                item.get("sentiment_score"),
+                item.get(
+                    "business_impact_primary"
+                ),
+                ", ".join(
+                    str(value)
+                    for value in impact_categories
+                ),
+                item.get(
+                    "business_impact_summary"
+                ),
+                ", ".join(
+                    str(value)
+                    for value in competitors
+                ),
+                item.get("risk_score"),
+                item.get("risk_level"),
+                item.get(
+                    "escalation_action"
+                ),
+                item.get(
+                    "attention_level"
+                ),
+                item.get(
+                    "risk_headline"
+                ),
+                item.get(
+                    "risk_summary"
+                ),
+                item.get(
+                    "event_cluster_title"
+                ),
+                len(nested_alerts),
+            ]
+        )
+
+    _xlsx_add_table(
+        articles_sheet,
+        [
+            "Article ID",
+            "Title",
+            "Source",
+            "Published",
+            "URL",
+            "Sentiment",
+            "Sentiment Score",
+            "Primary Impact",
+            "Impact Categories",
+            "Impact Summary",
+            "Competitors",
+            "Risk Score",
+            "Risk Level",
+            "Escalation",
+            "Attention",
+            "Risk Headline",
+            "Risk Summary",
+            "Event Cluster",
+            "Alert Count",
+        ],
+        article_rows,
+        widths=[
+            12,
+            42,
+            24,
+            24,
+            42,
+            14,
+            16,
+            18,
+            30,
+            42,
+            28,
+            14,
+            14,
+            18,
+            18,
+            36,
+            45,
+            36,
+            12,
+        ],
+        empty_message=(
+            "No qualifying articles are available "
+            "for this reporting period."
+        ),
+    )
+
+    articles_sheet.sheet_view.showGridLines = False
+
+    sentiment_sheet = workbook["Sentiment"]
+
+    sentiment = report_data.get(
+        "sentiment",
+        {},
+    )
+
+    sentiment_rows = [
+        [
+            "Positive",
+            sentiment.get(
+                "positive",
+                0,
+            ),
+        ],
+        [
+            "Neutral",
+            sentiment.get(
+                "neutral",
+                0,
+            ),
+        ],
+        [
+            "Negative",
+            sentiment.get(
+                "negative",
+                0,
+            ),
+        ],
+    ]
+
+    _xlsx_add_table(
+        sentiment_sheet,
+        [
+            "Classification",
+            "Article Count",
+        ],
+        sentiment_rows,
+        widths=[
+            22,
+            18,
+        ],
+    )
+
+    sentiment_sheet[
+        "D1"
+    ] = "Trend"
+
+    _xlsx_section_style(
+        sentiment_sheet["D1"]
+    )
+
+    trend_headers = [
+        "Period",
+        "Positive",
+        "Neutral",
+        "Negative",
+    ]
+
+    for column, value in enumerate(
+        trend_headers,
+        start=4,
+    ):
+        cell = sentiment_sheet.cell(
+            row=2,
+            column=column,
+            value=value,
+        )
+        _xlsx_header_style(cell)
+
+    sentiment_series = sentiment.get(
+        "series",
+        [],
+    )
+
+    if sentiment_series:
+        for row_index, item in enumerate(
+            sentiment_series,
+            start=3,
+        ):
+            values = [
+                item.get("period"),
+                item.get("positive", 0),
+                item.get("neutral", 0),
+                item.get("negative", 0),
+            ]
+
+            for column, value in enumerate(
+                values,
+                start=4,
+            ):
+                cell = sentiment_sheet.cell(
+                    row=row_index,
+                    column=column,
+                    value=value,
+                )
+                _xlsx_body_style(cell)
+    else:
+        sentiment_sheet[
+            "D3"
+        ] = (
+            "No sentiment trend data is "
+            "available for this period."
+        )
+        _xlsx_body_style(
+            sentiment_sheet["D3"]
+        )
+
+    sentiment_sheet.column_dimensions[
+        "D"
+    ].width = 24
+    sentiment_sheet.column_dimensions[
+        "E"
+    ].width = 14
+    sentiment_sheet.column_dimensions[
+        "F"
+    ].width = 14
+    sentiment_sheet.column_dimensions[
+        "G"
+    ].width = 14
+
+    sentiment_sheet.sheet_view.showGridLines = False
+
+    risk_sheet = workbook["Risk"]
+
+    risk = report_data.get(
+        "risk",
+        {},
+    )
+
+    risk_rows = [
+        [
+            "Average Risk Score",
+            risk.get(
+                "average_risk_score",
+                0.0,
+            ),
+        ],
+        [
+            "Highest Risk Score",
+            risk.get(
+                "highest_risk_score",
+                0.0,
+            ),
+        ],
+        [
+            "Low Risk",
+            risk.get(
+                "low_risk_count",
+                0,
+            ),
+        ],
+        [
+            "Medium Risk",
+            risk.get(
+                "medium_risk_count",
+                0,
+            ),
+        ],
+        [
+            "High Risk",
+            risk.get(
+                "high_risk_count",
+                0,
+            ),
+        ],
+    ]
+
+    _xlsx_add_table(
+        risk_sheet,
+        [
+            "Metric",
+            "Value",
+        ],
+        risk_rows,
+        widths=[
+            28,
+            18,
+        ],
+    )
+
+    risk_sheet["D1"] = "Risk Trend"
+    _xlsx_section_style(
+        risk_sheet["D1"]
+    )
+
+    risk_trend_headers = [
+        "Period",
+        "Average Risk",
+        "Maximum Risk",
+        "Low",
+        "Medium",
+        "High",
+        "Escalations",
+    ]
+
+    for column, value in enumerate(
+        risk_trend_headers,
+        start=4,
+    ):
+        cell = risk_sheet.cell(
+            row=2,
+            column=column,
+            value=value,
+        )
+        _xlsx_header_style(cell)
+
+    risk_series = risk.get(
+        "series",
+        [],
+    )
+
+    if risk_series:
+        for row_index, item in enumerate(
+            risk_series,
+            start=3,
+        ):
+            values = [
+                item.get("period"),
+                item.get(
+                    "average_risk_score",
+                    0.0,
+                ),
+                item.get(
+                    "maximum_risk_score",
+                    0.0,
+                ),
+                item.get(
+                    "low_count",
+                    0,
+                ),
+                item.get(
+                    "medium_count",
+                    0,
+                ),
+                item.get(
+                    "high_count",
+                    0,
+                ),
+                item.get(
+                    "escalation_count",
+                    0,
+                ),
+            ]
+
+            for column, value in enumerate(
+                values,
+                start=4,
+            ):
+                cell = risk_sheet.cell(
+                    row=row_index,
+                    column=column,
+                    value=value,
+                )
+                _xlsx_body_style(cell)
+    else:
+        risk_sheet["D3"] = (
+            "No risk trend data is "
+            "available for this period."
+        )
+        _xlsx_body_style(
+            risk_sheet["D3"]
+        )
+
+    for column, width in {
+        "D": 22,
+        "E": 18,
+        "F": 18,
+        "G": 12,
+        "H": 12,
+        "I": 12,
+        "J": 16,
+    }.items():
+        risk_sheet.column_dimensions[
+            column
+        ].width = width
+
+    risk_sheet.sheet_view.showGridLines = False
+
+    impact_sheet = workbook[
+        "Business Impact"
+    ]
+
+    business_impact = report_data.get(
+        "business_impact",
+        {},
+    )
+
+    primary_distribution = (
+        business_impact.get(
+            "primary_distribution",
+            {},
+        )
+    )
+
+    category_distribution = (
+        business_impact.get(
+            "category_distribution",
+            {},
+        )
+    )
+
+    primary_rows = [
+        [
+            str(category)
+            .replace("_", " ")
+            .title(),
+            count,
+        ]
+        for category, count
+        in primary_distribution.items()
+        if count
+    ]
+
+    _xlsx_add_table(
+        impact_sheet,
+        [
+            "Primary Category",
+            "Article Count",
+        ],
+        primary_rows,
+        widths=[
+            28,
+            18,
+        ],
+        empty_message=(
+            "No primary business-impact "
+            "classifications are available "
+            "for this period."
+        ),
+    )
+
+    impact_sheet["D1"] = (
+        "All-Category Distribution"
+    )
+    _xlsx_section_style(
+        impact_sheet["D1"]
+    )
+
+    impact_sheet["D2"] = (
+        "Impact Category"
+    )
+    impact_sheet["E2"] = (
+        "Article Count"
+    )
+
+    _xlsx_header_style(
+        impact_sheet["D2"]
+    )
+    _xlsx_header_style(
+        impact_sheet["E2"]
+    )
+
+    category_rows = [
+        [
+            str(category)
+            .replace("_", " ")
+            .title(),
+            count,
+        ]
+        for category, count
+        in category_distribution.items()
+        if count
+    ]
+
+    if category_rows:
+        for row_index, values in enumerate(
+            category_rows,
+            start=3,
+        ):
+            for column, value in enumerate(
+                values,
+                start=4,
+            ):
+                cell = impact_sheet.cell(
+                    row=row_index,
+                    column=column,
+                    value=value,
+                )
+                _xlsx_body_style(cell)
+    else:
+        impact_sheet["D3"] = (
+            "No all-category business-impact "
+            "classifications are available "
+            "for this period."
+        )
+        _xlsx_body_style(
+            impact_sheet["D3"]
+        )
+
+    impact_sheet.column_dimensions[
+        "D"
+    ].width = 32
+
+    impact_sheet.column_dimensions[
+        "E"
+    ].width = 18
+
+    impact_sheet.sheet_view.showGridLines = False
+
+    events_sheet = workbook["Events"]
+
+    events = report_data.get(
+        "events",
+        {},
+    )
+
+    event_rows = [
+        [
+            item.get("cluster_id"),
+            item.get("title"),
+            item.get("article_count", 0),
+            item.get("first_published_at"),
+            item.get("last_published_at"),
+        ]
+        for item in events.get(
+            "largest_events",
+            [],
+        )
+    ]
+
+    _xlsx_add_table(
+        events_sheet,
+        [
+            "Cluster ID",
+            "Event Title",
+            "Article Count",
+            "First Published",
+            "Last Published",
+        ],
+        event_rows,
+        widths=[
+            14,
+            48,
+            16,
+            26,
+            26,
+        ],
+        empty_message=(
+            "No qualifying event clusters "
+            "were identified for this period."
+        ),
+    )
+
+    events_sheet.sheet_view.showGridLines = False
+
+    sources_sheet = workbook["Sources"]
+
+    source_rows = [
+        [
+            item.get("source_name"),
+            item.get("article_count", 0),
+        ]
+        for item in report_data.get(
+            "sources",
+            [],
+        )
+    ]
+
+    _xlsx_add_table(
+        sources_sheet,
+        [
+            "Source",
+            "Article Count",
+        ],
+        source_rows,
+        widths=[
+            40,
+            18,
+        ],
+        empty_message=(
+            "No qualifying media sources "
+            "were identified for this period."
+        ),
+    )
+
+    sources_sheet.sheet_view.showGridLines = False
+
+    competitors_sheet = workbook[
+        "Competitors"
+    ]
+
+    competitor_rows = []
+
+    for item in report_data.get(
+        "competitors",
+        [],
+    ):
+        sentiment = item.get(
+            "sentiment",
+            {},
+        )
+
+        source_breakdown = ", ".join(
+            (
+                f"{source.get('source_name')}: "
+                f"{source.get('count', 0)}"
+            )
+            for source in item.get(
+                "sources",
+                [],
+            )
+        )
+
+        competitor_rows.append(
+            [
+                item.get("name"),
+                item.get(
+                    "mention_count",
+                    0,
+                ),
+                item.get(
+                    "article_count",
+                    0,
+                ),
+                item.get(
+                    "event_count",
+                    0,
+                ),
+                sentiment.get(
+                    "positive",
+                    0,
+                ),
+                sentiment.get(
+                    "neutral",
+                    0,
+                ),
+                sentiment.get(
+                    "negative",
+                    0,
+                ),
+                source_breakdown,
+            ]
+        )
+
+    _xlsx_add_table(
+        competitors_sheet,
+        [
+            "Competitor",
+            "Mentions",
+            "Articles",
+            "Events",
+            "Positive",
+            "Neutral",
+            "Negative",
+            "Source Breakdown",
+        ],
+        competitor_rows,
+        widths=[
+            32,
+            14,
+            14,
+            14,
+            14,
+            14,
+            14,
+            48,
+        ],
+        empty_message=(
+            "No competitors are currently "
+            "configured for comparison."
+        ),
+    )
+
+    competitors_sheet.sheet_view.showGridLines = False
+
+    alerts_sheet = workbook["Alerts"]
+
+    alert_rows = [
+        [
+            item.get("article_id"),
+            item.get("alert_type"),
+            item.get("severity"),
+            item.get("title"),
+            item.get("message"),
+            item.get("delivery_status"),
+            item.get("delivery_channel"),
+            item.get("sla_due_at"),
+            item.get("delivered_at"),
+            item.get("created_at"),
+        ]
+        for item in report_data.get(
+            "alerts",
+            [],
+        )
+    ]
+
+    _xlsx_add_table(
+        alerts_sheet,
+        [
+            "Article ID",
+            "Alert Type",
+            "Severity",
+            "Title",
+            "Message",
+            "Delivery Status",
+            "Delivery Channel",
+            "SLA Due",
+            "Delivered",
+            "Created",
+        ],
+        alert_rows,
+        widths=[
+            14,
+            22,
+            14,
+            36,
+            55,
+            20,
+            20,
+            26,
+            26,
+            26,
+        ],
+        empty_message=(
+            "No alerts were generated "
+            "during the reporting period."
+        ),
+    )
+
+    alerts_sheet.sheet_view.showGridLines = False
+
     output = io.BytesIO()
-    workbook.save(output)
+
+    workbook.save(
+        output
+    )
+
     return output.getvalue()
 
+def _pdf_safe_text(
+    value: object | None,
+    *,
+    fallback: str = "Not available",
+) -> str:
+    if value is None:
+        return escape(fallback)
 
-def export_report_pdf(report_data: dict) -> bytes:
+    text = str(value).strip()
+
+    if not text:
+        return escape(fallback)
+
+    return escape(text)
+
+
+def _pdf_display_value(
+    value: object | None,
+    *,
+    fallback: str = "Not available",
+) -> str:
+    if value is None:
+        return fallback
+
+    if isinstance(value, float):
+        return f"{value:.2f}"
+
+    if isinstance(value, datetime):
+        return value.strftime(
+            "%d %b %Y, %H:%M UTC"
+        )
+
+    text = str(value).strip()
+
+    return text if text else fallback
+
+
+def _pdf_styles() -> dict[str, ParagraphStyle]:
+    sample = getSampleStyleSheet()
+
+    return {
+        "title": ParagraphStyle(
+            "VeeReportTitle",
+            parent=sample["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=22,
+            leading=27,
+            alignment=TA_CENTER,
+            spaceAfter=12,
+            textColor=colors.HexColor("#16324F"),
+        ),
+        "subtitle": ParagraphStyle(
+            "VeeReportSubtitle",
+            parent=sample["Normal"],
+            fontName="Helvetica",
+            fontSize=11,
+            leading=15,
+            alignment=TA_CENTER,
+            spaceAfter=6,
+            textColor=colors.HexColor("#4B5563"),
+        ),
+        "section": ParagraphStyle(
+            "VeeReportSection",
+            parent=sample["Heading2"],
+            fontName="Helvetica-Bold",
+            fontSize=14,
+            leading=18,
+            spaceBefore=10,
+            spaceAfter=8,
+            textColor=colors.HexColor("#16324F"),
+        ),
+        "body": ParagraphStyle(
+            "VeeReportBody",
+            parent=sample["BodyText"],
+            fontName="Helvetica",
+            fontSize=9.5,
+            leading=14,
+            spaceAfter=7,
+            textColor=colors.HexColor("#1F2937"),
+        ),
+        "small": ParagraphStyle(
+            "VeeReportSmall",
+            parent=sample["BodyText"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=11,
+            textColor=colors.HexColor("#4B5563"),
+        ),
+        "table_header": ParagraphStyle(
+            "VeeReportTableHeader",
+            parent=sample["BodyText"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.white,
+        ),
+        "table_cell": ParagraphStyle(
+            "VeeReportTableCell",
+            parent=sample["BodyText"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=11,
+            textColor=colors.HexColor("#1F2937"),
+        ),
+        "empty": ParagraphStyle(
+            "VeeReportEmpty",
+            parent=sample["BodyText"],
+            fontName="Helvetica-Oblique",
+            fontSize=9,
+            leading=13,
+            textColor=colors.HexColor("#6B7280"),
+        ),
+    }
+
+
+def _pdf_paragraph(
+    value: object | None,
+    style: ParagraphStyle,
+    *,
+    fallback: str = "Not available",
+) -> Paragraph:
+    return Paragraph(
+        _pdf_safe_text(
+            value,
+            fallback=fallback,
+        ),
+        style,
+    )
+
+def _pdf_page_footer(
+    canvas,
+    document,
+) -> None:
+    canvas.saveState()
+
+    page_width, _ = letter
+
+    canvas.setFont(
+        "Helvetica",
+        7.5,
+    )
+    canvas.setFillColor(
+        colors.HexColor("#6B7280")
+    )
+
+    canvas.drawString(
+        document.leftMargin,
+        0.42 * inch,
+        "VEE Technologies - AI Media Intelligence",
+    )
+
+    canvas.drawRightString(
+        page_width - document.rightMargin,
+        0.42 * inch,
+        f"Page {document.page}",
+    )
+
+    canvas.restoreState()
+
+
+def export_report_pdf(
+    report_data: dict,
+) -> bytes:
     output = io.BytesIO()
-    canvas = Canvas(output, pagesize=letter)
-    width, height = letter
-    y = height - 54
-    canvas.setTitle("VEE Technologies Media Intelligence Report")
-    canvas.setFont("Helvetica-Bold", 16)
-    canvas.drawString(54, y, "VEE Technologies Media Intelligence Report")
-    y -= 30
-    canvas.setFont("Helvetica", 10)
-    for metric, value in report_rows(report_data):
-        if y < 54:
-            canvas.showPage()
-            y = height - 54
-            canvas.setFont("Helvetica", 10)
-        canvas.drawString(54, y, f"{metric}: {value}")
-        y -= 16
-    canvas.save()
+
+    document = SimpleDocTemplate(
+        output,
+        pagesize=letter,
+        rightMargin=0.65 * inch,
+        leftMargin=0.65 * inch,
+        topMargin=0.65 * inch,
+        bottomMargin=0.65 * inch,
+        title=(
+            "VEE Technologies Media Intelligence Report"
+        ),
+        author="VEE Technologies",
+    )
+
+    styles = _pdf_styles()
+    story = []
+
+    company_name = report_data.get(
+        "company_name",
+        "VEE Technologies",
+    )
+
+    start_date = report_data.get(
+        "start_date"
+    )
+    end_date = report_data.get(
+        "end_date"
+    )
+
+    report_type = report_data.get(
+        "report_type"
+    )
+
+    generated_at = datetime.now(
+        timezone.utc
+    )
+
+    story.append(
+        Paragraph(
+            (
+                "VEE Technologies "
+                "Media Intelligence Report"
+            ),
+            styles["title"],
+        )
+    )
+
+    story.append(
+        _pdf_paragraph(
+            company_name,
+            styles["subtitle"],
+        )
+    )
+
+    if report_type:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "Report Type: "
+                    f"{str(report_type).title()}"
+                ),
+                styles["subtitle"],
+            )
+        )
+
+    if (
+        isinstance(start_date, datetime)
+        and isinstance(end_date, datetime)
+    ):
+        period_text = (
+            "Reporting Period: "
+            f"{start_date:%d %b %Y %H:%M UTC}"
+            " - "
+            f"{end_date:%d %b %Y %H:%M UTC}"
+        )
+    else:
+        period_text = (
+            "Reporting Period: "
+            "Not available"
+        )
+
+    story.append(
+        _pdf_paragraph(
+            period_text,
+            styles["subtitle"],
+        )
+    )
+
+    story.append(
+        _pdf_paragraph(
+            (
+                "Generated: "
+                f"{generated_at:%d %b %Y %H:%M UTC}"
+            ),
+            styles["small"],
+        )
+    )
+
+    story.append(
+        Spacer(
+            1,
+            0.28 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Executive Summary",
+            styles["section"],
+        )
+    )
+
+    story.append(
+        _pdf_paragraph(
+            report_data.get(
+                "executive_summary"
+            ),
+            styles["body"],
+            fallback=(
+                "No executive summary "
+                "is available."
+            ),
+        )
+    )
+
+    story.append(
+        Spacer(
+            1,
+            0.14 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "KPI Summary",
+            styles["section"],
+        )
+    )
+
+    sentiment_balance = report_data.get(
+        "sentiment_balance",
+        {},
+    )
+    risk_summary = report_data.get(
+        "risk",
+        {},
+    )
+    alerts = report_data.get(
+        "alerts",
+        [],
+    )
+
+    kpi_rows = [
+        (
+            "Total Articles",
+            report_data.get(
+                "total_articles",
+                0,
+            ),
+        ),
+        (
+            "Total Events",
+            report_data.get(
+                "total_events",
+                0,
+            ),
+        ),
+        (
+            "High Risk",
+            report_data.get(
+                "high_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Medium Risk",
+            report_data.get(
+                "medium_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Low Risk",
+            report_data.get(
+                "low_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Positive Sentiment",
+            sentiment_balance.get(
+                "positive",
+                0,
+            ),
+        ),
+        (
+            "Neutral Sentiment",
+            sentiment_balance.get(
+                "neutral",
+                0,
+            ),
+        ),
+        (
+            "Negative Sentiment",
+            sentiment_balance.get(
+                "negative",
+                0,
+            ),
+        ),
+        (
+            "Alerts",
+            len(alerts),
+        ),
+        (
+            "Average Risk Score",
+            risk_summary.get(
+                "average_risk_score",
+                0.0,
+            ),
+        ),
+        (
+            "Highest Risk Score",
+            risk_summary.get(
+                "highest_risk_score",
+                0.0,
+            ),
+        ),
+    ]
+
+    kpi_table_data = [
+        [
+            Paragraph(
+                "Metric",
+                styles["table_header"],
+            ),
+            Paragraph(
+                "Value",
+                styles["table_header"],
+            ),
+        ]
+    ]
+
+    for label, value in kpi_rows:
+        kpi_table_data.append(
+            [
+                _pdf_paragraph(
+                    label,
+                    styles["table_cell"],
+                ),
+                _pdf_paragraph(
+                    _pdf_display_value(value),
+                    styles["table_cell"],
+                ),
+            ]
+        )
+
+    kpi_table = Table(
+        kpi_table_data,
+        colWidths=[
+            3.65 * inch,
+            2.25 * inch,
+        ],
+        repeatRows=1,
+        hAlign="LEFT",
+    )
+
+    kpi_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#16324F"),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP",
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    colors.HexColor("#D1D5DB"),
+                ),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [
+                        colors.white,
+                        colors.HexColor("#F8FAFC"),
+                    ],
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        kpi_table
+    )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Sentiment",
+            styles["section"],
+        )
+    )
+
+    sentiment = report_data.get(
+        "sentiment",
+        {},
+    )
+
+    sentiment_rows = [
+        (
+            "Positive",
+            sentiment.get(
+                "positive",
+                0,
+            ),
+        ),
+        (
+            "Neutral",
+            sentiment.get(
+                "neutral",
+                0,
+            ),
+        ),
+        (
+            "Negative",
+            sentiment.get(
+                "negative",
+                0,
+            ),
+        ),
+    ]
+
+    sentiment_table_data = [
+        [
+            Paragraph(
+                "Classification",
+                styles["table_header"],
+            ),
+            Paragraph(
+                "Articles",
+                styles["table_header"],
+            ),
+        ]
+    ]
+
+    for label, value in sentiment_rows:
+        sentiment_table_data.append(
+            [
+                _pdf_paragraph(
+                    label,
+                    styles["table_cell"],
+                ),
+                _pdf_paragraph(
+                    _pdf_display_value(value),
+                    styles["table_cell"],
+                ),
+            ]
+        )
+
+    sentiment_table = Table(
+        sentiment_table_data,
+        colWidths=[
+            3.65 * inch,
+            2.25 * inch,
+        ],
+        repeatRows=1,
+        hAlign="LEFT",
+    )
+
+    sentiment_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#16324F"),
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    colors.HexColor("#D1D5DB"),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP",
+                ),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [
+                        colors.white,
+                        colors.HexColor("#F8FAFC"),
+                    ],
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        sentiment_table
+    )
+
+    sentiment_series = sentiment.get(
+        "series",
+        [],
+    )
+
+    if sentiment_series:
+        story.append(
+            Spacer(
+                1,
+                0.10 * inch,
+            )
+        )
+
+        sentiment_series_data = [
+            [
+                Paragraph(
+                    "Period",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Positive",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Neutral",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Negative",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for item in sentiment_series:
+            sentiment_series_data.append(
+                [
+                    _pdf_paragraph(
+                        item.get("period"),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "positive",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "neutral",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "negative",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                ]
+            )
+
+        sentiment_series_table = Table(
+            sentiment_series_data,
+            colWidths=[
+                2.3 * inch,
+                1.2 * inch,
+                1.2 * inch,
+                1.2 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        sentiment_series_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#334E68"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.3,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                ]
+            )
+        )
+
+        story.append(
+            sentiment_series_table
+        )
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No sentiment trend data "
+                    "is available for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Risk",
+            styles["section"],
+        )
+    )
+
+    risk = report_data.get(
+        "risk",
+        {},
+    )
+
+    risk_rows = [
+        (
+            "Average Risk Score",
+            risk.get(
+                "average_risk_score",
+                0.0,
+            ),
+        ),
+        (
+            "Highest Risk Score",
+            risk.get(
+                "highest_risk_score",
+                0.0,
+            ),
+        ),
+        (
+            "Low Risk",
+            risk.get(
+                "low_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Medium Risk",
+            risk.get(
+                "medium_risk_count",
+                0,
+            ),
+        ),
+        (
+            "High Risk",
+            risk.get(
+                "high_risk_count",
+                0,
+            ),
+        ),
+    ]
+
+    risk_table_data = [
+        [
+            Paragraph(
+                "Metric",
+                styles["table_header"],
+            ),
+            Paragraph(
+                "Value",
+                styles["table_header"],
+            ),
+        ]
+    ]
+
+    for label, value in risk_rows:
+        risk_table_data.append(
+            [
+                _pdf_paragraph(
+                    label,
+                    styles["table_cell"],
+                ),
+                _pdf_paragraph(
+                    _pdf_display_value(value),
+                    styles["table_cell"],
+                ),
+            ]
+        )
+
+    risk_table = Table(
+        risk_table_data,
+        colWidths=[
+            3.65 * inch,
+            2.25 * inch,
+        ],
+        repeatRows=1,
+        hAlign="LEFT",
+    )
+
+    risk_table.setStyle(
+        TableStyle(
+            [
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor("#16324F"),
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    colors.HexColor("#D1D5DB"),
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP",
+                ),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [
+                        colors.white,
+                        colors.HexColor("#F8FAFC"),
+                    ],
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7,
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7,
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6,
+                ),
+            ]
+        )
+    )
+
+    story.append(
+        risk_table
+    )
+
+    risk_series = risk.get(
+        "series",
+        [],
+    )
+
+    if risk_series:
+        story.append(
+            Spacer(
+                1,
+                0.10 * inch,
+            )
+        )
+
+        risk_series_data = [
+            [
+                Paragraph(
+                    "Period",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Average",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Maximum",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Low",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Medium",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "High",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Escalations",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for item in risk_series:
+            risk_series_data.append(
+                [
+                    _pdf_paragraph(
+                        item.get("period"),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "average_risk_score",
+                                0.0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "maximum_risk_score",
+                                0.0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "low_count",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "medium_count",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "high_count",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "escalation_count",
+                                0,
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                ]
+            )
+
+        risk_series_table = Table(
+            risk_series_data,
+            colWidths=[
+                1.45 * inch,
+                0.78 * inch,
+                0.78 * inch,
+                0.55 * inch,
+                0.68 * inch,
+                0.55 * inch,
+                0.85 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        risk_series_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#334E68"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.3,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        4,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        4,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                ]
+            )
+        )
+
+        story.append(
+            risk_series_table
+        )
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No risk trend data is "
+                    "available for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Business Impact",
+            styles["section"],
+        )
+    )
+
+    business_impact = report_data.get(
+        "business_impact",
+        {},
+    )
+
+    primary_distribution = business_impact.get(
+        "primary_distribution",
+        {},
+    )
+    category_distribution = business_impact.get(
+        "category_distribution",
+        {},
+    )
+
+    if any(primary_distribution.values()):
+        primary_data = [
+            [
+                Paragraph(
+                    "Primary Category",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Articles",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for category, count in primary_distribution.items():
+            if count:
+                primary_data.append(
+                    [
+                        _pdf_paragraph(
+                            str(category).replace(
+                                "_",
+                                " ",
+                            ).title(),
+                            styles["table_cell"],
+                        ),
+                        _pdf_paragraph(
+                            count,
+                            styles["table_cell"],
+                        ),
+                    ]
+                )
+
+        primary_table = Table(
+            primary_data,
+            colWidths=[
+                3.65 * inch,
+                2.25 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        primary_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#16324F"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                ]
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Primary Distribution",
+                styles["small"],
+            )
+        )
+        story.append(primary_table)
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No primary business-impact "
+                    "classifications are available "
+                    "for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    if any(category_distribution.values()):
+        story.append(
+            Spacer(
+                1,
+                0.10 * inch,
+            )
+        )
+
+        category_data = [
+            [
+                Paragraph(
+                    "Impact Category",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Articles",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for category, count in category_distribution.items():
+            if count:
+                category_data.append(
+                    [
+                        _pdf_paragraph(
+                            str(category).replace(
+                                "_",
+                                " ",
+                            ).title(),
+                            styles["table_cell"],
+                        ),
+                        _pdf_paragraph(
+                            count,
+                            styles["table_cell"],
+                        ),
+                    ]
+                )
+
+        category_table = Table(
+            category_data,
+            colWidths=[
+                3.65 * inch,
+                2.25 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        category_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#334E68"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                ]
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "All-Category Distribution",
+                styles["small"],
+            )
+        )
+        story.append(category_table)
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No all-category business-impact "
+                    "classifications are available "
+                    "for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Events",
+            styles["section"],
+        )
+    )
+
+    events = report_data.get(
+        "events",
+        {},
+    )
+    event_rows = events.get(
+        "largest_events",
+        [],
+    )
+
+    if event_rows:
+        event_table_data = [
+            [
+                Paragraph(
+                    "Event",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Articles",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "First Published",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Last Published",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for item in event_rows:
+            event_table_data.append(
+                [
+                    _pdf_paragraph(
+                        item.get("title"),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        item.get(
+                            "article_count",
+                            0,
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "first_published_at"
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            item.get(
+                                "last_published_at"
+                            )
+                        ),
+                        styles["table_cell"],
+                    ),
+                ]
+            )
+
+        event_table = Table(
+            event_table_data,
+            colWidths=[
+                2.6 * inch,
+                0.65 * inch,
+                1.35 * inch,
+                1.35 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        event_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#16324F"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.3,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5,
+                    ),
+                ]
+            )
+        )
+
+        story.append(event_table)
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No qualifying event clusters "
+                    "were identified for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Highest Risk Stories",
+            styles["section"],
+        )
+    )
+
+    highest_risk_stories = report_data.get(
+        "highest_risk_stories",
+        [],
+    )
+
+    if highest_risk_stories:
+        for index, item in enumerate(
+            highest_risk_stories,
+            start=1,
+        ):
+            title = item.get(
+                "title",
+                "Untitled story",
+            )
+
+            source_name = item.get(
+                "source_name"
+            )
+            published_at = item.get(
+                "published_at"
+            )
+            risk_score = item.get(
+                "risk_score"
+            )
+            risk_level = item.get(
+                "risk_level"
+            )
+            sentiment_value = item.get(
+                "sentiment"
+            )
+            business_impact = item.get(
+                "business_impact_primary"
+            )
+            risk_headline = item.get(
+                "risk_headline"
+            )
+            risk_summary = item.get(
+                "risk_summary"
+            )
+            event_title = item.get(
+                "event_cluster_title"
+            )
+
+            metadata_parts = []
+
+            if source_name:
+                metadata_parts.append(
+                    f"Source: {source_name}"
+                )
+
+            if published_at:
+                metadata_parts.append(
+                    (
+                        "Published: "
+                        f"{_pdf_display_value(published_at)}"
+                    )
+                )
+
+            if risk_score is not None:
+                metadata_parts.append(
+                    (
+                        "Risk Score: "
+                        f"{_pdf_display_value(risk_score)}"
+                    )
+                )
+
+            if risk_level:
+                metadata_parts.append(
+                    (
+                        "Risk Level: "
+                        f"{str(risk_level).title()}"
+                    )
+                )
+
+            if sentiment_value:
+                metadata_parts.append(
+                    (
+                        "Sentiment: "
+                        f"{str(sentiment_value).title()}"
+                    )
+                )
+
+            if business_impact:
+                metadata_parts.append(
+                    (
+                        "Business Impact: "
+                        f"{str(business_impact).replace('_', ' ').title()}"
+                    )
+                )
+
+            story_block = [
+                _pdf_paragraph(
+                    f"{index}. {title}",
+                    styles["body"],
+                )
+            ]
+
+            if metadata_parts:
+                story_block.append(
+                    _pdf_paragraph(
+                        " | ".join(
+                            metadata_parts
+                        ),
+                        styles["small"],
+                    )
+                )
+
+            if risk_headline:
+                story_block.append(
+                    _pdf_paragraph(
+                        (
+                            "Risk Headline: "
+                            f"{risk_headline}"
+                        ),
+                        styles["body"],
+                    )
+                )
+
+            if risk_summary:
+                story_block.append(
+                    _pdf_paragraph(
+                        risk_summary,
+                        styles["body"],
+                    )
+                )
+
+            if event_title:
+                story_block.append(
+                    _pdf_paragraph(
+                        (
+                            "Event Cluster: "
+                            f"{event_title}"
+                        ),
+                        styles["small"],
+                    )
+                )
+
+            story_block.append(
+                Spacer(
+                    1,
+                    0.10 * inch,
+                )
+            )
+
+            story.append(
+                KeepTogether(
+                    story_block
+                )
+            )
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No risk-ranked stories are "
+                    "available for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Sources",
+            styles["section"],
+        )
+    )
+
+    sources = report_data.get(
+        "sources",
+        [],
+    )
+
+    if sources:
+        source_table_data = [
+            [
+                Paragraph(
+                    "Source",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Articles",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for item in sources:
+            source_name = (
+                item.get("source_name")
+                or item.get("source")
+                or item.get("name")
+                or "Unknown source"
+            )
+
+            article_count = (
+                item.get("article_count")
+                if item.get("article_count") is not None
+                else item.get("count", 0)
+            )
+
+            source_table_data.append(
+                [
+                    _pdf_paragraph(
+                        source_name,
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            article_count
+                        ),
+                        styles["table_cell"],
+                    ),
+                ]
+            )
+
+        source_table = Table(
+            source_table_data,
+            colWidths=[
+                4.25 * inch,
+                1.65 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        source_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#16324F"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                ]
+            )
+        )
+
+        story.append(source_table)
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No qualifying media sources "
+                    "were identified for this period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Competitors",
+            styles["section"],
+        )
+    )
+
+    competitors = report_data.get(
+        "competitors",
+        [],
+    )
+
+    if competitors:
+        competitor_table_data = [
+            [
+                Paragraph(
+                    "Competitor",
+                    styles["table_header"],
+                ),
+                Paragraph(
+                    "Mentions",
+                    styles["table_header"],
+                ),
+            ]
+        ]
+
+        for item in competitors:
+            competitor_name = (
+                item.get("competitor_name")
+                or item.get("company_name")
+                or item.get("name")
+                or "Configured competitor"
+            )
+
+            mention_count = item.get(
+                "mention_count",
+                0,
+            )
+
+            competitor_table_data.append(
+                [
+                    _pdf_paragraph(
+                        competitor_name,
+                        styles["table_cell"],
+                    ),
+                    _pdf_paragraph(
+                        _pdf_display_value(
+                            mention_count
+                        ),
+                        styles["table_cell"],
+                    ),
+                ]
+            )
+
+        competitor_table = Table(
+            competitor_table_data,
+            colWidths=[
+                4.25 * inch,
+                1.65 * inch,
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+
+        competitor_table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#16324F"),
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.35,
+                        colors.HexColor("#D1D5DB"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.white,
+                            colors.HexColor("#F8FAFC"),
+                        ],
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        7,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        6,
+                    ),
+                ]
+            )
+        )
+
+        story.append(
+            competitor_table
+        )
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No competitors are currently "
+                    "configured for comparison."
+                ),
+                styles["empty"],
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.16 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Alerts",
+            styles["section"],
+        )
+    )
+
+    alert_rows = report_data.get(
+        "alerts",
+        [],
+    )
+
+    if alert_rows:
+        for index, item in enumerate(
+            alert_rows,
+            start=1,
+        ):
+            title = item.get(
+                "title",
+                "Alert",
+            )
+
+            severity = item.get(
+                "severity"
+            )
+            alert_type = item.get(
+                "alert_type"
+            )
+            message = item.get(
+                "message"
+            )
+            delivery_status = item.get(
+                "delivery_status"
+            )
+            delivery_channel = item.get(
+                "delivery_channel"
+            )
+            created_at = item.get(
+                "created_at"
+            )
+            delivered_at = item.get(
+                "delivered_at"
+            )
+            sla_due_at = item.get(
+                "sla_due_at"
+            )
+
+            metadata_parts = []
+
+            if severity:
+                metadata_parts.append(
+                    (
+                        "Severity: "
+                        f"{str(severity).title()}"
+                    )
+                )
+
+            if alert_type:
+                metadata_parts.append(
+                    (
+                        "Type: "
+                        f"{str(alert_type).replace('_', ' ').title()}"
+                    )
+                )
+
+            if delivery_status:
+                metadata_parts.append(
+                    (
+                        "Status: "
+                        f"{str(delivery_status).title()}"
+                    )
+                )
+
+            if delivery_channel:
+                metadata_parts.append(
+                    (
+                        "Channel: "
+                        f"{str(delivery_channel).title()}"
+                    )
+                )
+
+            alert_block = [
+                _pdf_paragraph(
+                    f"{index}. {title}",
+                    styles["body"],
+                )
+            ]
+
+            if metadata_parts:
+                alert_block.append(
+                    _pdf_paragraph(
+                        " | ".join(
+                            metadata_parts
+                        ),
+                        styles["small"],
+                    )
+                )
+
+            if message:
+                alert_block.append(
+                    _pdf_paragraph(
+                        message,
+                        styles["body"],
+                    )
+                )
+
+            time_parts = []
+
+            if created_at:
+                time_parts.append(
+                    (
+                        "Created: "
+                        f"{_pdf_display_value(created_at)}"
+                    )
+                )
+
+            if sla_due_at:
+                time_parts.append(
+                    (
+                        "SLA Due: "
+                        f"{_pdf_display_value(sla_due_at)}"
+                    )
+                )
+
+            if delivered_at:
+                time_parts.append(
+                    (
+                        "Delivered: "
+                        f"{_pdf_display_value(delivered_at)}"
+                    )
+                )
+
+            if time_parts:
+                alert_block.append(
+                    _pdf_paragraph(
+                        " | ".join(time_parts),
+                        styles["small"],
+                    )
+                )
+
+            alert_block.append(
+                Spacer(
+                    1,
+                    0.08 * inch,
+                )
+            )
+
+            story.append(
+                KeepTogether(
+                    alert_block
+                )
+            )
+    else:
+        story.append(
+            _pdf_paragraph(
+                (
+                    "No alerts were generated "
+                    "during the reporting period."
+                ),
+                styles["empty"],
+            )
+        )
+
+    document.build(
+        story,
+        onFirstPage=_pdf_page_footer,
+        onLaterPages=_pdf_page_footer,
+    )
+
     return output.getvalue()
+
+def render_report(
+    report_data: dict,
+    file_format: str,
+) -> bytes:
+    if file_format not in REPORT_FORMATS:
+        raise ValueError(
+            (
+                "Unsupported report format: "
+                f"{file_format}"
+            )
+        )
+
+    exporters = {
+        "pdf": export_report_pdf,
+        "xlsx": export_report_xlsx,
+        "csv": export_report_csv,
+    }
+
+    return exporters[
+        file_format
+    ](
+        report_data
+    )
+
+
+async def find_existing_report(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    report_type: str,
+    file_format: str,
+    period_start: datetime,
+    period_end: datetime,
+) -> GeneratedReport | None:
+    stmt = select(
+        GeneratedReport
+    ).where(
+        GeneratedReport.company_id
+        == company_id,
+        GeneratedReport.report_type
+        == report_type,
+        GeneratedReport.file_format
+        == file_format,
+        GeneratedReport.period_start
+        == period_start,
+        GeneratedReport.period_end
+        == period_end,
+    )
+
+    return (
+        await db.execute(
+            stmt
+        )
+    ).scalar_one_or_none()
+
+
+async def create_pending_report(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    report_type: str,
+    file_format: str,
+    period_start: datetime,
+    period_end: datetime,
+) -> GeneratedReport:
+    if file_format not in REPORT_FORMATS:
+        raise ValueError(
+            (
+                "Unsupported report format: "
+                f"{file_format}"
+            )
+        )
+
+    period_start, period_end = (
+        validate_time_window(
+            period_start,
+            period_end,
+        )
+    )
+
+    existing = await find_existing_report(
+        db,
+        company_id=company_id,
+        report_type=report_type,
+        file_format=file_format,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    if existing is not None:
+        return existing
+
+    record = GeneratedReport(
+        company_id=company_id,
+        report_type=report_type,
+        file_format=file_format,
+        period_start=period_start,
+        period_end=period_end,
+        filename=None,
+        content_type=None,
+        content=None,
+        status="pending",
+        generated_at=None,
+        error=None,
+    )
+
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    return record
+
+
+async def mark_report_processing(
+    db: AsyncSession,
+    record: GeneratedReport,
+) -> GeneratedReport:
+    record.status = "processing"
+    record.error = None
+
+    await db.commit()
+    await db.refresh(record)
+
+    return record
+
+
+async def mark_report_success(
+    db: AsyncSession,
+    record: GeneratedReport,
+    *,
+    content: bytes,
+) -> GeneratedReport:
+    extension = REPORT_EXTENSIONS[
+        record.file_format
+    ]
+
+    record.filename = (
+        f"company-{record.company_id}-"
+        f"{record.report_type}-"
+        f"{record.period_start.date().isoformat()}-"
+        f"{record.period_end.date().isoformat()}."
+        f"{extension}"
+    )
+
+    record.content_type = (
+        REPORT_CONTENT_TYPES[
+            record.file_format
+        ]
+    )
+
+    record.content = content
+    record.status = "success"
+    record.generated_at = datetime.now(
+        timezone.utc
+    )
+    record.error = None
+
+    await db.commit()
+    await db.refresh(record)
+
+    return record
+
+
+async def mark_report_failed(
+    db: AsyncSession,
+    record: GeneratedReport,
+    *,
+    error: str,
+) -> GeneratedReport:
+    record.status = "failed"
+    record.error = error[:1000]
+    record.generated_at = None
+    record.filename = None
+    record.content_type = None
+    record.content = None
+
+    await db.commit()
+    await db.refresh(record)
+
+    return record
+
+
+async def generate_report_record(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    report_type: str,
+    file_format: str,
+    period_start: datetime,
+    period_end: datetime,
+) -> GeneratedReport:
+    record = await create_pending_report(
+        db,
+        company_id=company_id,
+        report_type=report_type,
+        file_format=file_format,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    if record.status == "success":
+        return record
+
+    await mark_report_processing(
+        db,
+        record,
+    )
+
+    try:
+        report_data = await build_company_report(
+            db,
+            company_id=company_id,
+            start_date=period_start,
+            end_date=period_end,
+        )
+
+        content = render_report(
+            report_data,
+            file_format,
+        )
+
+        return await mark_report_success(
+            db,
+            record,
+            content=content,
+        )
+
+    except Exception as exc:
+        await mark_report_failed(
+            db,
+            record,
+            error=str(exc),
+        )
+
+        raise
 
 
 async def persist_generated_report(
@@ -174,34 +4745,37 @@ async def persist_generated_report(
     content: bytes,
     report_type: str = "custom",
 ) -> GeneratedReport:
-    extensions = {"pdf": "pdf", "xlsx": "xlsx", "csv": "csv"}
-    content_types = {
-        "pdf": "application/pdf",
-        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "csv": "text/csv",
-    }
-    record = GeneratedReport(
-        company_id=report_data["company_id"],
+    """
+    Compatibility wrapper for the current Phase 17 API/tasks.
+
+    Phase 17G will migrate callers to generate_report_record().
+    """
+
+    record = await create_pending_report(
+        db,
+        company_id=report_data[
+            "company_id"
+        ],
         report_type=report_type,
         file_format=file_format,
-        filename=f"company-{report_data['company_id']}-report.{extensions[file_format]}",
-        content_type=content_types[file_format],
-        period_start=report_data["start_date"],
-        period_end=report_data["end_date"],
-        content=content,
-        status="success",
-        generated_at=datetime.now(report_data["end_date"].tzinfo),
+        period_start=report_data[
+            "start_date"
+        ],
+        period_end=report_data[
+            "end_date"
+        ],
     )
-    db.add(record)
-    await db.commit()
-    await db.refresh(record)
-    return record
 
+    if record.status == "success":
+        return record
 
-def render_report(report_data: dict, file_format: str) -> bytes:
-    exporters = {
-        "pdf": export_report_pdf,
-        "xlsx": export_report_xlsx,
-        "csv": export_report_csv,
-    }
-    return exporters[file_format](report_data)
+    await mark_report_processing(
+        db,
+        record,
+    )
+
+    return await mark_report_success(
+        db,
+        record,
+        content=content,
+    )

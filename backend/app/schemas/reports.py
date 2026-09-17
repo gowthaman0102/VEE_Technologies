@@ -41,8 +41,8 @@ class ReportHistoryItem(BaseModel):
     company_id: int
     report_type: str
     file_format: str
-    filename: str
-    content_type: str
+    filename: str | None
+    content_type: str | None
     period_start: datetime
     period_end: datetime
     status: str

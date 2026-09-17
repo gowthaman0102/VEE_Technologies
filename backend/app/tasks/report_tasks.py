@@ -14,11 +14,77 @@ from app.services.report_service import (
 )
 
 
-async def _generate_scheduled_reports(report_type: str, days: int) -> dict:
-    end = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
+def _scheduled_report_period(
+    report_type: str,
+    *,
+    now: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    current = now or datetime.now(
+        timezone.utc
     )
-    start = end - timedelta(days=days)
+
+    if current.tzinfo is None:
+        current = current.replace(
+            tzinfo=timezone.utc
+        )
+    else:
+        current = current.astimezone(
+            timezone.utc
+        )
+
+    today_start = current.replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    if report_type == "daily":
+        end = today_start
+        start = end - timedelta(
+            days=1
+        )
+        return start, end
+
+    if report_type == "weekly":
+        end = today_start - timedelta(
+            days=today_start.weekday()
+        )
+        start = end - timedelta(
+            days=7
+        )
+        return start, end
+
+    if report_type == "monthly":
+        end = today_start.replace(
+            day=1
+        )
+
+        if end.month == 1:
+            start = end.replace(
+                year=end.year - 1,
+                month=12,
+            )
+        else:
+            start = end.replace(
+                month=end.month - 1
+            )
+
+        return start, end
+
+    raise ValueError(
+        f"Unsupported scheduled report type: "
+        f"{report_type}"
+    )
+
+
+async def _generate_scheduled_reports(
+    report_type: str,
+) -> dict:
+    start, end = _scheduled_report_period(
+        report_type
+    )
+
     generated = []
 
     async with CeleryAsyncSessionLocal() as db:
@@ -51,14 +117,14 @@ async def _generate_scheduled_reports(report_type: str, days: int) -> dict:
 
 @celery_app.task(name="reports.generate_daily")
 def generate_daily_reports_task() -> dict:
-    return asyncio.run(_generate_scheduled_reports("daily", 1))
+    return asyncio.run(_generate_scheduled_reports("daily"))
 
 
 @celery_app.task(name="reports.generate_weekly")
 def generate_weekly_reports_task() -> dict:
-    return asyncio.run(_generate_scheduled_reports("weekly", 7))
+    return asyncio.run(_generate_scheduled_reports("weekly"))
 
 
 @celery_app.task(name="reports.generate_monthly")
 def generate_monthly_reports_task() -> dict:
-    return asyncio.run(_generate_scheduled_reports("monthly", 30))
+    return asyncio.run(_generate_scheduled_reports("monthly"))
