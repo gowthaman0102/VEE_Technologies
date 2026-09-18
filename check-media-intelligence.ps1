@@ -142,7 +142,11 @@ $celeryProcesses = @(
     Where-Object {
         $_.CommandLine -and
         $_.CommandLine -match "celery" -and
-        $_.CommandLine -match "app\.core\.celery_app"
+        $_.CommandLine -match "app\.core\.celery_app" -and
+        (
+            $_.CommandLine -match "-Q\s*media-intelligence" -or
+            $_.CommandLine -match "--queue\s*media-intelligence"
+        )
     }
 )
 
