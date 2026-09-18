@@ -6,7 +6,13 @@ from pydantic import BaseModel, Field
 
 class ReportRequest(BaseModel):
     company_id: int = Field(gt=0)
-    report_type: Literal["daily", "weekly", "monthly", "custom"] = "custom"
+    report_type: Literal[
+        "daily",
+        "weekly",
+        "monthly",
+        "custom",
+        "all_history",
+    ] = "custom"
     start_date: datetime | None = None
     end_date: datetime | None = None
     format: Literal["pdf", "xlsx", "csv"] = "pdf"

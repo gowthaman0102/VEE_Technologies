@@ -479,7 +479,7 @@ export type GenerateReportResponse = {
 
 export async function generateReport(args: {
   company_id: number;
-  report_type: "daily" | "weekly" | "monthly" | "custom";
+  report_type: "daily" | "weekly" | "monthly" | "custom" | "all_history";
   format: "pdf" | "xlsx" | "csv";
   start_date?: string;
   end_date?: string;

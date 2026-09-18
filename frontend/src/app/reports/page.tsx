@@ -18,7 +18,8 @@ type ReportType =
   | "daily"
   | "weekly"
   | "monthly"
-  | "custom";
+  | "custom"
+  | "all_history";
 
 type ReportFormat =
   | "pdf"
@@ -96,7 +97,7 @@ export default function ReportsPage() {
     useState("");
 
   const [reportType, setReportType] =
-    useState<ReportType>("weekly");
+    useState<ReportType>("all_history");
 
   const [format, setFormat] =
     useState<ReportFormat>("pdf");
@@ -376,6 +377,10 @@ export default function ReportsPage() {
 
               <option value="custom">
                 Custom
+              </option>
+
+              <option value="all_history">
+                All History
               </option>
             </select>
           </label>

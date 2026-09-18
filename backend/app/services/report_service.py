@@ -129,14 +129,9 @@ async def _get_report_articles(
 
     stmt = (
         select(Article)
-        .join(
-            ArticleTriage,
-            ArticleTriage.article_id == Article.id,
-        )
         .where(
-            ArticleTriage.company_id == company_id,
             article_time >= start_date,
-            article_time <= end_date,
+            article_time < end_date,
         )
         .order_by(
             article_time.desc(),
@@ -310,6 +305,44 @@ def _source_summary(
         }
         for source, count in counts.most_common()
     ]
+
+
+def _report_summaries(
+    article_rows: list[dict],
+) -> tuple[dict, dict, dict, dict]:
+    sentiments = Counter(
+        row["sentiment"]
+        for row in article_rows
+        if row["sentiment"]
+    )
+    risk_rows = [
+        row for row in article_rows
+        if row["risk_score"] is not None
+    ]
+    risk_scores = [row["risk_score"] for row in risk_rows]
+    risk = {
+        "average_risk_score": round(sum(risk_scores) / len(risk_scores), 2) if risk_scores else 0.0,
+        "highest_risk_score": max(risk_scores) if risk_scores else 0.0,
+        "high_risk_count": sum(row["risk_level"] == "high" for row in risk_rows),
+        "medium_risk_count": sum(row["risk_level"] == "medium" for row in risk_rows),
+        "low_risk_count": sum(row["risk_level"] == "low" for row in risk_rows),
+        "critical_risk_count": sum(row["risk_level"] == "critical" for row in risk_rows),
+    }
+    business = Counter()
+    primary = Counter()
+    for row in article_rows:
+        if row["business_impact_primary"]:
+            primary[row["business_impact_primary"]] += 1
+        for category in row["business_impact_categories"]:
+            business[category] += 1
+    events = {row["event_cluster_id"] for row in article_rows if row["event_cluster_id"] is not None}
+    alerts = sum(len(row["alerts"]) for row in article_rows)
+    return (
+        {"positive": sentiments["positive"], "neutral": sentiments["neutral"], "negative": sentiments["negative"]},
+        risk,
+        {"items": dict(business), "primary_distribution": dict(primary), "category_distribution": dict(business)},
+        {"total_events": len(events), "largest_events": []},
+    )
 
 
 def _competitor_summary(
@@ -805,37 +838,12 @@ async def build_company_report(
             }
         )
 
-    sentiment_summary = (
-        await get_sentiment_distribution(
-            db,
-            company_id=company_id,
-            start=start_date,
-            end=end_date,
-        )
-    )
-
-    risk_summary = await get_risk_summary(
-        db,
-        company_id=company_id,
-        start=start_date,
-        end=end_date,
-    )
-
-    business_summary = (
-        await get_business_impact_distribution(
-            db,
-            company_id=company_id,
-            start=start_date,
-            end=end_date,
-        )
-    )
-
-    event_summary = await get_event_summary(
-        db,
-        company_id=company_id,
-        start=start_date,
-        end=end_date,
-    )
+    (
+        sentiment_summary,
+        risk_summary,
+        business_summary,
+        event_summary,
+    ) = _report_summaries(article_rows)
 
     configured_competitors = (
         await _configured_competitor_names(
@@ -1018,6 +1026,7 @@ async def build_company_report(
 def report_rows(
     report_data: dict,
 ) -> list[tuple[str, str]]:
+    risk = report_data.get("risk", {})
     rows = [
         (
             "company",
@@ -1105,6 +1114,32 @@ def report_rows(
                     "sentiment_balance"
                 ]["negative"]
             ),
+        ),
+        (
+            "average_risk_score",
+            str(
+                risk.get(
+                    "average_risk_score",
+                    report_data.get("average_risk_score", 0.0),
+                )
+            ),
+        ),
+        (
+            "highest_risk_score",
+            str(
+                risk.get(
+                    "highest_risk_score",
+                    report_data.get("highest_risk_score", 0.0),
+                )
+            ),
+        ),
+        (
+            "source_count",
+            str(len(report_data.get("sources", []))),
+        ),
+        (
+            "alert_count",
+            str(len(report_data.get("alerts", []))),
         ),
     ]
 

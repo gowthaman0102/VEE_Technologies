@@ -47,9 +47,7 @@ async def export_report(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     try:
-        start_date, end_date = _resolve_period(
-            payload
-        )
+        start_date, end_date = await _resolve_period_for_request(payload, db)
 
         record = await generate_report_record(
             db,
@@ -130,6 +128,9 @@ def _resolve_period(
         microsecond=0,
     )
 
+    if payload.report_type == "all_history":
+        raise ValueError("all_history requires database resolution")
+
     if payload.report_type == "daily":
         end = day_start
         start = end - timedelta(
@@ -180,15 +181,37 @@ def _resolve_period(
     return start, end
 
 
+async def _resolve_period_for_request(
+    payload: ReportRequest,
+    db: AsyncSession,
+) -> tuple[datetime, datetime]:
+    if payload.report_type != "all_history":
+        return _resolve_period(payload)
+
+    from sqlalchemy import func
+    from app.models.article import Article
+
+    article_time = func.coalesce(
+        Article.published_at,
+        Article.collected_at,
+    )
+    result = await db.execute(
+        select(func.min(article_time), func.max(article_time))
+    )
+    oldest, newest = result.one()
+    reference = _as_utc(payload.end_date or datetime.now(timezone.utc))
+    if oldest is None or newest is None:
+        return reference - timedelta(days=1), reference
+    return oldest, newest + timedelta(microseconds=1)
+
+
 @router.post("/generate")
 async def generate_report(
     payload: ReportRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
-        start_date, end_date = _resolve_period(
-            payload
-        )
+        start_date, end_date = await _resolve_period_for_request(payload, db)
 
         record = await generate_report_record(
             db,
