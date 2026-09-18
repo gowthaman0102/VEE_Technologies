@@ -29,7 +29,7 @@ export default function AnalyticsPage() {
     useState("");
 
   const [preset, setPreset] =
-    useState<TimeRangePreset>("7d");
+    useState<TimeRangePreset>("365d");
 
   const [customStart, setCustomStart] =
     useState("");
@@ -226,13 +226,13 @@ export default function AnalyticsPage() {
                   data.total_events,
                 ],
                 [
-                  "High risk",
-                  data.risk.high_risk_count ??
+                  "Medium risk",
+                  data.risk.medium_risk_count ??
                     0,
                 ],
                 [
-                  "Negative sentiment",
-                  data.sentiment.negative ?? 0,
+                  "Positive sentiment",
+                  data.sentiment.positive ?? 0,
                 ],
               ].map(([label, value]) => (
                 <article
@@ -259,6 +259,8 @@ export default function AnalyticsPage() {
                 <div className="mt-4 space-y-3">
                   {Object.entries(
                     data.business_impact,
+                  ).filter(
+                    ([, value]) => value > 0,
                   ).length === 0 ? (
                     <p className="text-sm text-slate-500">
                       No business-impact data
@@ -267,7 +269,11 @@ export default function AnalyticsPage() {
                   ) : (
                     Object.entries(
                       data.business_impact,
-                    ).map(
+                    )
+                      .filter(
+                        ([, value]) => value > 0,
+                      )
+                      .map(
                       ([label, value]) => (
                         <div
                           key={label}

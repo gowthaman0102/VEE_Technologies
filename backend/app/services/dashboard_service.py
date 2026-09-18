@@ -13,6 +13,7 @@ from app.models.company_relationship import CompanyRelationship
 from app.models.monitoring_topic import MonitoringTopic
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
+from app.ingestion.sources import get_enabled_sources
 from app.schemas.dashboard import (
     DashboardAlertItem,
     DashboardAlertsResponse,
@@ -35,9 +36,18 @@ async def get_dashboard_overview(
         timezone.utc
     )
 
+    enabled_source_names = [
+        source.name
+        for source in get_enabled_sources()
+    ]
+
     total_articles = await db.scalar(
         select(
             func.count(Article.id)
+        ).where(
+            Article.source_name.in_(
+                enabled_source_names
+            )
         )
     )
 

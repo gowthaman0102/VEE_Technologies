@@ -3,6 +3,7 @@
   | "7d"
   | "30d"
   | "90d"
+  | "365d"
   | "custom";
 
 export type ResolvedTimeRange = {
@@ -25,6 +26,7 @@ const PRESET_DURATION_MS: Record<
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
   "90d": 90 * 24 * 60 * 60 * 1000,
+  "365d": 365 * 24 * 60 * 60 * 1000,
 };
 
 function parseDate(

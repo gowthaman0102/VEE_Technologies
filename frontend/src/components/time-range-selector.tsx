@@ -21,6 +21,7 @@ const presets: {
   { value: "7d", label: "7d" },
   { value: "30d", label: "30d" },
   { value: "90d", label: "90d" },
+  { value: "365d", label: "1 Year" },
   { value: "custom", label: "Custom" },
 ];
 
