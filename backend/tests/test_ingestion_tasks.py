@@ -142,6 +142,63 @@ async def test_run_live_ingestion_queues_processing(
 
 
 @pytest.mark.asyncio
+async def test_run_historical_backfill_queues_inserted_articles(
+    monkeypatch,
+):
+    result = SimpleNamespace(
+        source_key="openai_official_news",
+        source_name="OpenAI Official News",
+        collected=3,
+        inserted=2,
+        skipped=1,
+        inserted_article_ids=[601, 602],
+        error=None,
+    )
+
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "get_enabled_sources",
+        lambda: [SimpleNamespace(key="openai_official_news")],
+    )
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "get_active_company_profile",
+        AsyncMock(return_value=SimpleNamespace(company_id=3)),
+    )
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "run_sources",
+        AsyncMock(return_value=[result]),
+    )
+    monkeypatch.setattr(
+        ingestion_tasks,
+        "CeleryAsyncSessionLocal",
+        FakeSession,
+    )
+    send_task_mock = Mock()
+    monkeypatch.setattr(
+        ingestion_tasks.celery_app,
+        "send_task",
+        send_task_mock,
+    )
+
+    output = await ingestion_tasks._run_historical_backfill(
+        max_age_days=1095,
+        per_source_limit=100,
+    )
+
+    assert output["inserted_article_ids"] == [601, 602]
+    assert output["processing_tasks_queued"] == 2
+    send_task_mock.assert_any_call(
+        "processing.process_article",
+        args=[601, 3],
+    )
+    send_task_mock.assert_any_call(
+        "processing.process_article",
+        args=[602, 3],
+    )
+
+@pytest.mark.asyncio
 async def test_run_live_ingestion_with_no_new_articles(
     monkeypatch,
 ):

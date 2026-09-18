@@ -19,7 +19,7 @@ def test_list_ingestion_sources():
 
     data = response.json()
 
-    assert len(data) == 2
+    assert len(data) == 7
 
     keys = {
         source["key"]
@@ -27,8 +27,13 @@ def test_list_ingestion_sources():
     }
 
     assert keys == {
-        "google_news_vee",
-        "newsapi_vee",
+        "openai_official_news",
+        "google_news_openai",
+        "google_news_openai_chatgpt",
+        "google_news_openai_research_safety",
+        "google_news_openai_business",
+        "newsapi_openai",
+        "newsapi_openai_chatgpt",
     }
 
 
@@ -38,9 +43,9 @@ def test_run_selected_sources(
     run_mock = AsyncMock(
         return_value=[
             SourceIngestionResult(
-                source_key="google_news_vee",
+                source_key="google_news_openai",
                 source_name=(
-                    "Google News - VEE Technologies"
+                    "Google News - OpenAI"
                 ),
                 collected=3,
                 inserted=1,
@@ -59,7 +64,7 @@ def test_run_selected_sources(
         "/api/v1/ingestion/run",
         json={
             "source_keys": [
-                "google_news_vee"
+                "google_news_openai"
             ],
             "per_source_limit": 3,
         },
@@ -77,7 +82,7 @@ def test_run_selected_sources(
 
     assert (
         data["sources"][0]["source_key"]
-        == "google_news_vee"
+        == "google_news_openai"
     )
 
     run_mock.assert_awaited_once()
@@ -106,9 +111,9 @@ def test_run_single_source(
     run_mock = AsyncMock(
         return_value=[
             SourceIngestionResult(
-                source_key="newsapi_vee",
+                source_key="newsapi_openai",
                 source_name=(
-                    "NewsAPI - VEE Technologies"
+                    "NewsAPI - OpenAI"
                 ),
                 collected=2,
                 inserted=0,
@@ -125,7 +130,7 @@ def test_run_single_source(
 
     response = client.post(
         "/api/v1/ingestion/run/"
-        "newsapi_vee",
+        "newsapi_openai",
         json={
             "per_source_limit": 2,
         },

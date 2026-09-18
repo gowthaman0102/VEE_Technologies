@@ -1,5 +1,6 @@
 from app.ingestion.collectors import (
     BaseCollector,
+    HTMLListingCollector,
     NewsAPICollector,
     RSSCollector,
 )
@@ -12,6 +13,18 @@ def build_collector(
     newsapi_api_key: str | None = None,
     newsapi_base_url: str = "https://newsapi.org/v2",
 ) -> BaseCollector:
+    if source.source_type == "html_listing":
+        if not source.url:
+            raise ValueError(
+                f"HTML listing source '{source.key}' requires a URL"
+            )
+
+        return HTMLListingCollector(
+            listing_url=source.url,
+            source_name=source.name,
+            language=source.language,
+        )
+
     if source.source_type == "rss":
         if not source.url:
             raise ValueError(

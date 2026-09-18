@@ -29,6 +29,7 @@ async def run_sources(
     newsapi_api_key: str | None = None,
     newsapi_base_url: str = "https://newsapi.org/v2",
     per_source_limit: int | None = None,
+    max_age_days: int = 30,
 ) -> list[SourceIngestionResult]:
     results: list[SourceIngestionResult] = []
 
@@ -44,6 +45,7 @@ async def run_sources(
                 db=db,
                 collector=collector,
                 limit=per_source_limit,
+                max_age_days=max_age_days,
             )
 
             results.append(

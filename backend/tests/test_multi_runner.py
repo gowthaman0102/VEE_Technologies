@@ -32,6 +32,7 @@ async def test_run_sources_collects_results(monkeypatch):
         db,
         collector,
         limit=None,
+        **kwargs,
     ):
         return IngestionResult(
             collected=5,
@@ -58,6 +59,7 @@ async def test_run_sources_collects_results(monkeypatch):
         db=None,
         sources=sources,
         per_source_limit=10,
+        max_age_days=365,
     )
 
     assert len(results) == 2
@@ -101,6 +103,7 @@ async def test_run_sources_continues_after_failure(monkeypatch):
         db,
         collector,
         limit=None,
+        **kwargs,
     ):
         return IngestionResult(
             collected=2,

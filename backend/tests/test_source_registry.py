@@ -19,30 +19,48 @@ def test_registry_contains_expected_sources():
         for source in NEWS_SOURCES
     }
 
-    assert keys == {
-        "google_news_vee",
-        "newsapi_vee",
-    }
+    assert "openai_official_news" in keys
+    assert "google_news_openai" in keys
+    assert "google_news_openai_chatgpt" in keys
+    assert "google_news_openai_research_safety" in keys
+    assert "google_news_openai_business" in keys
+    assert "newsapi_openai" in keys
+    assert "newsapi_openai_chatgpt" in keys
+    assert len(keys) == 7
 
 
 def test_get_source():
     source = get_source(
-        "google_news_vee"
+        "openai_official_news"
     )
 
     assert source is not None
     assert source.source_type == "rss"
+    assert source.url == "https://openai.com/news/rss.xml"
     assert source.category == "company"
 
 
 def test_get_enabled_sources():
     sources = get_enabled_sources()
 
-    assert len(sources) == 2
+    assert len(sources) == 7
     assert all(
         source.enabled
         for source in sources
     )
+
+
+def test_build_html_listing_collector():
+    source = NewsSource(
+        key="vee_official_newsroom",
+        name="VEE Technologies Official Newsroom",
+        source_type="html_listing",
+        url="https://www.veetechnologies.com/newsroom/press-releases.htm",
+    )
+
+    collector = build_collector(source)
+
+    assert collector.__class__.__name__ == "HTMLListingCollector"
 
 
 def test_build_rss_collector():
@@ -80,26 +98,27 @@ def test_build_newsapi_collector():
     )
 
 
-def test_google_news_vee_source():
+def test_google_news_openai_source():
     source = get_source(
-        "google_news_vee"
+        "google_news_openai"
     )
 
     assert source is not None
     assert source.source_type == "rss"
     assert source.url is not None
     assert "news.google.com/rss/search" in source.url
+    assert "%22OpenAI%22" in source.url
     assert source.category == "company"
 
 
-def test_newsapi_vee_source():
+def test_newsapi_openai_source():
     source = get_source(
-        "newsapi_vee"
+        "newsapi_openai"
     )
 
     assert source is not None
     assert source.source_type == "newsapi"
-    assert source.query == "VEE Technologies"
+    assert source.query == '"OpenAI"'
     assert source.category == "company"
 
 

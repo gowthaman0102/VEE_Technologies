@@ -1324,7 +1324,7 @@ def export_report_xlsx(
 
     company_name = report_data.get(
         "company_name",
-        "VEE Technologies",
+        "Monitored Company",
     )
 
     start_date = report_data.get(
@@ -1343,7 +1343,7 @@ def export_report_xlsx(
         "A1:D1"
     )
     summary["A1"] = (
-        "VEE Technologies "
+        f"{company_name} "
         "Media Intelligence Report"
     )
     _xlsx_title_style(
@@ -2445,7 +2445,7 @@ def _pdf_page_footer(
     canvas.drawString(
         document.leftMargin,
         0.42 * inch,
-        "VEE Technologies - AI Media Intelligence",
+        "AI Media Intelligence",
     )
 
     canvas.drawRightString(
@@ -2470,9 +2470,9 @@ def export_report_pdf(
         topMargin=0.65 * inch,
         bottomMargin=0.65 * inch,
         title=(
-            "VEE Technologies Media Intelligence Report"
+            "Monitored Company Media Intelligence Report"
         ),
-        author="VEE Technologies",
+        author="AI Media Intelligence",
     )
 
     styles = _pdf_styles()
@@ -2480,7 +2480,7 @@ def export_report_pdf(
 
     company_name = report_data.get(
         "company_name",
-        "VEE Technologies",
+        "Monitored Company",
     )
 
     start_date = report_data.get(
@@ -2503,7 +2503,7 @@ def export_report_pdf(
     story.append(
         Paragraph(
             (
-                "VEE Technologies "
+                f"{company_name} "
                 "Media Intelligence Report"
             ),
             styles["title"],

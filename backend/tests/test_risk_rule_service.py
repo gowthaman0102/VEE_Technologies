@@ -1,4 +1,19 @@
-﻿import pytest
+﻿from app.services.risk_rule_service import (
+    event_type_to_monitoring_topic,
+)
+
+
+def test_all_triage_event_types_have_deterministic_topics():
+    assert event_type_to_monitoring_topic("regulatory_action") == "Regulatory Action"
+    assert event_type_to_monitoring_topic("fraud_security") == "Fraud and Security"
+    assert event_type_to_monitoring_topic("service_outage") == "Service Outage"
+    assert event_type_to_monitoring_topic("leadership_change") == "Leadership Change"
+    assert event_type_to_monitoring_topic("product_launch") == "Product Launch"
+    assert event_type_to_monitoring_topic("financial_performance") == "Financial Performance"
+    assert event_type_to_monitoring_topic("market_competition") == "Market Competition"
+    assert event_type_to_monitoring_topic("other") == "Reputation"
+
+import pytest
 
 from app.services.risk_rule_service import (
     calculate_risk,
@@ -49,7 +64,7 @@ def test_event_type_without_mapping():
         event_type_to_monitoring_topic(
             "financial_performance"
         )
-        is None
+        == "Financial Performance"
     )
 
 

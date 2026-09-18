@@ -12,6 +12,9 @@ EVENT_TOPIC_MAP: dict[str, str] = {
     "service_outage": "Service Outage",
     "leadership_change": "Leadership Change",
     "product_launch": "Product Launch",
+    "financial_performance": "Financial Performance",
+    "market_competition": "Market Competition",
+    "other": "Reputation",
 }
 
 

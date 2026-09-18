@@ -8,6 +8,11 @@ class IngestionRunRequest(BaseModel):
         ge=1,
         le=100,
     )
+    max_age_days: int | None = Field(
+        default=None,
+        ge=1,
+        le=36500,
+    )
 
 
 class SourceResponse(BaseModel):

@@ -43,6 +43,7 @@ async def run_collector(
     limit: int | None = None,
     *,
     validator: ArticleValidator | None = None,
+    max_age_days: int = 30,
 ) -> IngestionResult:
     articles = await collector.collect()
 
@@ -69,10 +70,17 @@ async def run_collector(
     inserted_article_ids: list[int] = []
 
     for article in articles:
-        validation = await resolved_validator(
-            article,
-            profile,
-        )
+        try:
+            validation = await resolved_validator(
+                article,
+                profile,
+                max_age_days=max_age_days,
+            )
+        except TypeError:
+            validation = await resolved_validator(
+                article,
+                profile,
+            )
 
         if not validation.accepted:
             skipped += 1

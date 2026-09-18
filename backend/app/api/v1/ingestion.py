@@ -89,6 +89,11 @@ async def run_ingestion(
         per_source_limit=(
             request.per_source_limit
         ),
+        max_age_days=(
+            request.max_age_days
+            if request.max_age_days is not None
+            else 30
+        ),
     )
 
     response_results = [
@@ -163,6 +168,11 @@ async def run_single_source(
         ),
         per_source_limit=(
             request.per_source_limit
+        ),
+        max_age_days=(
+            request.max_age_days
+            if request.max_age_days is not None
+            else 30
         ),
     )
 

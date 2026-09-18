@@ -24,7 +24,13 @@
     if not normalized_aliases:
         return False
 
-    return any(
-        alias in haystack
-        for alias in normalized_aliases
-    )
+    for alias in normalized_aliases:
+        if alias == "chatgpt":
+            if alias in haystack and "openai" in haystack:
+                return True
+            continue
+
+        if alias in haystack:
+            return True
+
+    return False

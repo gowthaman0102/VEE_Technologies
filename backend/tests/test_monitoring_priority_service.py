@@ -43,17 +43,23 @@ async def test_resolves_configured_priority():
 async def test_uses_fallback_for_unmapped_event():
     db = AsyncMock()
 
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = execute_result
+
     result = await resolve_monitoring_priority(
         db,
         company_id=1,
         event_type="financial_performance",
     )
 
-    assert result.monitoring_topic is None
+    assert result.monitoring_topic == (
+        "Financial Performance"
+    )
     assert result.priority == "medium"
     assert result.source == "fallback"
 
-    db.execute.assert_not_awaited()
+    db.execute.assert_awaited_once()
 
 
 @pytest.mark.asyncio

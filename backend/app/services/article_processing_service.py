@@ -5,7 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.article import Article
-from app.processing.extractor import ArticleExtractor
+from app.processing.extractor import (
+    ArticleExtractor,
+    ExtractionResult,
+)
 from app.processing.normalization import (
     canonicalize_url,
     clean_text,
@@ -103,9 +106,42 @@ async def process_article(
             duplicate_of_id=duplicate.id,
         )
 
-    extraction = await extractor.extract_from_url(
-        resolved_url
-    )
+    if (
+        article.source_name == "OpenAI Official News"
+        and article.description
+        and article.description.strip()
+    ):
+        extraction = ExtractionResult(
+            success=True,
+            content=(
+                f"{article.title}\n\n"
+                f"{article.description.strip()}"
+            ),
+            error="Used official OpenAI RSS description",
+            final_url=resolved_url,
+        )
+    else:
+        extraction = await extractor.extract_from_url(
+            resolved_url
+        )
+
+    if (
+        not extraction.success
+        and article.description
+        and article.description.strip()
+    ):
+        extraction = type(extraction)(
+            success=True,
+            content=(
+                f"{article.title}\n\n"
+                f"{article.description.strip()}"
+            ),
+            error=(
+                "Article page unavailable; used source-provided "
+                "description"
+            ),
+            final_url=extraction.final_url or resolved_url,
+        )
 
     final_canonical_url = canonicalize_url(
         extraction.final_url
