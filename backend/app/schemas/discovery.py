@@ -9,30 +9,17 @@ class KeywordSearchResult(BaseModel):
     source_name: str
     url: str
     published_at: datetime | None
+    publisher_name: str = ""
     event_type: str | None = None
     sentiment: str | None = None
     risk_level: str | None = None
     risk_score: float | None = None
     business_impact: str | None = None
     event_cluster_id: int | None = None
+    collected_at: datetime | None = None
 
 
 class KeywordSearchResponse(BaseModel):
     query: str
     count: int
     results: list[KeywordSearchResult]
-
-
-class EventClusterItem(BaseModel):
-    id: int
-    company_id: int
-    title: str | None
-    representative_article_id: int | None
-    first_published_at: datetime | None
-    last_published_at: datetime | None
-    article_count: int
-
-
-class EventClusterResponse(BaseModel):
-    count: int
-    items: list[EventClusterItem]

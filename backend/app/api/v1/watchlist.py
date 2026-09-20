@@ -65,6 +65,7 @@ async def read_watchlist_matches(
                 value=item.value,
                 article_id=item.article_id,
                 title=item.title,
+                publisher_name=item.publisher_name,
                 source_name=item.source_name,
                 url=item.url,
                 published_at=(
@@ -72,6 +73,7 @@ async def read_watchlist_matches(
                     if item.published_at is not None
                     else None
                 ),
+                collected_at=item.collected_at.isoformat(),
                 event_type=item.event_type,
                 monitoring_topic=item.monitoring_topic,
                 risk_level=item.risk_level,

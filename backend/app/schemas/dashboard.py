@@ -1,4 +1,5 @@
-﻿from pydantic import BaseModel
+from pydantic import BaseModel
+from datetime import datetime
 
 
 class DashboardOverviewResponse(BaseModel):
@@ -7,8 +8,29 @@ class DashboardOverviewResponse(BaseModel):
     total_companies: int
     high_risk_items: int
     critical_risk_items: int
-    active_alerts: int
-    overdue_alerts: int
+    last_hour_articles: int = 0
+    last_hour_processed: int = 0
+
+
+class DashboardArticleItem(BaseModel):
+    article_id: int
+    title: str
+    source_name: str
+    url: str
+    published_at: datetime | None
+    publisher_name: str
+    collected_at: datetime
+    event_type: str | None = None
+    sentiment: str | None = None
+    risk_level: str | None = None
+    risk_score: float | None = None
+    business_impact: str | None = None
+    collected_at: datetime
+
+
+class DashboardArticleResponse(BaseModel):
+    count: int
+    items: list[DashboardArticleItem]
 
 from datetime import datetime
 
@@ -22,6 +44,7 @@ class DashboardIntelligenceItem(BaseModel):
     source_name: str
     url: str
     published_at: datetime | None
+    publisher_name: str
 
     event_type: str
     urgency: str
@@ -41,6 +64,7 @@ class DashboardIntelligenceItem(BaseModel):
     attention_level: str
 
     updated_at: datetime
+    collected_at: datetime
 
 
 class DashboardIntelligenceResponse(BaseModel):
@@ -63,38 +87,13 @@ class DashboardRiskAnalyticsResponse(BaseModel):
     event_types: list[DashboardRiskBucket]
 
 
-class DashboardAlertItem(BaseModel):
-    id: int
-    article_id: int
-    company_id: int
-
-    alert_type: str
-    severity: str
-    title: str
-    message: str
-
-    delivery_status: str
-    delivery_channel: str | None
-    retry_count: int
-    last_error: str | None
-
-    requires_immediate_delivery: bool
-    sla_due_at: datetime | None
-    delivered_at: datetime | None
-
-    is_overdue: bool
-
-    created_at: datetime
-    updated_at: datetime
-
-
-class DashboardAlertsResponse(BaseModel):
-    total_alerts: int
-    active_alerts: int
-    delivered_alerts: int
-    failed_alerts: int
-    overdue_alerts: int
-    items: list[DashboardAlertItem]
+class RiskDrilldownResponse(BaseModel):
+    metric: str
+    value: str | None = None
+    total: int
+    page: int
+    page_size: int
+    items: list[DashboardArticleItem]
 
 
 class DashboardMonitoringTopic(BaseModel):

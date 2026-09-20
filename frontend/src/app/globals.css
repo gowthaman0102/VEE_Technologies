@@ -1,15 +1,68 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 :root {
-  --background: #020617;
-  --foreground: #f8fafc;
+  --canvas: #f4f2f9;
+  --surface: #ffffff;
+  --surface-raised: #faf9fd;
+  --surface-sunken: #f0ecf8;
+  --border: #dfdaec;
+  --border-strong: #c9c0e0;
+  --text: #1c1734;
+  --text-body: #2e2350;
+  --text-muted: #615b7a;
+  --primary: #3e2f82;
+  --primary-hover: #32255f;
+  --primary-soft: #e7e2f5;
+  --primary-border: #cfc5e8;
+  --sidebar: #2a2059;
+  --sidebar-text: #bfb7dc;
+  --sidebar-active: #3e2f82;
+  --sidebar-border: #3d3070;
+  --critical: #9b1c3d;
+  --critical-bg: #f6dce3;
+  --critical-border: #e9b9c7;
+  --high: #b4442a;
+  --high-bg: #f7e0d7;
+  --high-border: #eabfab;
+  --medium: #96700c;
+  --medium-bg: #f6ecd0;
+  --medium-border: #e4d29c;
+  --low: #3e2f82;
+  --low-bg: #e7e2f5;
+  --low-border: #cfc5e8;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-body: var(--text-body);
+  --color-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-border: var(--primary-border);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-critical: var(--critical);
+  --color-critical-bg: var(--critical-bg);
+  --color-critical-border: var(--critical-border);
+  --color-high: var(--high);
+  --color-high-bg: var(--high-bg);
+  --color-high-border: var(--high-border);
+  --color-medium: var(--medium);
+  --color-medium-bg: var(--medium-bg);
+  --color-medium-border: var(--medium-border);
+  --color-low: var(--low);
+  --color-low-bg: var(--low-bg);
+  --color-low-border: var(--low-border);
+  --font-sans: var(--font-nunito-sans);
 }
 
 * {
@@ -17,16 +70,129 @@
 }
 
 html {
-  background: var(--background);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--canvas);
+  color: var(--text-body);
 }
 
 a {
   color: inherit;
   text-decoration: none;
 }
+
+select, input, textarea { color-scheme: light; }
+
+::selection { background: var(--primary-soft); color: var(--primary); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--canvas); }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--canvas);
+}
+::-webkit-scrollbar-thumb:hover { background: #a898cf; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Article Reader Modal prose ─────────────────────────────────────────── */
+
+.article-reader-prose {
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-body);
+}
+
+.article-reader-prose p {
+  margin-bottom: 1.25em;
+}
+
+.article-reader-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.article-reader-prose h1,
+.article-reader-prose h2,
+.article-reader-prose h3,
+.article-reader-prose h4 {
+  color: var(--text);
+  font-weight: 600;
+  margin-top: 1.75em;
+  margin-bottom: 0.6em;
+  line-height: 1.35;
+}
+
+.article-reader-prose h1 { font-size: 1.5em; }
+.article-reader-prose h2 { font-size: 1.25em; }
+.article-reader-prose h3 { font-size: 1.1em; }
+
+.article-reader-prose ul,
+.article-reader-prose ol {
+  padding-left: 1.5em;
+  margin-bottom: 1.25em;
+}
+
+.article-reader-prose li {
+  margin-bottom: 0.4em;
+}
+
+.article-reader-prose blockquote {
+  border-left: 3px solid var(--primary-border);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.article-reader-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.article-reader-prose a:hover {
+  color: var(--primary-hover);
+}
+
+.article-reader-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1em 0;
+}
+
+.article-reader-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 1.25em;
+}
+
+.article-reader-prose th,
+.article-reader-prose td {
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.article-reader-prose th {
+  background: var(--surface-raised);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.article-reader-prose strong { color: var(--text); }
+.article-reader-prose em { color: var(--text-body); }

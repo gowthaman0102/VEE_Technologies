@@ -24,6 +24,8 @@ class ArticleResponse(ArticleCreate):
 
     id: int
     collected_at: datetime
+    publisher_name: str
+    publisher_url: str | None = None
 
     canonical_url: str | None = None
     extracted_content: str | None = None

@@ -8,6 +8,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from app.ingestion.sources import get_enabled_sources
+
 from openpyxl import Workbook
 from openpyxl.styles import (
     Alignment,
@@ -73,6 +75,7 @@ from app.services.analytics_service import (
     get_sentiment_distribution,
     validate_time_window,
 )
+from app.utils.article_metadata import publisher_name
 
 
 REPORT_FORMATS = {"pdf", "xlsx", "csv"}
@@ -121,17 +124,29 @@ async def _get_report_articles(
     company_id: int,
     start_date: datetime,
     end_date: datetime,
+    snapshot_at: datetime,
+    time_mode: str = "media",
 ) -> list[Article]:
-    article_time = func.coalesce(
-        Article.published_at,
-        Article.collected_at,
-    )
+    enabled_source_names = [
+        source.name
+        for source in get_enabled_sources()
+    ]
+
+    if time_mode == "ingestion":
+        article_time = Article.collected_at
+    else:
+        article_time = func.coalesce(
+            Article.published_at,
+            Article.collected_at,
+        )
 
     stmt = (
         select(Article)
         .where(
             article_time >= start_date,
             article_time < end_date,
+            Article.collected_at <= snapshot_at,
+            Article.source_name.in_(enabled_source_names),
         )
         .order_by(
             article_time.desc(),
@@ -139,11 +154,36 @@ async def _get_report_articles(
         )
     )
 
-    return list(
-        (
-            await db.execute(stmt)
-        ).scalars().all()
+    raw_articles = list(
+        (await db.execute(stmt)).scalars().all()
     )
+
+    unique_articles = []
+    seen_external_ids = set()
+    seen_urls = set()
+
+    for article in raw_articles:
+        if article.external_id and article.external_id in seen_external_ids:
+            continue
+            
+        if getattr(article, "canonical_url", None) and article.canonical_url in seen_urls:
+            continue
+            
+        if article.url and article.url in seen_urls:
+            continue
+
+        if article.external_id:
+            seen_external_ids.add(article.external_id)
+
+        if getattr(article, "canonical_url", None):
+            seen_urls.add(article.canonical_url)
+
+        if article.url:
+            seen_urls.add(article.url)
+
+        unique_articles.append(article)
+
+    return unique_articles
 
 
 async def _fetch_by_article_ids(
@@ -335,13 +375,27 @@ def _report_summaries(
             primary[row["business_impact_primary"]] += 1
         for category in row["business_impact_categories"]:
             business[category] += 1
-    events = {row["event_cluster_id"] for row in article_rows if row["event_cluster_id"] is not None}
-    alerts = sum(len(row["alerts"]) for row in article_rows)
+            
+    events_map = defaultdict(lambda: {"count": 0, "title": ""})
+    for row in article_rows:
+        if row["event_cluster_id"] is not None:
+            cid = row["event_cluster_id"]
+            events_map[cid]["count"] += 1
+            events_map[cid]["title"] = row.get("event_cluster_title") or f"Event {cid}"
+            
+    largest_events = []
+    for cid, info in sorted(events_map.items(), key=lambda x: x[1]["count"], reverse=True)[:5]:
+        largest_events.append({
+            "cluster_id": cid,
+            "title": info["title"],
+            "article_count": info["count"],
+        })
+
     return (
         {"positive": sentiments["positive"], "neutral": sentiments["neutral"], "negative": sentiments["negative"]},
         risk,
         {"items": dict(business), "primary_distribution": dict(primary), "category_distribution": dict(business)},
-        {"total_events": len(events), "largest_events": []},
+        {"total_events": len(events_map), "largest_events": largest_events},
     )
 
 
@@ -612,6 +666,8 @@ async def build_company_report(
     company_id: int,
     start_date: datetime,
     end_date: datetime,
+    snapshot_at: datetime,
+    time_mode: str = "media",
 ) -> dict:
     start_date, end_date = validate_time_window(
         start_date,
@@ -628,12 +684,21 @@ async def build_company_report(
         company_id=company_id,
         start_date=start_date,
         end_date=end_date,
+        snapshot_at=snapshot_at,
+        time_mode=time_mode,
     )
 
     article_ids = [
         article.id
         for article in articles
     ]
+
+    triages = await _fetch_by_article_ids(
+        db,
+        ArticleTriage,
+        company_id=company_id,
+        article_ids=article_ids,
+    )
 
     sentiments = await _fetch_by_article_ids(
         db,
@@ -685,6 +750,9 @@ async def build_company_report(
         )
     )
 
+    triage_by_article = _index_by_article(
+        triages
+    )
     sentiment_by_article = _index_by_article(
         sentiments
     )
@@ -707,6 +775,9 @@ async def build_company_report(
     article_rows: list[dict] = []
 
     for article in articles:
+        triage = triage_by_article.get(
+            article.id
+        )
         sentiment = sentiment_by_article.get(
             article.id
         )
@@ -743,10 +814,22 @@ async def build_company_report(
             {
                 "article_id": article.id,
                 "title": article.title,
+                "publisher_name": publisher_name(
+                    article.source_name,
+                    article.title,
+                    article.url,
+                    getattr(article, "canonical_url", None),
+                ),
                 "source_name": article.source_name,
                 "url": article.url,
-                "published_at": _iso(
-                    _article_timestamp(article)
+                "has_triage": triage is not None,
+                "published_at": _iso(article.published_at),
+                "collected_at": _iso(
+                    getattr(
+                        article,
+                        "collected_at",
+                        getattr(article, "created_at", None),
+                    )
                 ),
                 "sentiment": (
                     sentiment.label
@@ -947,11 +1030,27 @@ async def build_company_report(
         },
     ]
 
+    processed_count = sum(1 for row in article_rows if row.get("has_triage"))
+    sentiment_count = sum(1 for row in article_rows if row.get("sentiment") is not None)
+    risk_count = sum(1 for row in article_rows if row.get("risk_score") is not None)
+    impact_count = sum(1 for row in article_rows if row.get("business_impact_primary") is not None)
+    event_assigned_count = sum(1 for row in article_rows if row.get("event_cluster_id") is not None)
+
+    metrics.extend([
+        {"label": "Processed Intelligence", "value": processed_count},
+        {"label": "Sentiment Analyzed", "value": sentiment_count},
+        {"label": "Risk Assessed", "value": risk_count},
+        {"label": "Business Impact Analyzed", "value": impact_count},
+        {"label": "Event Assigned", "value": event_assigned_count},
+    ])
+
     report_data = {
         "company_id": company_id,
         "company_name": company.name,
         "start_date": start_date,
         "end_date": end_date,
+        "snapshot_at": snapshot_at,
+        "time_mode": time_mode,
         "total_articles": len(article_rows),
         "total_events": event_summary.get(
             "total_events",
@@ -1158,16 +1257,55 @@ def export_report_csv(
 
     writer.writerow(
         (
-            "metric",
-            "value",
+            "row_type",
+            "metric_label",
+            "article_id",
+            "title",
+            "publisher",
+            "source_provider",
+            "url",
+            "published_at",
+            "collected_at",
+            "sentiment",
+            "risk_level",
+            "risk_score",
+            "business_impact",
+            "event_cluster_id",
+            "event_cluster_title",
         )
     )
 
-    writer.writerows(
-        report_rows(
-            report_data
+    for metric, value in report_rows(report_data):
+        writer.writerow(
+            (
+                "metric",
+                metric,
+                value,
+                "", "", "", "", "", "", "", "", "", "", "", "",
+            )
         )
-    )
+
+    articles = report_data.get("articles", [])
+    for item in articles:
+        writer.writerow(
+            (
+                "article",
+                "",
+                item.get("article_id"),
+                item.get("title"),
+                item.get("publisher_name"),
+                item.get("source_name"),
+                item.get("url"),
+                item.get("published_at"),
+                item.get("collected_at"),
+                item.get("sentiment"),
+                item.get("risk_level"),
+                item.get("risk_score"),
+                item.get("business_impact_primary"),
+                item.get("event_cluster_id"),
+                item.get("event_cluster_title"),
+            )
+        )
 
     return output.getvalue().encode(
         "utf-8"
@@ -1609,42 +1747,24 @@ def export_report_xlsx(
             [
                 item.get("article_id"),
                 item.get("title"),
+                item.get("publisher_name"),
                 item.get("source_name"),
                 item.get("published_at"),
+                item.get("collected_at"),
                 item.get("url"),
                 item.get("sentiment"),
                 item.get("sentiment_score"),
-                item.get(
-                    "business_impact_primary"
-                ),
-                ", ".join(
-                    str(value)
-                    for value in impact_categories
-                ),
-                item.get(
-                    "business_impact_summary"
-                ),
-                ", ".join(
-                    str(value)
-                    for value in competitors
-                ),
+                item.get("business_impact_primary"),
+                ", ".join(str(value) for value in impact_categories),
+                item.get("business_impact_summary"),
+                ", ".join(str(value) for value in competitors),
                 item.get("risk_score"),
                 item.get("risk_level"),
-                item.get(
-                    "escalation_action"
-                ),
-                item.get(
-                    "attention_level"
-                ),
-                item.get(
-                    "risk_headline"
-                ),
-                item.get(
-                    "risk_summary"
-                ),
-                item.get(
-                    "event_cluster_title"
-                ),
+                item.get("escalation_action"),
+                item.get("attention_level"),
+                item.get("risk_headline"),
+                item.get("risk_summary"),
+                item.get("event_cluster_title"),
                 len(nested_alerts),
             ]
         )
@@ -1654,8 +1774,10 @@ def export_report_xlsx(
         [
             "Article ID",
             "Title",
-            "Source",
-            "Published",
+            "Publisher",
+            "Source Provider",
+            "Published At",
+            "Collected At",
             "URL",
             "Sentiment",
             "Sentiment Score",
@@ -1678,6 +1800,7 @@ def export_report_xlsx(
             42,
             24,
             24,
+            24,
             42,
             14,
             16,
@@ -1693,6 +1816,9 @@ def export_report_xlsx(
             45,
             36,
             12,
+            24,
+            24,
+            24,
         ],
         empty_message=(
             "No qualifying articles are available "
@@ -3954,10 +4080,13 @@ def export_report_pdf(
             )
 
             source_name = item.get(
-                "source_name"
-            )
+                "publisher_name"
+            ) or item.get("source_name")
             published_at = item.get(
                 "published_at"
+            )
+            collected_at = item.get(
+                "collected_at"
             )
             risk_score = item.get(
                 "risk_score"
@@ -3993,6 +4122,14 @@ def export_report_pdf(
                     (
                         "Published: "
                         f"{_pdf_display_value(published_at)}"
+                    )
+                )
+
+            if collected_at:
+                metadata_parts.append(
+                    (
+                        "Added to Nova Cops: "
+                        f"{_pdf_display_value(collected_at)}"
                     )
                 )
 
@@ -4842,3 +4979,98 @@ async def persist_generated_report(
         record,
         content=content,
     )
+
+
+import uuid
+
+REPORT_FORMATS = ("pdf", "xlsx", "csv")
+
+
+async def generate_report_batch(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    report_type: str,
+    period_start: datetime,
+    period_end: datetime,
+    time_mode: str = "media",
+) -> list[GeneratedReport]:
+    """
+    Generate all three report formats (PDF, XLSX, CSV) in a single batch
+    sharing one snapshot_at timestamp and one report_data build.
+    Returns the list of GeneratedReport records (one per format).
+    """
+    snapshot_at = datetime.now(timezone.utc)
+    batch_id = str(uuid.uuid4())
+
+    records = []
+    for file_format in REPORT_FORMATS:
+        record = GeneratedReport(
+            company_id=company_id,
+            report_type=report_type,
+            file_format=file_format,
+            period_start=period_start,
+            period_end=period_end,
+            batch_id=batch_id,
+            snapshot_at=snapshot_at,
+            time_mode=time_mode,
+            filename=None,
+            content_type=None,
+            content=None,
+            status="processing",
+            generated_at=None,
+            error=None,
+        )
+        db.add(record)
+        records.append(record)
+
+    await db.commit()
+    for r in records:
+        await db.refresh(r)
+
+    try:
+        report_data = await build_company_report(
+            db,
+            company_id=company_id,
+            start_date=period_start,
+            end_date=period_end,
+            snapshot_at=snapshot_at,
+            time_mode=time_mode,
+        )
+
+        for record in records:
+            content = render_report(report_data, record.file_format)
+            extension = REPORT_EXTENSIONS[record.file_format]
+            record.filename = (
+                f"company-{record.company_id}-"
+                f"{record.report_type}-"
+                f"{record.period_start.date().isoformat()}-"
+                f"{record.period_end.date().isoformat()}."
+                f"{extension}"
+            )
+            record.content_type = REPORT_CONTENT_TYPES[record.file_format]
+            record.content = content
+            record.status = "success"
+            record.generated_at = snapshot_at
+            record.included_article_ids = [
+                row["article_id"] for row in report_data.get("articles", [])
+            ]
+            record.error = None
+
+        await db.commit()
+        for r in records:
+            await db.refresh(r)
+
+        return records
+
+    except Exception as exc:
+        for record in records:
+            record.status = "failed"
+            record.error = str(exc)[:1000]
+            record.generated_at = None
+            record.filename = None
+            record.content_type = None
+            record.content = None
+
+        await db.commit()
+        raise

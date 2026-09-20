@@ -1,0 +1,6 @@
+export const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-white";
+export const primaryButton = `inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
+export const secondaryButton = `inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-body transition-colors duration-150 hover:border-border-strong hover:text-text ${focusRing}`;
+export const ghostButton = `inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-primary transition-colors duration-150 hover:bg-primary-soft ${focusRing}`;
+export const dangerButton = `inline-flex items-center justify-center gap-2 rounded-lg border border-high-border bg-high-bg px-3 py-2 text-sm font-medium text-high transition-colors duration-150 hover:bg-high hover:text-white ${focusRing}`;
+export const inputClasses = `w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-muted transition-colors duration-150 focus:border-primary ${focusRing}`;

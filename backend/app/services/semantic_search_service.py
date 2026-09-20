@@ -16,6 +16,7 @@ from app.schemas.search_filters import SearchFilters
 from app.services.search_enrichment_service import (
     get_search_result_enrichments,
 )
+from app.utils.article_metadata import publisher_name
 
 
 @dataclass
@@ -24,9 +25,11 @@ class SemanticSearchResult:
     title: str
     source_name: str
     url: str
-    published_at: datetime | None
     distance: float
     similarity: float
+    published_at: datetime | None = None
+    publisher_name: str = ""
+    collected_at: datetime | None = None
     event_type: str | None = None
     sentiment: str | None = None
     risk_level: str | None = None
@@ -109,6 +112,7 @@ async def semantic_search(
             Article.source_name,
             Article.url,
             Article.published_at,
+            Article.collected_at,
             distance_expression.label(
                 "distance"
             ),
@@ -245,9 +249,15 @@ async def semantic_search(
             SemanticSearchResult(
                 article_id=row.id,
                 title=row.title,
+                publisher_name=publisher_name(
+                    row.source_name,
+                    row.title,
+                    row.url,
+                ),
                 source_name=row.source_name,
                 url=row.url,
                 published_at=row.published_at,
+                collected_at=row.collected_at,
                 distance=distance,
                 similarity=similarity,
             )
@@ -269,9 +279,11 @@ async def semantic_search(
         SemanticSearchResult(
             article_id=item.article_id,
             title=item.title,
+            publisher_name=item.publisher_name,
             source_name=item.source_name,
             url=item.url,
             published_at=item.published_at,
+            collected_at=item.collected_at,
             distance=item.distance,
             similarity=item.similarity,
             event_type=(

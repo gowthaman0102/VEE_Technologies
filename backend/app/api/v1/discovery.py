@@ -7,20 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas.discovery import (
-    EventClusterItem,
-    EventClusterResponse,
     KeywordSearchResponse,
     KeywordSearchResult,
 )
-from app.schemas.event_clusters import EventClusterDetailResponse
 from app.schemas.search_filters import SearchFilters
 from app.services.active_company_profile_service import (
     get_active_company_profile,
 )
 from app.services.discovery_service import (
-    get_event_cluster_detail,
     keyword_search,
-    list_event_clusters,
 )
 
 router = APIRouter(tags=["Discovery"])
@@ -75,7 +70,6 @@ async def search_keyword(
         limit=limit,
         filters=filters,
     )
-
     return KeywordSearchResponse(
         query=q.strip(),
         count=len(articles),
@@ -83,9 +77,11 @@ async def search_keyword(
             KeywordSearchResult(
                 article_id=article.article_id,
                 title=article.title,
+                publisher_name=article.publisher_name,
                 source_name=article.source_name,
                 url=article.url,
                 published_at=article.published_at,
+                collected_at=article.collected_at,
                 event_type=article.event_type,
                 sentiment=article.sentiment,
                 risk_level=article.risk_level,
@@ -96,33 +92,3 @@ async def search_keyword(
             for article in articles
         ],
     )
-
-
-
-@router.get("/event-clusters", response_model=EventClusterResponse)
-async def read_event_clusters(
-    company_id: int | None = Query(default=None, ge=1),
-    limit: int = Query(default=50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
-) -> EventClusterResponse:
-    items = await list_event_clusters(db, company_id=company_id, limit=limit)
-    return EventClusterResponse(
-        count=len(items),
-        items=[EventClusterItem(**item) for item in items],
-    )
-
-
-@router.get("/event-clusters/{cluster_id}", response_model=EventClusterDetailResponse)
-async def read_event_cluster_detail(
-    cluster_id: int,
-    company_id: int | None = Query(default=None, ge=1),
-    db: AsyncSession = Depends(get_db),
-) -> EventClusterDetailResponse:
-    detail = await get_event_cluster_detail(
-        db,
-        cluster_id=cluster_id,
-        company_id=company_id,
-    )
-    if detail is None:
-        raise HTTPException(status_code=404, detail="Event cluster not found.")
-    return EventClusterDetailResponse(**detail)

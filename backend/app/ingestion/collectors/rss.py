@@ -63,9 +63,23 @@ class RSSCollector(BaseCollector):
             if not title or not url:
                 continue
 
+            entry_source = entry.get("source") or {}
+            publisher = (
+                entry_source.get("title")
+                if isinstance(entry_source, dict)
+                else None
+            )
+            source_name = (
+                publisher.strip()
+                if self.source_name.lower().startswith("google news")
+                and isinstance(publisher, str)
+                and publisher.strip()
+                else self.source_name
+            )
+
             articles.append(
                 CollectedArticle(
-                    source_name=self.source_name,
+                    source_name=source_name,
                     source_type="rss",
                     external_id=(
                         entry.get("id")

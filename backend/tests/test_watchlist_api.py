@@ -95,6 +95,7 @@ def test_get_watchlist_matches(monkeypatch):
                 value="high",
                 article_id=20,
                 title="Regulatory scrutiny increases",
+                    publisher_name="Reuters",
                 source_name="Reuters",
                 url="https://example.com/20",
                 published_at=datetime(
@@ -103,6 +104,13 @@ def test_get_watchlist_matches(monkeypatch):
                     10,
                     tzinfo=timezone.utc,
                 ),
+                    collected_at=datetime(
+                        2026,
+                        9,
+                        10,
+                        1,
+                        tzinfo=timezone.utc,
+                    ),
                 event_type="regulatory_action",
                 monitoring_topic="payments regulation",
                 risk_level="high",

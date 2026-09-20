@@ -36,6 +36,8 @@ class SemanticSearchResultResponse(BaseModel):
     risk_score: float | None = None
     business_impact: str | None = None
     event_cluster_id: int | None = None
+    publisher_name: str = ""
+    collected_at: datetime | None = None
 
 
 class SemanticSearchResponse(BaseModel):

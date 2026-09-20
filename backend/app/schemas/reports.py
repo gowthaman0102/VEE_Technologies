@@ -15,7 +15,7 @@ class ReportRequest(BaseModel):
     ] = "custom"
     start_date: datetime | None = None
     end_date: datetime | None = None
-    format: Literal["pdf", "xlsx", "csv"] = "pdf"
+    time_mode: Literal["media", "ingestion"] = "media"
     include_details: bool = True
 
 
@@ -57,6 +57,18 @@ class ReportHistoryItem(BaseModel):
     created_at: datetime
 
 
+class ReportBatchHistoryItem(BaseModel):
+    batch_id: str
+    company_id: int
+    report_type: str
+    period_start: datetime
+    period_end: datetime
+    status: str
+    generated_at: datetime | None
+    error: str | None
+    formats: dict[str, ReportHistoryItem]
+
+
 class ReportHistoryResponse(BaseModel):
     count: int
-    items: list[ReportHistoryItem]
+    items: list[ReportBatchHistoryItem]

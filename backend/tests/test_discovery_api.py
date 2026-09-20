@@ -21,15 +21,6 @@ def test_keyword_search(monkeypatch):
     }
 
 
-def test_event_clusters(monkeypatch):
-    monkeypatch.setattr(
-        "app.api.v1.discovery.list_event_clusters",
-        AsyncMock(return_value=[]),
-    )
-    response = client.get("/api/v1/event-clusters?company_id=1")
-    assert response.status_code == 200
-    assert response.json() == {"count": 0, "items": []}
-
 def test_keyword_search_passes_filters(monkeypatch):
     search_mock = AsyncMock(return_value=[])
 
@@ -98,9 +89,11 @@ def test_keyword_search_returns_enriched_api_fields(
                 KeywordSearchItem(
                     article_id=10,
                     title="RBI regulatory update",
+                    publisher_name="Reuters",
                     source_name="Reuters",
                     url="https://example.com/10",
                     published_at=None,
+                    collected_at=None,
                     event_type="regulatory_action",
                     sentiment="negative",
                     risk_level="high",

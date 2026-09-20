@@ -22,8 +22,6 @@ def test_get_dashboard_overview(monkeypatch):
                 total_companies=1,
                 high_risk_items=1,
                 critical_risk_items=0,
-                active_alerts=1,
-                overdue_alerts=1,
             )
         ),
     )
@@ -41,8 +39,6 @@ def test_get_dashboard_overview(monkeypatch):
     assert data["total_companies"] == 1
     assert data["high_risk_items"] == 1
     assert data["critical_risk_items"] == 0
-    assert data["active_alerts"] == 1
-    assert data["overdue_alerts"] == 1
 
 
 def test_get_dashboard_intelligence(monkeypatch):
@@ -55,9 +51,11 @@ def test_get_dashboard_intelligence(monkeypatch):
                     "company_id": 1,
                     "company_name": "PayU",
                     "title": "PayU RBI approval",
+                        "publisher_name": "PayU",
                     "source_name": "Google News",
                     "url": "https://example.com/article",
                     "published_at": None,
+                        "collected_at": "2026-09-11T09:00:00+00:00",
                     "event_type": "regulatory_action",
                     "urgency": "high",
                     "confidence": 0.9,
@@ -99,6 +97,42 @@ def test_get_dashboard_intelligence(monkeypatch):
     assert data["items"][0]["company_name"] == "PayU"
     assert data["items"][0]["risk_score"] == 80.0
     assert data["items"][0]["risk_level"] == "high"
+
+
+def test_get_dashboard_articles(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.v1.dashboard.get_dashboard_articles",
+        AsyncMock(
+            return_value={
+                "count": 1,
+                "items": [
+                    {
+                        "article_id": 8,
+                        "title": "PayU RBI approval",
+                        "publisher_name": "PayU",
+                        "source_name": "Google News",
+                        "url": "https://news.google.com/articles/example",
+                        "published_at": None,
+                        "collected_at": "2026-09-11T09:00:00+00:00",
+                        "event_type": "regulatory_action",
+                        "sentiment": None,
+                        "risk_level": "high",
+                        "risk_score": 80.0,
+                        "business_impact": "regulatory",
+                    }
+                ],
+            }
+        ),
+    )
+
+    response = client.get(
+        "/api/v1/dashboard/articles",
+        params={"metric": "high-risk"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["items"][0]["source_name"] == "Google News"
 
 
 def test_get_dashboard_risk_analytics(
@@ -147,68 +181,6 @@ def test_get_dashboard_risk_analytics(
         "count": 1,
     }
 
-
-def test_get_dashboard_alerts(monkeypatch):
-    monkeypatch.setattr(
-        "app.api.v1.dashboard."
-        "get_dashboard_alerts",
-        AsyncMock(
-            return_value={
-                "total_alerts": 1,
-                "active_alerts": 1,
-                "delivered_alerts": 0,
-                "failed_alerts": 1,
-                "overdue_alerts": 1,
-                "items": [
-                    {
-                        "id": 2,
-                        "article_id": 8,
-                        "company_id": 1,
-                        "alert_type": "review",
-                        "severity": "high",
-                        "title": "PayU alert",
-                        "message": "Review required.",
-                        "delivery_status": "failed",
-                        "delivery_channel": "slack",
-                        "retry_count": 2,
-                        "last_error": (
-                            "Slack webhook is not configured."
-                        ),
-                        "requires_immediate_delivery": False,
-                        "sla_due_at": (
-                            "2026-09-11T12:09:25+00:00"
-                        ),
-                        "delivered_at": None,
-                        "is_overdue": True,
-                        "created_at": (
-                            "2026-09-11T11:09:25+00:00"
-                        ),
-                        "updated_at": (
-                            "2026-09-11T11:09:25+00:00"
-                        ),
-                    }
-                ],
-            }
-        ),
-    )
-
-    response = client.get(
-        "/api/v1/dashboard/alerts"
-    )
-
-    assert response.status_code == 200
-
-    data = response.json()
-
-    assert data["total_alerts"] == 1
-    assert data["failed_alerts"] == 1
-    assert data["overdue_alerts"] == 1
-    assert (
-        data["items"][0]["delivery_status"]
-        == "failed"
-    )
-    assert data["items"][0]["retry_count"] == 2
-    assert data["items"][0]["is_overdue"] is True
 
 
 def test_get_dashboard_companies(monkeypatch):

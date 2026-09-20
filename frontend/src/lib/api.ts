@@ -1,11 +1,37 @@
-﻿export type DashboardOverview = {
+export type DashboardOverview = {
   total_articles: number;
   processed_articles: number;
   total_companies: number;
   high_risk_items: number;
   critical_risk_items: number;
-  active_alerts: number;
-  overdue_alerts: number;
+  last_hour_articles: number;
+  last_hour_processed: number;
+};
+
+export type DashboardArticleMetric =
+  | "total"
+  | "processed"
+  | "high-risk"
+  | "critical-risk";
+
+export type DashboardArticleItem = {
+  article_id: number;
+  title: string;
+  publisher_name: string;
+  source_name: string;
+  url: string;
+  published_at: string | null;
+  collected_at: string;
+  event_type: string | null;
+  sentiment: string | null;
+  risk_level: string | null;
+  risk_score: number | null;
+  business_impact: string | null;
+};
+
+export type DashboardArticleResponse = {
+  count: number;
+  items: DashboardArticleItem[];
 };
 
 export type DashboardIntelligenceItem = {
@@ -14,9 +40,11 @@ export type DashboardIntelligenceItem = {
   company_name: string;
 
   title: string;
+  publisher_name: string;
   source_name: string;
   url: string;
   published_at: string | null;
+  collected_at: string;
 
   event_type: string;
   urgency: string;
@@ -43,7 +71,7 @@ export type DashboardIntelligenceResponse = {
   items: DashboardIntelligenceItem[];
 };
 
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   "http://127.0.0.1:8000/api/v1";
 
@@ -79,6 +107,72 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   return response.json();
 }
 
+export type AnalyticsOverview = {
+  company_id: number;
+  start: string;
+  end: string;
+  total_articles: number;
+  total_events: number;
+  sentiment: Record<string, number>;
+  risk: Record<string, number>;
+  business_impact: Record<string, number>;
+  competitors: Array<Record<string, unknown>>;
+  comparison: Record<string, number>;
+};
+
+export async function getAnalyticsOverview(
+  companyId?: number,
+  start?: string,
+  end?: string,
+): Promise<AnalyticsOverview> {
+  const params = new URLSearchParams();
+  if (companyId) params.set("company_id", String(companyId));
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/overview?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Analytics overview API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export type ArticleTrendPoint = {
+  bucket: string | null;
+  article_count: number;
+};
+
+export async function getArticleTrend(
+  start: string,
+  end: string,
+  bucket: "hour" | "day" | "week" | "month" = "hour",
+  companyId?: number,
+): Promise<ArticleTrendPoint[]> {
+  const params = new URLSearchParams({
+    start,
+    end,
+    bucket,
+  });
+  if (companyId) params.set("company_id", String(companyId));
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/articles/trend?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Article trend API failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.points ?? [];
+}
+
 export async function getDashboardIntelligence(
   limit = 20,
 ): Promise<DashboardIntelligenceResponse> {
@@ -92,6 +186,23 @@ export async function getDashboardIntelligence(
   if (!response.ok) {
     throw new Error(
       `Intelligence API failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function getDashboardArticles(
+  metric: DashboardArticleMetric,
+): Promise<DashboardArticleResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/articles?metric=${metric}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Dashboard article API failed with status ${response.status}`,
     );
   }
 
@@ -120,66 +231,38 @@ export async function getDashboardRiskAnalytics(): Promise<DashboardRiskAnalytic
       cache: "no-store",
     },
   );
-
   if (!response.ok) {
-    throw new Error(
-      `Risk analytics API failed with status ${response.status}`,
-    );
+    throw new Error("Failed to fetch risk analytics");
   }
-
   return response.json();
 }
 
-export type DashboardAlertItem = {
-  id: number;
-  article_id: number;
-  company_id: number;
-
-  alert_type: string;
-  severity: string;
-  title: string;
-  message: string;
-
-  delivery_status: string;
-  delivery_channel: string | null;
-  retry_count: number;
-  last_error: string | null;
-
-  requires_immediate_delivery: boolean;
-  sla_due_at: string | null;
-  delivered_at: string | null;
-
-  is_overdue: boolean;
-
-  created_at: string;
-  updated_at: string;
+export type RiskDrilldownResponse = {
+  metric: string;
+  value?: string;
+  total: number;
+  page: number;
+  page_size: number;
+  items: DashboardArticleItem[];
 };
 
-export type DashboardAlertsResponse = {
-  total_alerts: number;
-  active_alerts: number;
-  delivered_alerts: number;
-  failed_alerts: number;
-  overdue_alerts: number;
-  items: DashboardAlertItem[];
-};
+export async function getRiskDrilldown(
+  metric: string,
+  value?: string,
+  page: number = 1,
+  search?: string
+): Promise<RiskDrilldownResponse> {
+  const params = new URLSearchParams({ metric, page: String(page) });
+  if (value) params.append("value", value);
+  if (search) params.append("search", search);
 
-export async function getDashboardAlerts(
-  limit = 50,
-): Promise<DashboardAlertsResponse> {
   const response = await fetch(
-    `${API_BASE_URL}/dashboard/alerts?limit=${limit}`,
-    {
-      cache: "no-store",
-    },
+    `${API_BASE_URL}/dashboard/risk-analytics/drilldown?${params}`,
+    { cache: "no-store" }
   );
-
   if (!response.ok) {
-    throw new Error(
-      `Alerts API failed with status ${response.status}`,
-    );
+    throw new Error("Failed to load drilldown data");
   }
-
   return response.json();
 }
 
@@ -219,6 +302,20 @@ export type DashboardCompaniesResponse = {
   items: DashboardCompanyItem[];
 };
 
+export type ArticleCategory = {
+  id: number;
+  company_id: number;
+  name: string;
+  description: string | null;
+  priority: string;
+  is_active: boolean;
+};
+
+export type ArticleCategoryResponse = {
+  count: number;
+  items: ArticleCategory[];
+};
+
 export type WatchlistItem = {
   id: number;
   company_id: number;
@@ -240,9 +337,11 @@ export type WatchlistMatch = {
   value: string;
   article_id: number;
   title: string;
+  publisher_name: string;
   source_name: string;
   url: string;
   published_at: string | null;
+  collected_at: string;
   event_type: string | null;
   monitoring_topic: string | null;
   risk_level: string | null;
@@ -292,42 +391,16 @@ export type ReportHistoryItem = {
   created_at: string;
 };
 
-export type AnalyticsOverview = {
+export type ReportBatchHistoryItem = {
+  batch_id: string;
   company_id: number;
-  start: string;
-  end: string;
-  total_articles: number;
-  total_events: number;
-  sentiment: Record<string, number>;
-  risk: Record<string, number>;
-  business_impact: Record<string, number>;
-  competitors: Array<{ name: string; mention_count: number }>;
-};
-
-export type EventCluster = {
-  id: number;
-  company_id: number;
-  title: string | null;
-  representative_article_id: number | null;
-  first_published_at: string | null;
-  last_published_at: string | null;
-  article_count: number;
-};
-
-export type EventClusterResponse = {
-  count: number;
-  items: EventCluster[];
-};
-
-export type EventClusterDetail = EventCluster & {
-  members: Array<{
-    article_id: number;
-    title: string;
-    source_name: string;
-    url: string;
-    published_at: string | null;
-    similarity: number | null;
-  }>;
+  report_type: string;
+  period_start: string;
+  period_end: string;
+  status: string;
+  generated_at: string | null;
+  error: string | null;
+  formats: Record<string, ReportHistoryItem>;
 };
 
 export type SearchFilters = {
@@ -344,9 +417,11 @@ export type SearchFilters = {
 export type SearchResult = {
   article_id: number;
   title: string;
+  publisher_name: string;
   source_name: string;
   url: string;
   published_at: string | null;
+  collected_at: string;
   event_type: string | null;
   sentiment: string | null;
   risk_level: string | null;
@@ -386,6 +461,68 @@ export async function getDashboardCompanies(): Promise<DashboardCompaniesRespons
   }
 
   return response.json();
+}
+
+export async function getArticleCategories(
+  companyId: number,
+): Promise<ArticleCategoryResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/article-settings/categories?company_id=${companyId}`,
+    {
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Article settings API failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function createArticleCategory(args: {
+  company_id: number;
+  name: string;
+  priority?: string;
+}): Promise<ArticleCategory> {
+  const response = await fetch(`${API_BASE_URL}/article-settings/categories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      company_id: args.company_id,
+      name: args.name,
+      priority: args.priority ?? "medium",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Article settings create failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updateArticleCategory(id: number, values: Partial<ArticleCategory>): Promise<ArticleCategory> {
+  const response = await fetch(`${API_BASE_URL}/article-settings/categories/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(values),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Article settings update failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function deleteArticleCategory(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/article-settings/categories/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`Article settings delete failed with status ${response.status}`);
+  }
 }
 
 export async function getWatchlist(
@@ -463,24 +600,29 @@ export async function getReportSummary(args: {
   return response.json();
 }
 
-export async function getReportHistory(companyId: number): Promise<{ count: number; items: ReportHistoryItem[] }> {
+export async function getReportHistory(companyId: number): Promise<{ count: number; items: ReportBatchHistoryItem[] }> {
   const response = await fetch(`${API_BASE_URL}/reports/history?company_id=${companyId}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`Report history API failed with status ${response.status}`);
   return response.json();
 }
 
 export type GenerateReportResponse = {
-  report_id: number;
-  status: string;
-  filename: string | null;
-  content_type: string | null;
-  error: string | null;
+  batch_id: string;
+  period_start: string;
+  period_end: string;
+  formats: Record<string, {
+    report_id: number;
+    status: string;
+    filename: string | null;
+    content_type: string | null;
+    error: string | null;
+  }>;
 };
 
 export async function generateReport(args: {
   company_id: number;
   report_type: "daily" | "weekly" | "monthly" | "custom" | "all_history";
-  format: "pdf" | "xlsx" | "csv";
+  time_mode?: "media" | "ingestion";
   start_date?: string;
   end_date?: string;
 }): Promise<GenerateReportResponse> {
@@ -491,6 +633,13 @@ export async function generateReport(args: {
   });
   if (!response.ok) throw new Error(`Report generation failed with status ${response.status}`);
   return response.json();
+}
+
+export async function deleteReport(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/reports/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error(`Report deletion failed with status ${response.status}`);
 }
 
 export async function createWatchlistItem(args: {
@@ -521,37 +670,6 @@ export async function updateWatchlistItem(id: number, values: Partial<WatchlistI
 export async function deleteWatchlistItem(id: number): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/watchlist/${id}`, { method: "DELETE" });
   if (!response.ok) throw new Error(`Watchlist delete failed with status ${response.status}`);
-}
-
-export async function getAnalyticsOverview(
-  companyId: number,
-  start: string,
-  end: string,
-): Promise<AnalyticsOverview> {
-  const params = new URLSearchParams({
-    company_id: String(companyId),
-    start,
-    end,
-  });
-  const response = await fetch(`${API_BASE_URL}/analytics/overview?${params}`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Analytics API failed with status ${response.status}`);
-  }
-  return response.json();
-}
-
-export async function getEventClusters(companyId: number): Promise<EventClusterResponse> {
-  const response = await fetch(`${API_BASE_URL}/event-clusters?company_id=${companyId}`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Event cluster API failed with status ${response.status}`);
-  }
-  return response.json();
-}
-
-export async function getEventClusterDetail(companyId: number, clusterId: number): Promise<EventClusterDetail> {
-  const response = await fetch(`${API_BASE_URL}/event-clusters/${clusterId}?company_id=${companyId}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Event detail API failed with status ${response.status}`);
-  return response.json();
 }
 
 function appendSearchFilters(
@@ -646,6 +764,56 @@ export async function searchSemantic(
   if (!response.ok) {
     throw new Error(
       `Semantic search API failed with status ${response.status}`,
+    );
+  }
+
+  return response.json();
+}
+
+// ─── Article Detail (for ArticleReaderModal) ────────────────────────────────
+
+export type ArticleDetail = {
+  id: number;
+  title: string;
+  publisher_name: string;
+  source_name: string;
+  url: string | null;
+  canonical_url: string | null;
+  publisher_url: string | null;
+  published_at: string | null;
+  collected_at: string;
+
+  // Content fields – use in priority order
+  cleaned_content: string | null;
+  extracted_content: string | null;
+  raw_content: string | null;
+  description: string | null;
+
+  extraction_status: string;
+
+  // Optional intelligence fields (populated separately from intelligence endpoint)
+  risk_level?: string | null;
+  risk_score?: number | null;
+  sentiment?: string | null;
+  business_impact?: string | null;
+  event_type?: string | null;
+  executive_summary?: string | null;
+  recommended_action?: string | null;
+  urgency?: string | null;
+  escalation_action?: string | null;
+  monitoring_topic?: string | null;
+  confidence?: number | null;
+};
+
+export async function getArticleDetail(articleId: number): Promise<ArticleDetail> {
+  const response = await fetch(
+    `${API_BASE_URL}/articles/${articleId}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Article detail API failed with status ${response.status}`,
     );
   }
 

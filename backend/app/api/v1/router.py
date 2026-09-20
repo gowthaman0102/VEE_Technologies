@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.analytics import router as analytics_router
+from app.api.v1.article_settings import router as article_settings_router
 from app.api.v1.articles import router as articles_router
 from app.api.v1.clients import router as clients_router
 from app.api.v1.companies import router as companies_router
@@ -79,4 +80,8 @@ api_router.include_router(
 
 api_router.include_router(
     watchlist_router
+)
+
+api_router.include_router(
+    article_settings_router
 )

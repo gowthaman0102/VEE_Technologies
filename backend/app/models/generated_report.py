@@ -10,6 +10,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import ARRAY
 
 from app.db.base import Base
 
@@ -17,16 +18,7 @@ from app.db.base import Base
 class GeneratedReport(Base):
     __tablename__ = "generated_reports"
 
-    __table_args__ = (
-        UniqueConstraint(
-            "company_id",
-            "report_type",
-            "period_start",
-            "period_end",
-            "file_format",
-            name="uq_generated_report_period_format",
-        ),
-    )
+    __table_args__ = ()
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -41,6 +33,28 @@ class GeneratedReport(Base):
         ),
         nullable=False,
         index=True,
+    )
+
+    batch_id: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
+    )
+
+    snapshot_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    time_mode: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default="media",
+    )
+
+    included_article_ids: Mapped[list[int] | None] = mapped_column(
+        ARRAY(Integer),
+        nullable=True,
     )
 
     report_type: Mapped[str] = mapped_column(

@@ -46,6 +46,8 @@ class WatchlistMatchResponse(BaseModel):
     risk_level: str | None = None
     risk_score: float | None = None
     business_impact: str | None = None
+    publisher_name: str
+    collected_at: str
 
 
 class WatchlistMatchListResponse(BaseModel):

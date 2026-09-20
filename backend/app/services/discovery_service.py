@@ -8,12 +8,13 @@ from app.models.article import Article
 from app.models.article_business_impact import ArticleBusinessImpact
 from app.models.article_sentiment import ArticleSentiment
 from app.models.article_triage import ArticleTriage
-from app.models.event_cluster import EventCluster, EventClusterMembership
+from app.models.event_cluster import EventClusterMembership
 from app.models.risk_assessment import RiskAssessment
 from app.schemas.search_filters import SearchFilters
 from app.services.search_enrichment_service import (
     get_search_result_enrichments,
 )
+from app.utils.article_metadata import publisher_name
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,9 @@ class KeywordSearchItem:
     title: str
     source_name: str
     url: str
-    published_at: datetime | None
+    published_at: datetime | None = None
+    publisher_name: str = ""
+    collected_at: datetime | None = None
     event_type: str | None = None
     sentiment: str | None = None
     risk_level: str | None = None
@@ -179,9 +182,15 @@ async def keyword_search(
         KeywordSearchItem(
             article_id=article.id,
             title=article.title,
+            publisher_name=publisher_name(
+                article.source_name,
+                article.title,
+                article.url,
+            ),
             source_name=article.source_name,
             url=article.url,
             published_at=article.published_at,
+            collected_at=article.collected_at,
             event_type=(
                 enrichments[article.id].event_type
                 if article.id in enrichments
@@ -215,134 +224,3 @@ async def keyword_search(
         )
         for article in articles
     ]
-
-
-async def list_event_clusters(
-    db: AsyncSession,
-    *,
-    company_id: int | None,
-    limit: int = 50,
-):
-    stmt = (
-        select(
-            EventCluster,
-            func.count(
-                EventClusterMembership.article_id
-            ).label("article_count"),
-        )
-        .outerjoin(
-            EventClusterMembership,
-            EventClusterMembership.cluster_id
-            == EventCluster.id,
-        )
-        .group_by(EventCluster.id)
-        .order_by(
-            EventCluster.last_published_at
-            .desc()
-            .nullslast(),
-            EventCluster.id.desc(),
-        )
-        .limit(limit)
-    )
-
-    if company_id is not None:
-        stmt = stmt.where(
-            EventCluster.company_id == company_id
-        )
-
-    rows = (await db.execute(stmt)).all()
-
-    return [
-        {
-            "id": cluster.id,
-            "company_id": cluster.company_id,
-            "title": cluster.title,
-            "representative_article_id": (
-                cluster.representative_article_id
-            ),
-            "first_published_at": (
-                cluster.first_published_at
-            ),
-            "last_published_at": (
-                cluster.last_published_at
-            ),
-            "article_count": article_count,
-        }
-        for cluster, article_count in rows
-    ]
-
-
-async def get_event_cluster_detail(
-    db: AsyncSession,
-    *,
-    cluster_id: int,
-    company_id: int | None = None,
-):
-    cluster_stmt = select(EventCluster).where(
-        EventCluster.id == cluster_id
-    )
-
-    if company_id is not None:
-        cluster_stmt = cluster_stmt.where(
-            EventCluster.company_id == company_id
-        )
-
-    cluster = (
-        await db.execute(cluster_stmt)
-    ).scalar_one_or_none()
-
-    if cluster is None:
-        return None
-
-    articles = (
-        await db.execute(
-            select(
-                Article.id,
-                Article.title,
-                Article.source_name,
-                Article.url,
-                Article.published_at,
-                EventClusterMembership.similarity,
-            )
-            .join(
-                EventClusterMembership,
-                EventClusterMembership.article_id
-                == Article.id,
-            )
-            .where(
-                EventClusterMembership.cluster_id
-                == cluster_id
-            )
-            .order_by(
-                Article.published_at
-                .desc()
-                .nullslast()
-            )
-        )
-    ).all()
-
-    return {
-        "id": cluster.id,
-        "company_id": cluster.company_id,
-        "title": cluster.title,
-        "representative_article_id": (
-            cluster.representative_article_id
-        ),
-        "first_published_at": (
-            cluster.first_published_at
-        ),
-        "last_published_at": (
-            cluster.last_published_at
-        ),
-        "articles": [
-            {
-                "article_id": row.id,
-                "title": row.title,
-                "source_name": row.source_name,
-                "url": row.url,
-                "published_at": row.published_at,
-                "similarity": row.similarity,
-            }
-            for row in articles
-        ],
-    }

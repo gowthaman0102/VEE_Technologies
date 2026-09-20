@@ -9,6 +9,7 @@ from app.models.article_business_impact import ArticleBusinessImpact
 from app.models.article_triage import ArticleTriage
 from app.models.risk_assessment import RiskAssessment
 from app.models.watchlist import WatchlistItem
+from app.utils.article_metadata import publisher_name
 
 
 @dataclass(frozen=True)
@@ -19,9 +20,11 @@ class WatchlistMatch:
     value: str
     article_id: int
     title: str
+    publisher_name: str
     source_name: str
     url: str
     published_at: datetime | None
+    collected_at: datetime
     event_type: str | None = None
     monitoring_topic: str | None = None
     risk_level: str | None = None
@@ -127,6 +130,7 @@ async def match_watchlist_items(
             Article.source_name,
             Article.url,
             Article.published_at,
+            Article.collected_at,
             Article.description,
             Article.cleaned_content,
             ArticleTriage.event_type,
@@ -194,9 +198,15 @@ async def match_watchlist_items(
                     value=item.value,
                     article_id=row.article_id,
                     title=row.title,
+                    publisher_name=publisher_name(
+                        row.source_name,
+                        row.title,
+                        row.url,
+                    ),
                     source_name=row.source_name,
                     url=row.url,
                     published_at=row.published_at,
+                    collected_at=row.collected_at,
                     event_type=row.event_type,
                     monitoring_topic=row.monitoring_topic,
                     risk_level=row.risk_level,

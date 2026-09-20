@@ -15,12 +15,20 @@ client = TestClient(app)
 class FakeDB:
     def __init__(self, record=None):
         self.record = record
+        self.deleted = None
+        self.committed = False
 
     async def get(self, model, report_id):
         return self.record
 
     async def rollback(self):
         return None
+
+    async def delete(self, record):
+        self.deleted = record
+
+    async def commit(self):
+        self.committed = True
 
 
 def _record(
@@ -64,6 +72,39 @@ def _record(
         error=error,
         content=content,
     )
+
+
+def test_delete_report_removes_record(monkeypatch):
+    record = _record()
+    database = FakeDB(record)
+
+    async def override_db():
+        yield database
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        response = client.delete("/api/v1/reports/123")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    assert database.deleted is record
+    assert database.committed is True
+
+
+def test_delete_report_returns_not_found():
+    database = FakeDB()
+
+    async def override_db():
+        yield database
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        response = client.delete("/api/v1/reports/404")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
 
 
 def test_generate_report_returns_lifecycle_state(

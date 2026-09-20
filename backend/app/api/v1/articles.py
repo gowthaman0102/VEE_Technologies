@@ -7,6 +7,7 @@ from app.services.article_service import (
     get_article,
     list_articles,
 )
+from app.utils.article_metadata import publisher_name, resolve_publisher_url
 
 
 router = APIRouter(
@@ -32,7 +33,22 @@ async def get_articles(
         limit=limit,
     )
 
-    return articles
+    return [
+        ArticleResponse(
+            **article.__dict__,
+            publisher_name=publisher_name(
+                article.source_name,
+                article.title,
+                article.url,
+                article.canonical_url,
+            ),
+            publisher_url=resolve_publisher_url(
+                article.url,
+                article.canonical_url,
+            ),
+        )
+        for article in articles
+    ]
 
 
 @router.get(
@@ -54,4 +70,16 @@ async def get_article_by_id(
             detail="Article not found",
         )
 
-    return article
+    return ArticleResponse(
+        **article.__dict__,
+        publisher_name=publisher_name(
+            article.source_name,
+            article.title,
+            article.url,
+            article.canonical_url,
+        ),
+        publisher_url=resolve_publisher_url(
+            article.url,
+            article.canonical_url,
+        ),
+    )

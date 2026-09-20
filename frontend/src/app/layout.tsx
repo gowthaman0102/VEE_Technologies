@@ -1,8 +1,5 @@
-﻿import type { Metadata } from "next";
-import {
-  Geist,
-  Geist_Mono,
-} from "next/font/google";
+import type { Metadata } from "next";
+import { Nunito_Sans } from "next/font/google";
 
 import {
   DashboardHeader,
@@ -14,19 +11,14 @@ import {
 import "./globals.css";
 
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const nunitoSans = Nunito_Sans({
+  variable: "--font-nunito-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 
 export const metadata: Metadata = {
-  title: "AI Media Intelligence",
+  title: "VEE Technologies · Media Intelligence",
   description:
     "Real-time AI-powered media monitoring and crisis intelligence dashboard.",
 };
@@ -40,20 +32,19 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={nunitoSans.variable}
     >
-      <body className="min-h-screen bg-slate-950 font-sans text-white antialiased">
-        <div className="flex min-h-screen">
-          <Sidebar />
+      <body className="min-h-screen bg-canvas font-sans text-body antialiased">
+          <div className="flex min-h-screen">
+            <Sidebar />
 
-          <div className="min-w-0 flex-1">
-            <DashboardHeader />
-
-            <div className="min-h-[calc(100vh-73px)]">
-              {children}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <DashboardHeader />
+              <main className="flex-1">
+                {children}
+              </main>
             </div>
           </div>
-        </div>
       </body>
     </html>
   );
