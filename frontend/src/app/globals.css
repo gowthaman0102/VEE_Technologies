@@ -15,7 +15,7 @@
   --primary-soft: #e7e2f5;
   --primary-border: #cfc5e8;
   --sidebar: #2a2059;
-  --sidebar-text: #bfb7dc;
+  --sidebar-text: #ffffff;
   --sidebar-active: #3e2f82;
   --sidebar-border: #3d3070;
   --critical: #9b1c3d;
@@ -196,3 +196,16 @@ select, input, textarea { color-scheme: light; }
 
 .article-reader-prose strong { color: var(--text); }
 .article-reader-prose em { color: var(--text-body); }
+
+@utility text-sidebar-text {
+  color: var(--sidebar-text);
+}
+
+@utility bg-sidebar-active {
+  background-color: var(--sidebar-active);
+}
+
+@utility border-sidebar-border {
+  border-color: var(--sidebar-border);
+}
+

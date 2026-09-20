@@ -64,16 +64,16 @@ function LiveMetricRing({ config, value, progress, onClick, index }: { config: (
   const previousValue = useRef(value);
 
   const baseStyles = {
-    blue: { ring: "#4EA5F5", track: "#EBF5FF", text: "text-[#4EA5F5]" },
-    amber: { ring: "#F2A915", track: "#FFF6E5", text: "text-[#F2A915]" },
-    red: { ring: "#EF3340", track: "#FDEAEB", text: "text-[#EF3340]" },
-    critical: { ring: "#D9E1E5", track: "#F1F4F7", text: "text-[#8CA0AF]" },
-    purple: { ring: "#7754E8", track: "#F2EFFF", text: "text-[#7754E8]" },
+    blue: { ring: "var(--color-primary)", track: "var(--color-primary-soft)", text: "text-primary" },
+    amber: { ring: "var(--color-medium)", track: "var(--color-medium-bg)", text: "text-medium" },
+    red: { ring: "var(--color-critical)", track: "var(--color-critical-bg)", text: "text-critical" },
+    critical: { ring: "var(--color-muted)", track: "var(--color-surface-sunken)", text: "text-muted" },
+    purple: { ring: "var(--color-primary)", track: "var(--color-primary-soft)", text: "text-primary" },
   };
 
   const isCriticalActive = config.tone === "critical" && value > 0;
   const tone = isCriticalActive 
-    ? { ring: "#8A2328", track: "#FDEAEB", text: "text-[#8A2328]" }
+    ? { ring: "var(--color-high)", track: "var(--color-critical-bg)", text: "text-critical" }
     : baseStyles[config.tone];
 
   const MetricIcon = config.icon;
@@ -112,7 +112,7 @@ function LiveMetricRing({ config, value, progress, onClick, index }: { config: (
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 xl:gap-1.5 text-center">
           <MetricIcon size={24} className={tone.text} strokeWidth={2.5} aria-hidden="true" />
-          <span className={`text-[32px] font-bold leading-none tracking-tight text-[#0A1730] transition-transform duration-300 xl:text-[36px] ${changed ? 'scale-110 text-[#3C9CF4]' : ''}`}>
+          <span className={`text-[32px] font-bold leading-none tracking-tight text-text transition-transform duration-300 xl:text-[36px] ${changed ? 'scale-110 text-primary' : ''}`}>
             <AnimatedValue value={value} />
           </span>
         </div>
@@ -120,7 +120,7 @@ function LiveMetricRing({ config, value, progress, onClick, index }: { config: (
       
       <div className="mt-3">
         <span className={`text-[12px] font-bold uppercase tracking-[0.08em] ${tone.text}`}>{config.label}</span>
-        <p className="mt-1 px-2 text-[12px] leading-tight text-[#60718A]">{config.description}</p>
+        <p className="mt-1 px-2 text-[12px] leading-tight text-muted">{config.description}</p>
       </div>
     </button>
   );
@@ -132,36 +132,36 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
 
   const styles = {
     high: {
-      bg: "bg-gradient-to-br from-[#FFF6F6] to-[#FFF0F1]",
-      border: "border-[#F4C8CC]",
-      iconBg: "bg-[#FDEAEB]",
-      iconColor: "text-[#EF3340]",
-      titleColor: "text-[#9E2028]",
-      dot: "bg-[#EF3340]",
+      bg: "bg-critical-bg",
+      border: "border-critical-border",
+      iconBg: "bg-critical-bg",
+      iconColor: "text-critical",
+      titleColor: "text-critical",
+      dot: "bg-critical",
       desc: "High risk and time-sensitive subjects",
       footer: "Highest priority monitoring",
       Icon: AlertTriangle,
       Graphic: Globe2,
     },
     medium: {
-      bg: "bg-gradient-to-br from-[#FFF9EB] to-[#FFF6DF]",
-      border: "border-[#EFD9A5]",
-      iconBg: "bg-[#FFF0CC]",
-      iconColor: "text-[#F2A915]",
-      titleColor: "text-[#9D6800]",
-      dot: "bg-[#F2A915]",
+      bg: "bg-medium-bg",
+      border: "border-medium-border",
+      iconBg: "bg-medium-bg",
+      iconColor: "text-medium",
+      titleColor: "text-medium",
+      dot: "bg-medium",
       desc: "Important topics to monitor closely",
       footer: "Active monitoring",
       Icon: BarChart3,
       Graphic: Activity,
     },
     low: {
-      bg: "bg-gradient-to-br from-[#F2FCF7] to-[#EAF9F2]",
-      border: "border-[#C7E9D7]",
-      iconBg: "bg-[#D9F2E6]",
-      iconColor: "text-[#15A77A]",
-      titleColor: "text-[#0B684A]",
-      dot: "bg-[#15A77A]",
+      bg: "bg-low-bg",
+      border: "border-low-border",
+      iconBg: "bg-low-bg",
+      iconColor: "text-low",
+      titleColor: "text-low",
+      dot: "bg-low",
       desc: "General awareness and trending topics",
       footer: "Routine monitoring",
       Icon: Leaf,
@@ -183,7 +183,7 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
           </div>
           <div>
             <h3 className={`text-[15px] font-bold capitalize ${styles.titleColor}`}>{priority} Priority</h3>
-            <p className="mt-0.5 text-[11px] font-medium text-[#60718A]">{styles.desc}</p>
+            <p className="mt-0.5 text-[11px] font-medium text-muted">{styles.desc}</p>
           </div>
         </div>
         <div className={`flex items-center gap-1 text-[13px] font-bold ${styles.iconColor}`}>
@@ -194,7 +194,7 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
 
       <ul className="relative z-10 mt-3 flex-1 space-y-1.5">
         {visibleTopics.map((t, i) => (
-          <li key={t} className="flex cursor-default items-start gap-2 text-[12px] font-medium text-[#0A1730] transition-colors hover:text-[#3C9CF4] animate-[fadeInUp_0.3s_ease-out_both]" style={{ animationDelay: `${(i * 30)}ms` }}>
+          <li key={t} className="flex cursor-default items-start gap-2 text-[12px] font-medium text-text transition-colors hover:text-primary animate-[fadeInUp_0.3s_ease-out_both]" style={{ animationDelay: `${(i * 30)}ms` }}>
             <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${styles.dot}`} aria-hidden="true" />
             {t}
           </li>
@@ -202,7 +202,7 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
       </ul>
 
       <div className="relative z-10 mt-3 flex items-center justify-between border-t border-white/40 pt-3">
-        <span className="text-[12px] font-medium text-[#60718A]">{styles.footer} · {topics.length} {topics.length === 1 ? "topic" : "topics"}</span>
+        <span className="text-[12px] font-medium text-muted">{styles.footer} · {topics.length} {topics.length === 1 ? "topic" : "topics"}</span>
         {topics.length > 5 && (
           <button 
             type="button" 
@@ -232,19 +232,19 @@ function MetricModal({ metric, articles, loading, onClose }: { metric: MetricKey
       <section role="dialog" aria-modal="true" aria-labelledby="company-metric-title" className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[0_2px_8px_rgba(28,23,52,0.10)] animate-[slideUp_0.3s_ease-out]">
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#3C9CF4]">Live Intelligence Detail</p>
-            <h2 id="company-metric-title" className="mt-1 text-lg font-bold text-[#0A1730]">{config.label}</h2>
-            <p className="mt-1 text-sm text-[#60718A]">{loading ? "Loading current data..." : `${articles.length} ${articles.length === 1 ? "item" : "items"}`}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Live Intelligence Detail</p>
+            <h2 id="company-metric-title" className="mt-1 text-lg font-bold text-text">{config.label}</h2>
+            <p className="mt-1 text-sm text-muted">{loading ? "Loading current data..." : `${articles.length} ${articles.length === 1 ? "item" : "items"}`}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-[#60718A] hover:border-[#3C9CF4] hover:text-[#3C9CF4] hover:bg-[#EEF7FF] transition-colors">
+          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted hover:border-primary hover:text-primary hover:bg-primary-soft transition-colors">
             <X size={17} aria-hidden="true" />
           </button>
         </header>
-        <div className="overflow-y-auto px-5 py-5 sm:px-6 bg-[#F8FAFC]">
+        <div className="overflow-y-auto px-5 py-5 sm:px-6 bg-surface-raised">
           {loading ? (
             <div className="py-12 flex flex-col items-center justify-center text-center">
-              <Activity className="animate-spin text-[#3C9CF4] mb-3" size={24} />
-              <p className="text-sm text-[#60718A]">Loading current data...</p>
+              <Activity className="animate-spin text-primary mb-3" size={24} />
+              <p className="text-sm text-muted">Loading current data...</p>
             </div>
           ) : articles.length === 0 ? (
             <EmptyState title={emptyTitle} />
@@ -255,7 +255,7 @@ function MetricModal({ metric, articles, loading, onClose }: { metric: MetricKey
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <ArticleMetadata publisherName={article.publisher_name} publishedAt={article.published_at} collectedAt={article.collected_at} compact />
-                      <h3 className="mt-3 break-words text-[15px] font-bold leading-relaxed text-[#0A1730]">{article.title}</h3>
+                      <h3 className="mt-3 break-words text-[15px] font-bold leading-relaxed text-text">{article.title}</h3>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {article.risk_level && <Badge tone={toneForRisk(article.risk_level)}>{formatLabel(article.risk_level)}</Badge>}
                         {article.event_type && <Badge>{formatLabel(article.event_type)}</Badge>}
@@ -342,30 +342,30 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
   };
 
   return (
-    <main className="companies-page min-h-[calc(100vh-74px)] w-full bg-[#F6F9FA]">
+    <main className="companies-page min-h-[calc(100vh-74px)] w-full bg-surface-raised">
       <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
         {/* Live Intelligence Card */}
-        <section className="shrink-0 rounded-[22px] border border-[#DFE8EA] bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
-          <div className="flex flex-col justify-between gap-3 border-b border-[#DFE8EA] pb-3 md:flex-row md:items-center">
+        <section className="shrink-0 rounded-[22px] border border-border bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
+          <div className="flex flex-col justify-between gap-3 border-b border-border pb-3 md:flex-row md:items-center">
             <div className="flex items-center gap-4">
-              <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] bg-[#EEF7FF] text-[#3C9CF4]">
+              <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] bg-primary-soft text-primary">
                 <Layers size={22} strokeWidth={2.2} />
               </div>
               <div>
-                <h2 className="text-[22px] lg:text-[26px] font-bold text-[#0A1730] leading-none">Live Intelligence Overview</h2>
-                <p className="mt-2 text-[15px] font-medium text-[#60718A]">Real-time analysis from {company.name} across monitored sources</p>
+                <h2 className="text-[22px] lg:text-[26px] font-bold text-text leading-none">Live Intelligence Overview</h2>
+                <p className="mt-2 text-[15px] font-medium text-muted">Real-time analysis from {company.name} across monitored sources</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
               {liveStatus === "live" && (
-                <div className="flex items-center gap-2 text-[14px] font-bold text-[#15A77A]">
+                <div className="flex items-center gap-2 text-[14px] font-bold text-low">
                   <Activity size={16} strokeWidth={2.5} className="animate-pulse" />
                   Scanning new content...
                 </div>
               )}
-              <div className={`flex items-center gap-2.5 rounded-full border px-4 py-2 text-[14px] font-bold shadow-sm ${liveStatus === "live" ? "border-[#C7E9D7] bg-[#F2FCF7] text-[#15A77A]" : "border-[#EFD9A5] bg-[#FFF9EB] text-[#F2A915]"}`}>
-                <span className={`h-2.5 w-2.5 rounded-full ${liveStatus === 'live' ? 'bg-[#15A77A] animate-pulse' : 'bg-[#F2A915]'}`} />
+              <div className={`flex items-center gap-2.5 rounded-full border px-4 py-2 text-[14px] font-bold shadow-sm ${liveStatus === "live" ? "border-low-border bg-low-bg text-low" : "border-medium-border bg-medium-bg text-medium"}`}>
+                <span className={`h-2.5 w-2.5 rounded-full ${liveStatus === 'live' ? 'bg-low animate-pulse' : 'bg-medium'}`} />
                 {liveStatus === "live" ? "Live" : "Update delayed"}
               </div>
             </div>
@@ -391,21 +391,21 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
 
         {/* Monitoring Topics */}
         <section className="min-h-0 flex-1 animate-[fadeIn_0.5s_ease-out_200ms_both]">
-          <div className="flex flex-col justify-between gap-4 border-b border-[#DCE7E9] pb-4 md:flex-row md:items-end">
+          <div className="flex flex-col justify-between gap-4 border-b border-border pb-4 md:flex-row md:items-end">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-[#DCE7E9] shadow-sm text-[#0A1730]">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-border shadow-sm text-text">
                 <Layers size={22} strokeWidth={2.2} />
               </div>
               <div>
-                <h2 className="text-[22px] lg:text-[24px] font-bold text-[#0A1730]">
-                  Monitoring Topics <span className="text-[#60718A] font-semibold">· {company.monitoring_topics.length}</span>
+                <h2 className="text-[22px] lg:text-[24px] font-bold text-text">
+                  Monitoring Topics <span className="text-muted font-semibold">· {company.monitoring_topics.length}</span>
                 </h2>
-                <p className="mt-1.5 text-[15px] font-medium text-[#60718A]">AI is monitoring these topics across global media and online sources</p>
+                <p className="mt-1.5 text-[15px] font-medium text-muted">AI is monitoring these topics across global media and online sources</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
-              <div suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-[#8CA0AF]">
+              <div suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
                 <Clock size={15} />
                 Last updated {formatRelativeTime(lastUpdated)}
               </div>

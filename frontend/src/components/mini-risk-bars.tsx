@@ -1,6 +1,6 @@
 export function MiniRiskBars({ 
   data, 
-  color = "#EF4048",
+  color = "var(--color-critical)",
 }: { 
   data?: number[]; 
   color?: string;

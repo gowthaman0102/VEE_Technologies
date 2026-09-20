@@ -14,27 +14,7 @@ import { chartColor } from "@/lib/chart-colors";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
-const EVENT_COLORS: Record<string, string> = {
-  fraud_security:         "#14B8A6",
-  regulatory_action:      "#3B82F6",
-  other:                  "#8B5CF6",
-  product_launch:         "#F97316",
-  financial_performance:  "#22C55E",
-  leadership_change:      "#A78BFA",
-  service_outage:         "#F43F5E",
-  market_competition:     "#64748B",
-  regulatory_development: "#06B6D4",
-  reputation:             "#EC4899",
-  ai_safety:              "#0EA5E9",
-  cybersecurity:          "#EF4444",
-  data_privacy:           "#84CC16",
-  legal:                  "#F59E0B",
-};
-
-function eventColor(label: string): string {
-  const key = label.toLowerCase().replace(/[\s-]+/g, "_");
-  return EVENT_COLORS[key] ?? "var(--color-primary)";
-}
+// Chart colors imported from lib/chart-colors.ts
 
 function riskColor(label: string): string {
   const l = label.toLowerCase();
@@ -247,7 +227,13 @@ function EventBars({
   const [animated, setAnimated] = useState(false);
   useEffect(() => { const t = setTimeout(() => setAnimated(true), 120); return () => clearTimeout(t); }, []);
 
-  const sorted = [...data].sort((a, b) => b.count - a.count);
+  let sorted = [...data].sort((a, b) => b.count - a.count);
+  if (sorted.length > 4) {
+    const top = sorted.slice(0, 3);
+    const otherCount = sorted.slice(3).reduce((acc, curr) => acc + curr.count, 0);
+    sorted = [...top, { label: "Other", count: otherCount }];
+  }
+  
   const maxCount = Math.max(...sorted.map(d => d.count), 1);
 
   if (sorted.length === 0) return <p className="py-8 text-center text-sm text-muted">No event types available.</p>;
@@ -256,7 +242,7 @@ function EventBars({
     <div className="space-y-2.5">
       {sorted.map((d, i) => {
         const width = animated ? Math.max(2, (d.count / maxCount) * 100) : 0;
-        const color = eventColor(d.label);
+        const color = chartColor(i);
 
         return (
           <button
@@ -299,7 +285,12 @@ function DonutChart({
   useEffect(() => { const t = setTimeout(() => setAnimated(true), 160); return () => clearTimeout(t); }, []);
 
   const totalEvents = data.reduce((s, d) => s + d.count, 0);
-  const sorted = [...data].sort((a, b) => b.count - a.count);
+  let sorted = [...data].sort((a, b) => b.count - a.count);
+  if (sorted.length > 4) {
+    const top = sorted.slice(0, 3);
+    const otherCount = sorted.slice(3).reduce((acc, curr) => acc + curr.count, 0);
+    sorted = [...top, { label: "Other", count: otherCount }];
+  }
 
   const R = 80;
   const cx = 100;
@@ -315,19 +306,19 @@ function DonutChart({
           <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight="700" fill="var(--color-text)">0</text>
           <text x={cx} y={cy + 14} textAnchor="middle" fontSize={11} fill="var(--color-muted)">Total Events</text>
         </svg>
-        <p className="text-sm text-[#60718A]">No events for this period.</p>
+        <p className="text-sm text-muted">No events for this period.</p>
       </div>
     );
   }
 
   // Build arcs using reduce to avoid mutable variable
   const segments = sorted.reduce<Array<{ label: string; count: number; pct: number; dash: number; gap: number; offset: number; color: string }>>(
-    (acc, d) => {
+    (acc, d, i) => {
       const pct = d.count / totalEvents;
       const dash = animated ? pct * circumference : 0;
       const gap = circumference - dash;
       const currentOffset = acc.length > 0 ? acc[acc.length - 1].offset + acc[acc.length - 1].dash : 0;
-      return [...acc, { ...d, pct, dash, gap, offset: currentOffset, color: eventColor(d.label) }];
+      return [...acc, { ...d, pct, dash, gap, offset: currentOffset, color: chartColor(i) }];
     },
     []
   );
@@ -338,7 +329,7 @@ function DonutChart({
         <div className="relative">
           <svg viewBox="0 0 200 200" className="h-[190px] w-[190px] -rotate-90">
             {/* Track */}
-            <circle cx={cx} cy={cy} r={R} fill="none" stroke="#F1F5F9" strokeWidth={strokeW} />
+            <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--color-border)" strokeWidth={strokeW} />
             {segments.map(s => (
               <circle
                 key={s.label}
@@ -365,9 +356,9 @@ function DonutChart({
 
       {/* Legend */}
       <div className="mt-4 grid grid-cols-2 gap-1.5">
-        {sorted.map(d => {
+        {sorted.map((d, i) => {
           const pct = totalEvents > 0 ? ((d.count / totalEvents) * 100).toFixed(1) : "0.0";
-          const color = eventColor(d.label);
+          const color = chartColor(i);
           return (
             <button
               key={d.label}
@@ -405,8 +396,8 @@ function ChartCard({
     <div className={`flex flex-col rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(28,23,52,0.06)] ${className}`}>
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <h3 className="text-[17px] font-bold text-[#0A1730] leading-none">{title}</h3>
-          <p className="mt-1.5 text-[13px] text-[#60718A]">{subtitle}</p>
+          <h3 className="text-[17px] font-bold text-text leading-none">{title}</h3>
+          <p className="mt-1.5 text-[13px] text-muted">{subtitle}</p>
         </div>
         {rightContent}
       </div>
@@ -506,23 +497,23 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
   ];
 
   return (
-    <main className="w-full min-h-screen bg-[#F6F9FA]">
+    <main className="w-full min-h-screen bg-surface-raised">
       <div className="mx-auto w-full max-w-[1600px] px-6 py-7 lg:px-10 space-y-6">
 
         {/* ── Header ─── */}
         <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#60718A]">Risk Analytics</p>
-            <h1 className="mt-1 text-[32px] font-bold tracking-tight text-[#0A1730] leading-tight">Risk Intelligence Overview</h1>
-            <p className="mt-1.5 max-w-xl text-[14px] text-[#60718A] leading-relaxed">
+            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">Risk Analytics</p>
+            <h1 className="mt-1 text-[32px] font-bold tracking-tight text-text leading-tight">Risk Intelligence Overview</h1>
+            <p className="mt-1.5 max-w-xl text-[14px] text-muted leading-relaxed">
               Deterministic risk scoring across monitored intelligence, including review and alert signals.
             </p>
           </div>
 
           {/* Live status */}
           <div suppressHydrationWarning className="flex items-center gap-3 self-start md:self-auto">
-            <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-bold shadow-sm ${liveStatus === "live" ? "border-[#C7E9D7] bg-[#F2FCF7] text-[#15A77A]" : "border-[#EFD9A5] bg-[#FFF9EB] text-[#F2A915]"}`}>
-              <span className={`h-2 w-2 rounded-full ${liveStatus === "live" ? "bg-[#15A77A] animate-pulse" : "bg-[#F2A915]"}`} />
+            <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-bold shadow-sm ${liveStatus === "live" ? "border-low-border bg-low-bg text-low" : "border-medium-border bg-medium-bg text-medium"}`}>
+              <span className={`h-2 w-2 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : "bg-medium"}`} />
               <div>
                 <div>{liveStatus === "live" ? "Live Data" : "Update Delayed"}</div>
                 <div className="text-[11px] font-medium opacity-70">Updated {formatRelative(lastUpdated)}</div>
@@ -544,7 +535,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
             title="Risk Level Distribution"
             subtitle="Assessment count by deterministic risk level."
             rightContent={
-              <span className="rounded-full bg-[#EEF7FF] px-3 py-1 text-[12px] font-bold text-[#3C9CF4]">
+              <span className="rounded-full bg-primary-soft px-3 py-1 text-[12px] font-bold text-primary">
                 Total {total.toLocaleString()}
               </span>
             }
@@ -582,23 +573,23 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
         {/* ── Insight Strip ─── */}
         <section className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-7 py-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] md:flex-row md:items-center md:justify-between" aria-label="Key insights">
           <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EEF7FF] text-[#3C9CF4]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
               <Lightbulb size={20} strokeWidth={2.2} />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#3C9CF4]">Key Insights</p>
-              <h3 className="mt-0.5 text-[17px] font-bold text-[#0A1730] leading-snug">{insightHeadline}</h3>
-              <p className="mt-1 text-[13px] text-[#60718A]">{insightBody}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">Key Insights</p>
+              <h3 className="mt-0.5 text-[17px] font-bold text-text leading-snug">{insightHeadline}</h3>
+              <p className="mt-1 text-[13px] text-muted">{insightBody}</p>
             </div>
           </div>
 
-          <div className={`flex shrink-0 items-center gap-3 rounded-xl border px-5 py-3 ${data.immediate_alert_count > 0 ? "border-[#F4C8CC] bg-[#FFF6F6]" : "border-[#C7E9D7] bg-[#F2FCF7]"}`}>
-            <CheckCircle size={18} className={data.immediate_alert_count > 0 ? "text-[#EF3340]" : "text-[#15A77A]"} />
+          <div className={`flex shrink-0 items-center gap-3 rounded-xl border px-5 py-3 ${data.immediate_alert_count > 0 ? "border-critical-border bg-critical-bg" : "border-low-border bg-low-bg"}`}>
+            <CheckCircle size={18} className={data.immediate_alert_count > 0 ? "text-critical" : "text-low"} />
             <div>
-              <p className={`text-[14px] font-bold ${data.immediate_alert_count > 0 ? "text-[#9E2028]" : "text-[#0B684A]"}`}>
+              <p className={`text-[14px] font-bold ${data.immediate_alert_count > 0 ? "text-critical" : "text-low"}`}>
                 {data.immediate_alert_count > 0 ? `${data.immediate_alert_count} Immediate Alert${data.immediate_alert_count > 1 ? "s" : ""}` : "No immediate alerts"}
               </p>
-              <p className="text-[12px] font-medium text-[#60718A]">
+              <p className="text-[12px] font-medium text-muted">
                 {data.immediate_alert_count > 0 ? "Items require attention." : "Risk levels are stable."}
               </p>
             </div>
@@ -606,7 +597,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
               <button
                 type="button"
                 onClick={() => openDrilldown("immediate_alert", "Immediate Alert Articles", data.immediate_alert_count)}
-                className="ml-2 flex h-7 w-7 items-center justify-center rounded-full border border-[#F4C8CC] text-[#EF3340] hover:bg-[#FDEAEB] transition-colors"
+                className="ml-2 flex h-7 w-7 items-center justify-center rounded-full border border-critical-border text-critical hover:bg-surface-raised transition-colors"
               >
                 <ChevronRight size={15} />
               </button>

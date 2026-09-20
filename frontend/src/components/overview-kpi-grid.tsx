@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
@@ -97,7 +98,16 @@ function DetailModal({
           <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={17} aria-hidden="true" /></button>
         </header>
         <div className="overflow-y-auto px-5 py-5 sm:px-6">
-          {error ? <EmptyState title="Unable to load details" description={error} /> : loading ? <p className="py-12 text-center text-sm text-muted">Loading current data...</p> : isCompanies ? (
+          {error ? <EmptyState title="Unable to load details" description={error} /> : loading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="rounded-lg border border-border bg-surface p-4">
+                      <Skeleton className="h-6 w-1/3 mb-2" />
+                      <Skeleton className="h-4 w-1/4" />
+                    </div>
+                  ))}
+                </div>
+              ) : isCompanies ? (
             companies.length === 0 ? <EmptyState title="No monitored companies found." /> : <div className="space-y-3">{companies.map((company) => <article key={company.id} className="rounded-lg border border-border bg-surface-raised p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-text">{company.name}</h3><p className="mt-1 text-sm text-muted">{company.is_active ? "Active monitoring" : "Inactive"}</p></div><Badge>{company.monitoring_topics.length} monitoring {company.monitoring_topics.length === 1 ? "category" : "categories"}</Badge></div>{company.aliases.length > 0 && <p className="mt-3 text-sm text-body">Aliases: {company.aliases.join(", ")}</p>}</article>)}</div>
           ) : articles.length === 0 ? <EmptyState title={selectedMetric === "critical-risk" ? "No critical-risk articles found." : "No matching articles found."} /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={`${article.article_id}-${article.risk_level ?? "article"}`} article={article} />)}</div>}
         </div>

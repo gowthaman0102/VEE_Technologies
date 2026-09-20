@@ -14,7 +14,7 @@ import { useRef } from "react";
  */
 export function MiniSparkline({
   data = [],
-  color = "#3C9CF4",
+  color = "var(--color-primary)",
   height = 32,
   width = 220,
 }: {
@@ -66,7 +66,7 @@ export function MiniSparkline({
 }
 
 export function AnimatedSparkline({
-  color = "#3C9CF4",
+  color = "var(--color-primary)",
   amplitude = 7,
   speed = 4, // seconds per full cycle
 }: {

@@ -45,11 +45,11 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
         backgroundSize: "cover",
         backgroundPosition: "center right",
         backgroundRepeat: "no-repeat",
-        backgroundColor: "#2A2059"
+        backgroundColor: "var(--color-sidebar)"
       }}
     >
       {/* Dark gradient overlay on left so text is readable */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#2A2059]/95 via-[#2A2059]/70 to-transparent pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-gradient-to-r from-sidebar/95 via-sidebar/70 to-transparent pointer-events-none z-0" />
 
       {/* Top Header Row within Hero */}
       <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 pb-2 w-full">
@@ -90,7 +90,7 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
           <h1 className="text-3xl lg:text-[38px] font-bold tracking-tight text-white leading-tight">
             Intelligence Command Center
           </h1>
-          <p className="mt-2 text-[15px] text-[#D3DFE8] max-w-xl leading-relaxed">
+          <p className="mt-2 text-[15px] text-sidebar-text max-w-xl leading-relaxed">
             Real-time media intelligence, risk signals, and actionable insights for a safer tomorrow.
           </p>
           
@@ -114,7 +114,7 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
             <Building2 size={16} className="text-primary-border" />
             <h3 className="text-[17px] font-bold text-white tracking-wide">{companyName}</h3>
           </div>
-          <p className="text-[11px] text-[#A0B0C0] mt-1 max-w-[200px] leading-snug">
+          <p className="text-[11px] text-muted mt-1 max-w-[200px] leading-snug">
             Tracking global media<br/>for a safer tomorrow.
           </p>
         </div>

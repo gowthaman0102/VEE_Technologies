@@ -8,7 +8,7 @@ export function OverviewMetricCard({
   value,
   icon: Icon,
   iconColorClass = "bg-primary-soft text-primary",
-  sparklineColor = "#3E2F82",
+  sparklineColor = "var(--color-primary)",
   bgClass,
   borderClass,
   valueColorClass,

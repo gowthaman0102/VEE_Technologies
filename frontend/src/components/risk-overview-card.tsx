@@ -40,24 +40,24 @@ export function RiskOverviewCard({
 
   const config = {
     high: {
-      bg: "bg-white",
-      border: "border-[#DFE9F0]",
+      bg: "bg-surface",
+      border: "border-border",
       icon: AlertTriangle,
-      iconColor: "text-[#EF4048]",
-      iconBg: "bg-[#EF4048]",
-      textColor: "text-[#0A1730]",
-      valueColor: "text-[#0A1730]",
-      highlightClass: "ring-2 ring-[#EF4048]/30",
+      iconColor: "text-critical",
+      iconBg: "bg-critical",
+      textColor: "text-text",
+      valueColor: "text-text",
+      highlightClass: "ring-2 ring-critical/30",
     },
     critical: {
-      bg: "bg-white",
-      border: "border-[#DFE9F0]",
+      bg: "bg-surface",
+      border: "border-border",
       icon: ShieldAlert,
-      iconColor: "text-[#F4A817]",
-      iconBg: "bg-[#F4A817]",
-      textColor: "text-[#0A1730]",
-      valueColor: "text-[#0A1730]",
-      highlightClass: "ring-2 ring-[#F4A817]/30",
+      iconColor: "text-medium",
+      iconBg: "bg-medium",
+      textColor: "text-text",
+      valueColor: "text-text",
+      highlightClass: "ring-2 ring-medium/30",
     },
   }[level];
 
@@ -91,7 +91,7 @@ export function RiskOverviewCard({
         {/* Middle: Content */}
         <div className="ml-4 flex flex-1 flex-col justify-between">
           <div className="flex items-start justify-between">
-            <p className="text-[14px] font-semibold text-[#0A1730]">{label}</p>
+            <p className="text-[14px] font-semibold text-text">{label}</p>
           </div>
           
           <div className="flex items-end justify-between mt-1">
