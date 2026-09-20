@@ -2,7 +2,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
-import { X, Activity, BarChart3, FileText, Search, Tags, ArrowRight } from "lucide-react";
+import { X, ShieldAlert, AlertTriangle } from "lucide-react";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import Link from "next/link";
 
@@ -20,61 +20,17 @@ import {
   getDashboardCompanies,
   getDashboardOverview,
   getDashboardIntelligence,
-  AnalyticsOverview,
-  ArticleCategory,
-  ReportBatchHistoryItem,
 } from "@/lib/api";
-import { formatLabel, formatRelativeTime } from "@/lib/format";
+import { formatLabel } from "@/lib/format";
 
+import { OverviewHero } from "./overview-hero";
+import { OverviewMetricCard } from "./overview-metric-card";
+import { RiskOverviewCard } from "./risk-overview-card";
+import { LatestIntelligenceGrid } from "./latest-intelligence-grid";
 import { PublisherLogo } from "./publisher-logo";
+import { KpiArticleIcon, KpiIntelligenceIcon, KpiCompanyIcon, KpiHighRiskIcon, KpiCriticalRiskIcon } from "./kpi-icons";
 
 type SelectedMetric = DashboardArticleMetric | "companies";
-
-function compactNumber(value: number) {
-  return value > 9999 ? `${(value / 1000).toFixed(1)}K` : value.toLocaleString();
-}
-
-function SignalPanel({ overview }: { overview: DashboardOverview }) {
-  const rows = [
-    ["Articles", overview.total_articles],
-    ["Processed", overview.processed_articles],
-    ["High risk", overview.high_risk_items],
-    ["Critical", overview.critical_risk_items],
-  ] as const;
-  const max = Math.max(...rows.map(([, value]) => value), 1);
-  return <section className="overview-panel signal-panel">
-    <div className="overview-panel-header"><div><p className="overview-panel-kicker">Current snapshot</p><h2><Activity size={15} /> Signal Matrix</h2></div><span className="overview-live"><i /> Live</span></div>
-    <div className="signal-visual" aria-label="Current signal counts by processing state">
-      <div className="signal-orbit signal-orbit-one" /><div className="signal-orbit signal-orbit-two" /><div className="signal-core"><span>{compactNumber(overview.total_articles)}</span><small>articles</small></div>
-      <span className="signal-node signal-node-one" /><span className="signal-node signal-node-two" /><span className="signal-node signal-node-three" />
-    </div>
-    <div className="signal-metrics">{rows.slice(0, 3).map(([label, value]) => <div key={label}><strong>{compactNumber(value)}</strong><span>{label}</span><b><i style={{ width: `${Math.max(4, (value / max) * 100)}%` }} /></b></div>)}</div>
-  </section>;
-}
-
-function TopicsPanel({ categories }: { categories: ArticleCategory[] }) {
-  const active = categories.filter((item) => item.is_active).slice(0, 5);
-  return <section className="overview-panel topics-panel"><div className="overview-panel-header"><div><p className="overview-panel-kicker">Configured coverage</p><h2><Tags size={15} /> Monitoring Topics</h2></div><Link href="/watchlist" className="panel-link">Manage <ArrowRight size={12} /></Link></div>{active.length ? <div className="topic-list">{active.map((item, index) => <div className="topic-row" key={item.id}><span className="topic-rank">{String(index + 1).padStart(2, "0")}</span><span className="topic-name">{item.name}</span><span className="topic-state">Active</span></div>)}</div> : <EmptyState title="No enabled monitoring topics" description="Add categories in Article Settings." />}</section>;
-}
-
-function AnalyticsPanel({ analytics, overview }: { analytics: AnalyticsOverview | null; overview: DashboardOverview }) {
-  const risk = analytics?.risk ?? {};
-  const values = Object.entries(risk).filter(([, value]) => typeof value === "number");
-  const total = values.reduce((sum, [, value]) => sum + value, 0);
-  const segments = values.length ? values : [["Processed", overview.processed_articles]] as [string, number][];
-  let offset = 0;
-  const colors = ["#4d8dff", "#43d4e7", "#f0b34c", "#43ce8c", "#7e66ff"];
-  const gradient = segments.map(([, value], index) => { const start = total ? (offset / total) * 360 : 0; offset += value; const end = total ? (offset / total) * 360 : 360; return `${colors[index % colors.length]} ${start}deg ${end}deg`; }).join(", ");
-  return <section className="overview-panel analytics-panel"><div className="overview-panel-header"><div><p className="overview-panel-kicker">Last 30 days</p><h2><BarChart3 size={15} /> Analytics Snapshot</h2></div><Link href="/analytics" className="panel-link">View all <ArrowRight size={12} /></Link></div><div className="analytics-value"><strong>{compactNumber(analytics?.total_articles ?? overview.total_articles)}</strong><span>articles in range</span></div><div className="donut-wrap"><div className="overview-donut" style={{ background: `conic-gradient(${gradient})` }}><div><strong>{compactNumber(total || overview.processed_articles)}</strong><span>risk signals</span></div></div><div className="donut-legend">{segments.slice(0, 4).map(([label, value], index) => <div key={label}><i style={{ background: colors[index % colors.length] }} /><span>{formatLabel(label)}</span><b>{value}</b></div>)}</div></div></section>;
-}
-
-function ReportsPanel({ reports }: { reports: ReportBatchHistoryItem[] }) {
-  return <section className="overview-panel reports-panel"><div className="overview-panel-header"><h2><FileText size={15} /> Reports</h2><Link href="/reports" className="panel-link">View all <ArrowRight size={12} /></Link></div>{reports.length ? <div className="report-list">{reports.slice(0, 4).map((report) => <Link href="/reports" className="report-row" key={report.batch_id}><FileText size={16} /><span><strong>{formatLabel(report.report_type)}</strong><small>{report.generated_at ? formatRelativeTime(new Date(report.generated_at)) : formatLabel(report.status)}</small></span><ArrowRight size={13} /></Link>)}</div> : <EmptyState title="No report batches yet" description="Generated reports will appear here." />}</section>;
-}
-
-function QuickSearchPanel() {
-  return <section className="overview-panel quick-search-panel"><div className="overview-panel-header"><h2><Search size={15} /> Quick Search</h2><Link href="/search" className="panel-link">Open <ArrowRight size={12} /></Link></div><Link href="/search" className="quick-search-field"><Search size={14} /> Search monitored intelligence...</Link><p>Search by keyword or semantic meaning.</p></section>;
-}
 
 const ARTICLE_METRICS: Record<DashboardArticleMetric, { title: string; description: string }> = {
   total: { title: "All Articles", description: "Every article included in the Overview coverage total." },
@@ -174,17 +130,11 @@ function DetailModal({
 export function OverviewContent({ 
   initialOverview, 
   initialIntelligence,
-  companyName,
-  initialAnalytics,
-  initialReports,
-  initialCategories,
+  companyName 
 }: { 
   initialOverview: DashboardOverview;
   initialIntelligence: DashboardIntelligenceItem[];
   companyName: string;
-  initialAnalytics: AnalyticsOverview | null;
-  initialReports: ReportBatchHistoryItem[];
-  initialCategories: ArticleCategory[];
 }) {
   const [overview, setOverview] = useState<DashboardOverview>(initialOverview);
   const [intelligence, setIntelligence] = useState<DashboardIntelligenceItem[]>(initialIntelligence);
@@ -243,20 +193,59 @@ export function OverviewContent({
 
   return (
     <div className="flex flex-col">
-      <section className="overview-intro">
-        <div><p className="overview-intro-kicker">Near Real-Time Monitoring</p><h1>Here&apos;s what&apos;s happening</h1><p>Near real-time intelligence for {companyName || "the active company"} across monitored media.</p></div>
-        <div className="overview-intro-status"><span className={`overview-live ${liveStatus === "delayed" ? "delayed" : ""}`}><i /> {liveStatus === "delayed" ? "Update delayed" : liveStatus === "updating" ? "Updating" : "Live"}</span><small>{lastUpdated ? formatRelativeTime(lastUpdated) : "Just now"}</small></div>
+      <OverviewHero 
+        companyName={companyName}
+        liveStatus={liveStatus}
+        lastUpdated={lastUpdated}
+      />
+      
+      <section className="mt-2">
+        <h2 className="mb-4 text-base font-semibold text-text">Coverage</h2>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <OverviewMetricCard 
+            label="Total Articles" 
+            value={overview.total_articles} 
+            icon={KpiArticleIcon} 
+            iconColorClass="bg-primary-soft text-primary"
+            sparklineColor="var(--color-primary)"
+            onOpen={() => openMetric("total")} 
+          />
+          <OverviewMetricCard 
+            label="Processed Intelligence" 
+            value={overview.processed_articles} 
+            icon={KpiIntelligenceIcon} 
+            iconColorClass="bg-primary-soft text-primary"
+            sparklineColor="var(--color-primary)"
+            onOpen={() => openMetric("processed")} 
+          />
+          <OverviewMetricCard 
+            label="Monitored Companies" 
+            value={overview.total_companies} 
+            icon={KpiCompanyIcon} 
+            iconColorClass="bg-primary-soft text-primary"
+            sparklineColor="var(--color-primary)"
+            onOpen={() => openMetric("companies")} 
+          />
+          <OverviewMetricCard 
+            label="High Risk" 
+            value={overview.high_risk_items} 
+            icon={KpiHighRiskIcon}
+            iconColorClass="bg-transparent text-critical"
+            onOpen={() => openMetric("high-risk")} 
+          />
+          <OverviewMetricCard 
+            label="Critical Risk" 
+            value={overview.critical_risk_items} 
+            icon={KpiCriticalRiskIcon}
+            iconColorClass="bg-transparent text-medium"
+            onOpen={() => openMetric("critical-risk")} 
+          />
+        </div>
       </section>
 
-      <section className="overview-summary-strip" aria-label="Current coverage summary">
-        {["Articles", "Processed", "Companies", "High risk", "Critical"].map((label, index) => { const values = [overview.total_articles, overview.processed_articles, overview.total_companies, overview.high_risk_items, overview.critical_risk_items]; return <button type="button" key={label} onClick={() => index === 2 ? openMetric("companies") : index === 3 ? openMetric("high-risk") : index === 4 ? openMetric("critical-risk") : index === 1 ? openMetric("processed") : openMetric("total")}><span>{label}</span><strong>{compactNumber(values[index])}</strong></button>; })}
-      </section>
-
-      <section className="overview-command-grid">
-        <div className="overview-column overview-column-left"><SignalPanel overview={overview} /><TopicsPanel categories={initialCategories} /></div>
-        <section className="overview-panel feed-panel"><div className="overview-panel-header"><div><p className="overview-panel-kicker">Latest processed signals</p><h2><Activity size={15} /> Intelligence Feed</h2></div><Link href="/intelligence" className="panel-link">View all <ArrowRight size={12} /></Link></div>{intelligence.length ? <div className="overview-feed-list">{intelligence.slice(0, 5).map((item) => <div className="overview-feed-row" key={`${item.company_id}-${item.article_id}`}><PublisherLogo publisherName={item.publisher_name} size={36} /><div className="min-w-0 flex-1"><div className="overview-feed-meta">{item.publisher_name} <span>·</span> {formatRelativeTime(new Date(item.published_at ?? item.collected_at))}</div><h3>{item.headline || item.title}</h3><div className="overview-feed-badges"><Badge tone={toneForRisk(item.risk_level)}>{formatLabel(item.risk_level)}</Badge>{item.event_type && <Badge>{formatLabel(item.event_type)}</Badge>}</div></div><ArticleViewButton articleId={item.article_id} sourceUrl={item.url} sourceName={item.source_name} /></div>)}</div> : <EmptyState title="No processed intelligence" description="No recent intelligence is available yet." />}</section>
-        <AnalyticsPanel analytics={initialAnalytics} overview={overview} />
-        <div className="overview-column overview-column-right"><ReportsPanel reports={initialReports} /><QuickSearchPanel /><section className="overview-panel category-panel"><div className="overview-panel-header"><h2><Tags size={15} /> Categories</h2><Link href="/watchlist" className="panel-link">Manage <ArrowRight size={12} /></Link></div><div className="category-grid">{initialCategories.filter((item) => item.is_active).slice(0, 6).map((item) => <Link href="/watchlist" key={item.id}>{item.name}</Link>)}</div></section></div>
+      <section className="mt-8">
+        <LatestIntelligenceGrid items={intelligence} />
       </section>
 
       {selectedMetric && (
