@@ -25,11 +25,11 @@ export function Sidebar() {
               aria-current={isActive ? "page" : undefined}
               className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
                 isActive
-                  ? "before:absolute before:left-0 before:h-5 before:w-[3px] before:rounded-r-full before:bg-white bg-sidebar-active font-semibold text-white"
-                  : "text-sidebar-text hover:bg-white/[0.06] hover:text-white"
+                  ? "before:absolute before:left-0 before:h-5 before:w-[3px] before:rounded-r-full before:bg-white bg-sidebar-active font-semibold text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+                  : "text-white/80 hover:bg-white/[0.06] hover:text-white"
               }`}
             >
-              <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+              <Icon size={16} strokeWidth={1.75} aria-hidden="true" className={isActive ? "text-white" : "text-white/80"} />
               {item.label}
             </Link>
           );
