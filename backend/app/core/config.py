@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_env: str = "development"
     debug: bool = False
+    cors_origins: str = ""
 
     database_url: str = (
         "postgresql+asyncpg://media_user:change_me@localhost:5432/media_intelligence"
