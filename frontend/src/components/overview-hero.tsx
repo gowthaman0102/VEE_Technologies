@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { Search, Sun, Bell } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { formatRelativeTime } from "@/lib/format";
 import { Building2 } from "lucide-react";
 
@@ -12,6 +15,9 @@ interface OverviewHeroProps {
 }
 
 export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewHeroProps) {
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+
   const updatedLabel = lastUpdated
     ? `Updated ${formatRelativeTime(lastUpdated)}`
     : "Updated just now";
@@ -23,10 +29,18 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
     year: "numeric"
   }).format(new Date());
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
+
   return (
     <div 
-      className="relative mb-6 flex min-h-[170px] flex-col justify-between overflow-hidden rounded-xl border border-primary-border shadow-[0_1px_2px_rgba(28,23,52,0.06)]"
+      className="relative mb-6 flex flex-col justify-between overflow-hidden rounded-xl border border-primary-border shadow-[0_1px_2px_rgba(28,23,52,0.06)]" 
       style={{ 
+        minHeight: "225px",
         backgroundImage: "url('/hero-globe.png')",
         backgroundSize: "cover",
         backgroundPosition: "center right",
@@ -37,17 +51,47 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
       {/* Dark gradient overlay on left so text is readable */}
       <div className="absolute inset-0 bg-gradient-to-r from-sidebar/95 via-sidebar/70 to-transparent pointer-events-none z-0" />
 
-      {/* Main Content Area */}
-      <div className="relative z-10 flex flex-col justify-between gap-5 p-5 sm:p-6 lg:flex-row lg:items-end">
-        <div className="max-w-2xl">
-          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary-border">
-            Near Real-Time Monitoring
+      {/* Top Header Row within Hero */}
+      <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 pb-2 w-full">
+        <div>
+            <p className="text-[10px] sm:text-[11px] font-bold tracking-[0.15em] text-primary-border uppercase mb-1">
+            NEAR REAL-TIME MONITORING
           </p>
-          <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight text-white sm:text-3xl">
-            Here&apos;s what&apos;s happening
+        </div>
+
+        <div className="flex items-center gap-4 mt-4 sm:mt-0 ml-auto w-full sm:w-auto">
+          <form onSubmit={handleSearch} className="relative w-full sm:w-64 lg:w-80 xl:w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-text" size={16} />
+            <input 
+              type="text" 
+              placeholder="Search articles, companies, topics..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-full border border-white/15 bg-white/10 py-2 pl-9 pr-4 text-sm text-white placeholder-sidebar-text focus:outline-none focus:ring-1 focus:ring-primary-border/50 transition-colors"
+            />
+          </form>
+          
+          <div className="hidden lg:flex items-center gap-3 text-sidebar-text">
+            <button aria-label="Theme toggle" className="hover:text-white transition-colors p-1"><Sun size={18} /></button>
+            <button aria-label="Notifications" className="hover:text-white transition-colors relative p-1">
+              <Bell size={18} />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+            </button>
+            <button aria-label="User profile" className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary-soft text-primary font-semibold text-xs">
+              N
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between p-6 pt-2 h-full gap-6">
+        <div className="max-w-2xl">
+          <h1 className="text-3xl lg:text-[38px] font-bold tracking-tight text-white leading-tight">
+            Intelligence Command Center
           </h1>
-          <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-sidebar-text">
-            Near real-time intelligence for {companyName} across monitored media.
+          <p className="mt-2 text-[15px] text-sidebar-text max-w-xl leading-relaxed">
+            Real-time media intelligence, risk signals, and actionable insights for a safer tomorrow.
           </p>
           
           <div className="mt-5 flex flex-wrap items-center gap-4">

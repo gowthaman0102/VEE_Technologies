@@ -79,7 +79,7 @@ function AnalyticsMetricCard({
   iconClass: string;
 }) {
   return (
-    <article className="rounded-[16px] border border-border bg-surface px-5 py-4 shadow-[0_5px_18px_rgba(25,59,70,0.05)] transition-shadow hover:shadow-[0_8px_24px_rgba(25,59,70,0.08)]">
+    <article className="rounded-[16px] border border-border bg-white px-5 py-4 shadow-[0_5px_18px_rgba(25,59,70,0.05)] transition-shadow hover:shadow-[0_8px_24px_rgba(25,59,70,0.08)]">
       <div className="flex items-center gap-4">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconClass}`}>
           <Icon size={23} strokeWidth={2} aria-hidden="true" />
@@ -105,7 +105,7 @@ function SectionHeading({ title, description, action }: { title: string; descrip
           <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p>
         </div>
       </div>
-      {action && <button type="button" className="shrink-0 rounded-full border border-border bg-surface px-3.5 py-1.5 text-[12px] font-semibold text-body shadow-sm transition-colors hover:bg-surface-raised">{action}</button>}
+      {action && <button type="button" className="shrink-0 rounded-full border border-border bg-white px-3.5 py-1.5 text-[12px] font-semibold text-body shadow-sm transition-colors hover:bg-surface-raised">{action}</button>}
     </div>
   );
 }
@@ -247,7 +247,7 @@ export default function AnalyticsPage() {
             <h1 className="mt-1.5 text-[28px] font-bold leading-tight tracking-tight text-text">{companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"}</h1>
             <p className="mt-1.5 text-[13px] text-muted">Explore stored media intelligence across configurable reporting periods.</p>
           </div>
-          <div className="shrink-0 rounded-full border border-border bg-surface p-1.5 shadow-[0_4px_15px_rgba(25,59,70,0.05)]">
+          <div className="shrink-0 rounded-full border border-border bg-white p-1.5 shadow-[0_4px_15px_rgba(25,59,70,0.05)]">
             <TimeRangeSelector
               value={preset}
               onChange={setPreset}
@@ -284,7 +284,7 @@ export default function AnalyticsPage() {
             </section>
 
             <section className="mt-5 grid items-start gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-              <article className="rounded-[17px] border border-border bg-surface p-5 shadow-[0_5px_18px_rgba(25,59,70,0.05)] sm:p-6">
+              <article className="rounded-[17px] border border-border bg-white p-5 shadow-[0_5px_18px_rgba(25,59,70,0.05)] sm:p-6">
                 <SectionHeading title="Business impact" description="Distribution of media intelligence by business impact category." action="View all" />
                 <div className="mt-5 space-y-2">
                   {Object.entries(data.business_impact).filter(([, value]) => value > 0).length === 0 ? (
@@ -303,7 +303,7 @@ export default function AnalyticsPage() {
                 </div>
               </article>
 
-              <article className="rounded-[17px] border border-border bg-surface p-5 shadow-[0_5px_18px_rgba(25,59,70,0.05)] sm:p-6">
+              <article className="rounded-[17px] border border-border bg-white p-5 shadow-[0_5px_18px_rgba(25,59,70,0.05)] sm:p-6">
                 <SectionHeading title="Competitor mentions" description={`Top organizations mentioned alongside ${companyName || "this company"}.`} action="View all" />
                 {data.competitors.length === 0 ? (
                   <div className="mt-5 rounded-xl bg-surface-raised px-4 py-10 text-center text-sm text-muted">No competitor mention data available for the selected period.</div>

@@ -251,7 +251,7 @@ function MetricModal({ metric, articles, loading, onClose }: { metric: MetricKey
           ) : (
             <div className="space-y-3">
               {articles.map((article) => (
-                <article key={`${article.article_id}-${article.risk_level ?? "article"}`} className="rounded-xl border border-border bg-surface p-5 shadow-sm hover:shadow-md transition-shadow">
+                <article key={`${article.article_id}-${article.risk_level ?? "article"}`} className="rounded-xl border border-border bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <ArticleMetadata publisherName={article.publisher_name} publishedAt={article.published_at} collectedAt={article.collected_at} compact />
@@ -345,7 +345,7 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
     <main className="companies-page min-h-[calc(100vh-74px)] w-full bg-surface-raised">
       <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
         {/* Live Intelligence Card */}
-        <section className="shrink-0 rounded-[22px] border border-border bg-surface p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
+        <section className="shrink-0 rounded-[22px] border border-border bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
           <div className="flex flex-col justify-between gap-3 border-b border-border pb-3 md:flex-row md:items-center">
             <div className="flex items-center gap-4">
               <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] bg-primary-soft text-primary">
@@ -393,7 +393,7 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
         <section className="min-h-0 flex-1 animate-[fadeIn_0.5s_ease-out_200ms_both]">
           <div className="flex flex-col justify-between gap-4 border-b border-border pb-4 md:flex-row md:items-end">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface border border-border shadow-sm text-text">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-border shadow-sm text-text">
                 <Layers size={22} strokeWidth={2.2} />
               </div>
               <div>
