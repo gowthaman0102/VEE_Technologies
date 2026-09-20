@@ -42,7 +42,7 @@ export function ArticleReaderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="reader-title" className="flex h-full max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-[16px] bg-white shadow-2xl">
+      <section role="dialog" aria-modal="true" aria-labelledby="reader-title" className="flex h-full max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-[16px] border border-border bg-[#101d2b] shadow-2xl">
         <header className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
             <p className="text-[11px] font-bold tracking-[0.15em] text-muted uppercase">

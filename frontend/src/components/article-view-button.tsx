@@ -29,7 +29,7 @@ export function ArticleViewButton({
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label={ariaLabel}
-        className={`inline-flex items-center justify-center rounded-[8px] border border-border bg-white px-3.5 py-1.5 text-[13px] font-bold text-text transition-colors duration-150 hover:bg-surface-raised hover:border-primary ${focusRing} ${className}`}
+        className={`inline-flex items-center justify-center rounded-[8px] border border-border bg-surface px-3.5 py-1.5 text-[13px] font-bold text-text transition-colors duration-150 hover:bg-surface-raised hover:border-primary ${focusRing} ${className}`}
       >
         View <ArrowRight size={14} className="ml-1.5" aria-hidden="true" />
       </button>

@@ -21,6 +21,7 @@ import { formatArticleTimestamp, formatLabel, formatRelativeTime } from "@/lib/f
 import { PublisherLogo } from "@/components/publisher-logo";
 import { Badge, toneForRisk } from "@/components/ui/badge";
 import { focusRing } from "@/components/ui/button-styles";
+import { ArticleReaderModal } from "@/components/article-reader-modal";
 
 type Props = {
   initialItems: DashboardIntelligenceItem[];
@@ -57,10 +58,8 @@ function matchesTopic(item: DashboardIntelligenceItem, filter: string): boolean 
       return /regulatory|compliance|legal|oversight|sanction|policy/i.test(source);
     case "Fraud Security":
       return /fraud|security|cyber|breach|phishing|malware|misuse/i.test(source);
-    case "OpenAI":
-      return /openai/i.test(source);
     case "Other":
-      return !/regulatory|compliance|legal|oversight|sanction|policy|fraud|security|cyber|breach|phishing|malware|misuse|openai/i.test(source);
+      return !/regulatory|compliance|legal|oversight|sanction|policy|fraud|security|cyber|breach|phishing|malware|misuse/i.test(source);
     default:
       return true;
   }
@@ -98,6 +97,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
   const [featuredArticleId, setFeaturedArticleId] = useState<number | null>(null);
+  const [readerArticleId, setReaderArticleId] = useState<number | null>(null);
 
   const fetchOverview = async () => {
     const overviewData = await getDashboardOverview();
@@ -182,11 +182,6 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const paginatedItems = filteredItems.slice((safePage - 1) * pageSize, safePage * pageSize);
   const featuredItem = filteredItems.find((item) => item.article_id === featuredArticleId) ?? filteredItems[0] ?? null;
 
-  const openOriginalArticle = (url: string | null | undefined) => {
-    if (!url) return;
-    window.location.assign(url);
-  };
-
   const handleFilterChange = (nextSearch?: string, nextRiskFilter?: string, nextTopicFilter?: string, nextSort?: string, nextPageSize?: number) => {
     if (nextSearch !== undefined) setSearch(nextSearch);
     if (nextRiskFilter !== undefined) setRiskFilter(nextRiskFilter);
@@ -198,10 +193,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   };
 
   const openArticleReader = (articleId: number) => {
-    const article = items.find((item) => item.article_id === articleId);
-    if (article?.url) {
-      openOriginalArticle(article.url);
-    }
+    setReaderArticleId(articleId);
   };
 
   const metricCards = [
@@ -236,7 +228,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   ];
 
   const riskFilters = ["All", "High Risk", "Medium Risk", "Low Risk"];
-  const topicFilters = ["All", "Regulatory Action", "Fraud Security", "OpenAI", "Other"];
+  const topicFilters = ["All", "Regulatory Action", "Fraud Security", "Other"];
 
   return (
     <main className="min-h-screen bg-canvas px-6 py-8 lg:px-8">
@@ -540,7 +532,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
           </section>
         </div>
       </div>
-
+      {readerArticleId !== null && <ArticleReaderModal articleId={readerArticleId} onClose={() => setReaderArticleId(null)} />}
     </main>
   );
 }

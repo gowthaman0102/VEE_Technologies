@@ -1,52 +1,41 @@
 import type { Metadata } from "next";
-import { Nunito_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 
-import {
-  DashboardHeader,
-} from "@/components/dashboard-header";
-import {
-  Sidebar,
-} from "@/components/sidebar";
+import { AppShell } from "@/components/app-shell";
 import { AppToaster } from "@/components/ui/toast";
+import { getActiveCompany } from "@/lib/api";
 
 import "./globals.css";
 
 
-const nunitoSans = Nunito_Sans({
-  variable: "--font-nunito-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
   title: "Nova Cops · Media Intelligence",
   description:
-    "Real-time AI-powered media monitoring and crisis intelligence dashboard.",
+    "Near real-time AI-powered media monitoring, risk intelligence, search, and executive reporting.",
 };
 
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const company = await getActiveCompany().catch(() => ({ name: "" }));
+
   return (
     <html
       lang="en"
-      className={nunitoSans.variable}
+      className={inter.variable}
     >
       <body className="min-h-screen bg-canvas font-sans text-body antialiased">
-          <div className="flex min-h-screen">
-            <Sidebar />
-
-            <div className="flex min-w-0 flex-1 flex-col">
-              <DashboardHeader />
-              <main className="flex-1">
-                {children}
-              </main>
-            </div>
-          </div>
-          <AppToaster />
+        <AppShell companyName={company.name}>{children}</AppShell>
+        <AppToaster />
       </body>
     </html>
   );
