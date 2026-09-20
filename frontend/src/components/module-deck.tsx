@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { navigation } from "@/lib/navigation";
 
@@ -14,6 +14,7 @@ export function ModuleDeck() {
   const pathname = usePathname();
   const trackRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLAnchorElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
@@ -22,6 +23,18 @@ export function ModuleDeck() {
   const scroll = (direction: number) => {
     trackRef.current?.scrollBy({ left: direction * 280, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const updateProgress = () => {
+      const max = track.scrollWidth - track.clientWidth;
+      setScrollProgress(max > 0 ? track.scrollLeft / max : 0);
+    };
+    updateProgress();
+    track.addEventListener("scroll", updateProgress, { passive: true });
+    return () => track.removeEventListener("scroll", updateProgress);
+  }, []);
 
   return (
     <nav aria-label="Application modules" className="module-deck-shell">
@@ -48,6 +61,10 @@ export function ModuleDeck() {
             </Link>
           );
         })}
+      </div>
+      <div className="module-deck-footer">
+        <span className="module-deck-label">Modules</span>
+        <span className="module-deck-indicator" aria-hidden="true"><span style={{ left: `${scrollProgress * 100}%` }} /></span>
       </div>
       <button type="button" className="module-deck-arrow right-2" aria-label="Next modules" onClick={() => scroll(1)}>
         <ChevronRight size={17} aria-hidden="true" />

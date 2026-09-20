@@ -1,7 +1,7 @@
 
 import { DashboardAutoRefresh } from "@/components/dashboard-auto-refresh";
 import { OverviewContent } from "@/components/overview-content";
-import { getActiveCompany, getDashboardIntelligence, getDashboardOverview } from "@/lib/api";
+import { getActiveCompany, getAnalyticsOverview, getArticleCategories, getDashboardIntelligence, getDashboardOverview, getReportHistory } from "@/lib/api";
 
 
 export default async function Home() {
@@ -9,6 +9,14 @@ export default async function Home() {
     getDashboardOverview(), 
     getDashboardIntelligence(6), 
     getActiveCompany()
+  ]);
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 30);
+  const [analytics, reports, categories] = await Promise.all([
+    getAnalyticsOverview(company.id, start.toISOString(), end.toISOString()).catch(() => null),
+    getReportHistory(company.id).catch(() => ({ count: 0, items: [] })),
+    getArticleCategories(company.id).catch(() => ({ count: 0, items: [] })),
   ]);
 
   return (
@@ -19,6 +27,9 @@ export default async function Home() {
           initialOverview={overview}
           initialIntelligence={intelligence.items}
           companyName={company.name}
+          initialAnalytics={analytics}
+          initialReports={reports.items}
+          initialCategories={categories.items}
         />
         
 
