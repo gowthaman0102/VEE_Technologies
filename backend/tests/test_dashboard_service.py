@@ -41,7 +41,7 @@ async def test_dashboard_overview_separates_total_and_processed_articles():
     assert "count(articles.id)" in total_articles_sql
     assert "from articles" in total_articles_sql
     assert "article_triages" not in total_articles_sql
-    assert "articles.source_name in" in total_articles_sql
+    assert "articles.source_name in" not in total_articles_sql
 
     assert (
         "count(distinct(article_triages.article_id))"

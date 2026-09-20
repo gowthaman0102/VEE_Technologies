@@ -81,6 +81,50 @@ body {
   color: var(--text-body);
 }
 
+.page-ambient {
+  position: absolute;
+  top: 0;
+  right: 2%;
+  z-index: 0;
+  width: min(30vw, 360px);
+  height: 260px;
+  pointer-events: none;
+  color: var(--primary);
+  opacity: 0.12;
+}
+
+.page-ambient svg {
+  position: absolute;
+  inset: 22px 18px auto auto;
+  width: 170px;
+  height: 155px;
+  animation: ambient-drift 8s ease-in-out infinite alternate;
+}
+
+.page-ambient-glow {
+  position: absolute;
+  top: -100px;
+  right: -80px;
+  width: 290px;
+  height: 290px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(132, 101, 232, 0.2), transparent 68%);
+}
+
+.page-ambient-risk { color: var(--critical); opacity: 0.08; }
+.page-ambient-reports { color: var(--primary); opacity: 0.1; }
+.page-ambient-settings { color: var(--medium); opacity: 0.1; }
+.page-ambient-search { color: var(--low); opacity: 0.1; }
+
+@keyframes ambient-drift {
+  from { transform: translate3d(0, 0, 0) rotate(-2deg); }
+  to { transform: translate3d(-8px, 7px, 0) rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-ambient svg { animation: none; }
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -105,6 +149,56 @@ select, input, textarea { color-scheme: light; }
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes dashboard-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dashboard-draw-in {
+  from { opacity: 0; transform: scaleY(0.96); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+.risk-kpi-enter,
+.analytics-metric-enter,
+.analytics-panel-enter,
+.analytics-row-enter {
+  animation: dashboard-rise-in 420ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.risk-chart-enter,
+.risk-donut-enter {
+  animation: dashboard-draw-in 600ms cubic-bezier(.2,.8,.2,1) both;
+  transform-origin: center bottom;
+}
+
+.analytics-impact-bar {
+  transform-origin: left center;
+  animation: analytics-bar-in 700ms cubic-bezier(.2,.8,.2,1) both;
+  transition: width 240ms ease-out;
+}
+
+@keyframes analytics-bar-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.analytics-page section[aria-label="Analytics summary metrics"] > article:nth-child(2) { animation-delay: 70ms; }
+.analytics-page section[aria-label="Analytics summary metrics"] > article:nth-child(3) { animation-delay: 140ms; }
+.analytics-page section[aria-label="Analytics summary metrics"] > article:nth-child(4) { animation-delay: 210ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .risk-kpi-enter,
+  .analytics-metric-enter,
+  .analytics-panel-enter,
+  .analytics-row-enter,
+  .risk-chart-enter,
+  .risk-donut-enter,
+  .analytics-impact-bar {
+    animation: none;
   }
 }
 

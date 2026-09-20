@@ -20,6 +20,7 @@ import type { DashboardOverview, DashboardIntelligenceItem } from "@/lib/api";
 import { formatArticleTimestamp, formatLabel, formatRelativeTime } from "@/lib/format";
 import { PublisherLogo } from "@/components/publisher-logo";
 import { Badge, toneForRisk } from "@/components/ui/badge";
+import { PageAmbient } from "@/components/page-ambient";
 import { focusRing } from "@/components/ui/button-styles";
 
 type Props = {
@@ -239,8 +240,9 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const topicFilters = ["All", "Regulatory Action", "Fraud Security", "OpenAI", "Other"];
 
   return (
-    <main className="min-h-screen bg-canvas px-6 py-8 lg:px-8">
-      <div className="mx-auto w-full max-w-[1500px]">
+    <main className="relative min-h-screen overflow-hidden bg-canvas px-6 py-8 lg:px-8">
+          <PageAmbient kind="intelligence" />
+          <div className="relative z-10 mx-auto w-full max-w-[1500px]">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-5 border-b border-border pb-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Near Real-Time Monitoring</p>

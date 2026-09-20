@@ -13,6 +13,7 @@ import {
 import { inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toast";
+import { PageAmbient } from "@/components/page-ambient";
 
 type Priority = "high" | "medium" | "low";
 const PRIORITIES: Array<{ key: Priority; label: string; tint: string; icon: ReactNode }> = [
@@ -140,7 +141,7 @@ export default function WatchlistPage() {
     }
   }
 
-  return <main className="px-4 py-5 sm:px-6 lg:px-8"><div className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-[1400px] flex-col">
+  return <main className="relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-4 py-5 sm:px-6 lg:px-8"><PageAmbient kind="settings" /><div className="relative z-10 mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-[1400px] flex-col">
     <header className="shrink-0 border-b border-border pb-4"><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">ARTICLE SETTINGS</p><div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h1 className="text-[36px] font-semibold leading-none tracking-[-0.05em] text-text">{companyName || "OpenAI"}</h1><p className="mt-3 text-sm text-muted">Control which article categories are enabled or disabled for monitoring and display.</p></div><button type="button" onClick={() => { setError(""); setModalOpen(true); }} className={`${primaryButton} shrink-0`}><Plus className="h-4 w-4" /> Add Category</button></div></header>
     {error && <div className="mt-4 shrink-0 rounded-lg border border-critical-border bg-critical-bg px-4 py-3 text-sm text-critical">{error}</div>}
     <div className="mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><span className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-muted"><strong className="text-text">{items.length}</strong> Total</span>{PRIORITIES.map((option) => <span key={option.key} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-muted"><strong className="text-text">{grouped[option.key].length}</strong> {option.key}</span>)}</div><button type="button" onClick={() => void refresh()} disabled={refreshing || loading} className={`${secondaryButton} h-9 px-3 text-xs`}>{refreshing ? <RefreshCcw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />} Refresh</button></div>

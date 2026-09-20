@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { 
   Activity, AlertTriangle, BarChart3, Bell, ChevronRight,
-  FileText, Globe2, Skull, Users, X, Layers, Clock, 
-  Settings, Leaf
+  FileText, Skull, X, Layers, Clock,
+  Settings, Eye
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { formatLabel } from "@/lib/format";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
+import { PageAmbient } from "@/components/page-ambient";
 
 type MetricKey = "triage" | "risks" | "high" | "critical" | "alerts";
 type MetricTone = "blue" | "amber" | "red" | "critical" | "purple";
@@ -27,23 +28,23 @@ const METRIC_CONFIG: Array<{ key: MetricKey; label: string; description: string;
   { key: "triage", label: "Triage", description: "Items under review", tone: "blue", icon: FileText },
   { key: "risks", label: "Risks", description: "Potential risks identified", tone: "amber", icon: AlertTriangle },
   { key: "high", label: "High", description: "High priority matches", tone: "red", icon: BarChart3 },
-  { key: "critical", label: "Critical", description: "Critical threats detected", tone: "critical", icon: Skull },
   { key: "alerts", label: "Alerts", description: "Total alerts generated", tone: "purple", icon: Bell },
+  { key: "critical", label: "Critical", description: "Critical threats detected", tone: "critical", icon: Skull },
 ];
 
 function AnimatedValue({ value }: { value: number }) {
-  const [displayValue, setDisplayValue] = useState(value);
+  const [displayValue, setDisplayValue] = useState(0);
   const previousValue = useRef<number | null>(null);
 
   useEffect(() => {
-    const previous = previousValue.current;
+    const previous = previousValue.current ?? 0;
     previousValue.current = value;
-    if (previous === null || previous === value) {
+    if (previous === value) {
       setDisplayValue(value);
       return;
     }
     const startedAt = performance.now();
-    const duration = 400;
+    const duration = 700;
     let frame = 0;
     const update = (now: number) => {
       const progress = Math.min((now - startedAt) / duration, 1);
@@ -82,6 +83,12 @@ function LiveMetricRing({ config, value, progress, onClick, index }: { config: (
   const size = 160;
   const circumference = 2 * Math.PI * radius;
   const visualProgress = progress ?? 1;
+  const [animatedProgress, setAnimatedProgress] = useState(0);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setAnimatedProgress(visualProgress));
+    return () => cancelAnimationFrame(frame);
+  }, [visualProgress]);
 
   useEffect(() => {
     if (previousValue.current === value) return;
@@ -106,7 +113,7 @@ function LiveMetricRing({ config, value, progress, onClick, index }: { config: (
             cx={size/2} cy={size/2} r={radius} fill="none" stroke={tone.ring} 
             strokeLinecap="round" strokeWidth={strokeWidth} 
             strokeDasharray={circumference} 
-            strokeDashoffset={circumference * (1 - visualProgress)} 
+            strokeDashoffset={circumference * (1 - animatedProgress)}
             className="transition-[stroke-dashoffset] duration-1000 ease-out" 
           />
         </svg>
@@ -141,7 +148,8 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
       desc: "High risk and time-sensitive subjects",
       footer: "Highest priority monitoring",
       Icon: AlertTriangle,
-      Graphic: Globe2,
+      Visual: AlertTriangle,
+      visualMotion: "animate-pulse",
     },
     medium: {
       bg: "bg-medium-bg",
@@ -153,7 +161,8 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
       desc: "Important topics to monitor closely",
       footer: "Active monitoring",
       Icon: BarChart3,
-      Graphic: Activity,
+      Visual: BarChart3,
+      visualMotion: "animate-[dashboard-rise-in_1.8s_ease-in-out_infinite_alternate]",
     },
     low: {
       bg: "bg-low-bg",
@@ -164,17 +173,22 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
       dot: "bg-low",
       desc: "General awareness and trending topics",
       footer: "Routine monitoring",
-      Icon: Leaf,
-      Graphic: Users,
+      Icon: Eye,
+      Visual: Eye,
+      visualMotion: "animate-pulse",
     }
   }[priority];
 
   return (
     <article 
-      className={`companies-topic-card relative flex min-h-[210px] flex-col overflow-hidden rounded-xl border ${styles.border} ${styles.bg} p-3 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong animate-[fadeIn_0.5s_ease-out_both]`}
+      className={`group companies-topic-card relative flex min-h-[210px] flex-col overflow-hidden rounded-xl border ${styles.border} ${styles.bg} p-3 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong animate-[fadeIn_0.5s_ease-out_both]`}
       style={{ animationDelay: `${250 + index * 60}ms` }}
     >
-      <styles.Graphic className={`absolute -bottom-10 -right-10 h-48 w-48 opacity-[0.07] ${styles.iconColor} pointer-events-none`} aria-hidden="true" />
+      <styles.Visual
+        className={`pointer-events-none absolute -bottom-10 -right-10 h-44 w-44 opacity-15 transition-transform duration-700 group-hover:scale-110 ${styles.iconColor} ${styles.visualMotion}`}
+        strokeWidth={1.4}
+        aria-hidden="true"
+      />
 
       <div className="relative z-10 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -342,8 +356,9 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
   };
 
   return (
-    <main className="companies-page min-h-[calc(100vh-74px)] w-full bg-surface-raised">
-      <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
+    <main className="companies-page relative min-h-[calc(100vh-74px)] w-full overflow-hidden bg-surface-raised">
+          <PageAmbient kind="companies" />
+          <div className="relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
         {/* Live Intelligence Card */}
         <section className="shrink-0 rounded-[22px] border border-border bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
           <div className="flex flex-col justify-between gap-3 border-b border-border pb-3 md:flex-row md:items-center">

@@ -29,13 +29,13 @@ import { Badge, toneForStatus } from "@/components/ui/badge";
 import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toast";
+import { PageAmbient } from "@/components/page-ambient";
 
 type ReportType =
   | "daily"
   | "weekly"
   | "monthly"
-  | "custom"
-  | "all_history";
+  | "custom";
 
 type TimeMode = "media" | "ingestion";
 
@@ -91,7 +91,7 @@ function formatStatusLabel(status: string | null | undefined) {
 export function ReportsPageClient() {
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [companyName, setCompanyName] = useState("");
-  const [reportType, setReportType] = useState<ReportType>("all_history");
+  const [reportType, setReportType] = useState<ReportType>("daily");
   const [timeMode, setTimeMode] = useState<TimeMode>("media");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -242,8 +242,9 @@ export function ReportsPageClient() {
   }
 
   return (
-    <main className="px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-[1400px]">
+    <main className="relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-4 py-6 sm:px-6 lg:px-8">
+      <PageAmbient kind="reports" />
+      <div className="relative z-10 mx-auto w-full max-w-[1400px]">
         <header className="mb-6 border-b border-border pb-5">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
@@ -363,7 +364,6 @@ export function ReportsPageClient() {
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
                 <option value="custom">Custom</option>
-                <option value="all_history">All History</option>
               </select>
             </label>
 

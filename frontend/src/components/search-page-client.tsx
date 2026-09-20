@@ -42,6 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
+import { PageAmbient } from "@/components/page-ambient";
 
 type SearchMode = "keyword" | "semantic";
 
@@ -278,8 +279,9 @@ export function SearchPageClient() {
   }
 
   return (
-    <main className="search-page min-h-[calc(100vh-74px)] bg-canvas px-5 py-6 sm:px-6 lg:px-8 lg:py-7">
-      <div className="mx-auto w-full max-w-[1400px]">
+    <main className="search-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-5 py-6 sm:px-6 lg:px-8 lg:py-7">
+          <PageAmbient kind="search" />
+          <div className="relative z-10 mx-auto w-full max-w-[1400px]">
         <header className="relative overflow-hidden border-b border-border pb-5">
           <div className="relative z-10 max-w-[620px]">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">SEARCH</p>

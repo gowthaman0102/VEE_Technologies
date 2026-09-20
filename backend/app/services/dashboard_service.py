@@ -40,18 +40,9 @@ async def get_dashboard_overview(
         timezone.utc
     )
 
-    enabled_source_names = [
-        source.name
-        for source in get_enabled_sources()
-    ]
-
     total_articles = await db.scalar(
         select(
             func.count(Article.id)
-        ).where(
-            Article.source_name.in_(
-                enabled_source_names
-            )
         )
     )
 
@@ -115,7 +106,6 @@ async def get_dashboard_overview(
 
     last_hour_articles = await db.scalar(
         select(func.count(Article.id)).where(
-            Article.source_name.in_(enabled_source_names),
             Article.collected_at >= one_hour_ago,
         )
     )
@@ -161,12 +151,7 @@ async def get_dashboard_articles(
     )
 
     if metric == "total":
-        statement = select(*columns).where(
-            Article.source_name.in_(
-                source.name
-                for source in get_enabled_sources()
-            )
-        ).order_by(
+        statement = select(*columns).order_by(
             Article.published_at.desc().nullslast(),
             Article.id.desc(),
         )

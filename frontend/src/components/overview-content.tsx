@@ -1,8 +1,8 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useState } from "react";
-import { X, ShieldAlert, AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, ShieldAlert, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import Link from "next/link";
 
@@ -87,8 +87,25 @@ function DetailModal({
   const isCompanies = selectedMetric === "companies";
   const articleConfig = isCompanies ? null : ARTICLE_METRICS[selectedMetric];
   const title = articleConfig?.title ?? "Monitored Companies";
-  const count = detailCount;
 
+  // ── Pagination ───────────────────────────────────────────────────
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const totalPages = isCompanies
+    ? Math.max(1, Math.ceil(companies.length / PAGE_SIZE))
+    : Math.max(1, Math.ceil(articles.length / PAGE_SIZE));
+
+  const pagedArticles = articles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pagedCompanies = companies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const goToPage = (next: number) => {
+    setPage(next);
+    listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // ── Keyboard ────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -97,35 +114,163 @@ function DetailModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  // ── Rendered item range label ───────────────────────────────────
+  const totalItems = isCompanies ? companies.length : articles.length;
+  const rangeStart = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalItems);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-text/40 p-0 sm:items-center sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="kpi-detail-title" className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[0_2px_8px_rgba(28,23,52,0.10)]">
-        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-text/40 p-0 sm:items-center sm:p-6"
+      role="presentation"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kpi-detail-title"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[0_2px_8px_rgba(28,23,52,0.10)]"
+      >
+        {/* ── Header ── */}
+        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6 shrink-0">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Overview Detail</p>
             <h2 id="kpi-detail-title" className="mt-1 text-lg font-semibold text-text">{title}</h2>
-            <p className="mt-1 text-sm text-muted">{loading ? "Loading current data..." : `${count} ${count === 1 ? "item" : "items"}`}</p>
+            <p className="mt-1 text-sm text-muted">
+              {loading
+                ? "Loading current data..."
+                : totalItems === 0
+                  ? "0 items"
+                  : `${detailCount.toLocaleString()} ${detailCount === 1 ? "item" : "items"} · showing ${rangeStart}–${rangeEnd}`}
+            </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={17} aria-hidden="true" /></button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close detail modal"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <X size={17} aria-hidden="true" />
+          </button>
         </header>
-        <div className="overflow-y-auto px-5 py-5 sm:px-6">
-          {error ? <EmptyState title="Unable to load details" description={error} /> : loading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-lg border border-border bg-surface p-4">
-                      <Skeleton className="h-6 w-1/3 mb-2" />
-                      <Skeleton className="h-4 w-1/4" />
-                    </div>
-                  ))}
+
+        {/* ── Scrollable body ── */}
+        <div ref={listRef} className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+          {error ? (
+            <EmptyState title="Unable to load details" description={error} />
+          ) : loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-lg border border-border bg-surface p-4">
+                  <Skeleton className="h-6 w-1/3 mb-2" />
+                  <Skeleton className="h-4 w-1/4" />
                 </div>
-              ) : isCompanies ? (
-            companies.length === 0 ? <EmptyState title="No monitored companies found." /> : <div className="space-y-3">{companies.map((company) => <article key={company.id} className="rounded-lg border border-border bg-surface-raised p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-text">{company.name}</h3><p className="mt-1 text-sm text-muted">{company.is_active ? "Active monitoring" : "Inactive"}</p></div><Badge>{company.monitoring_topics.length} monitoring {company.monitoring_topics.length === 1 ? "category" : "categories"}</Badge></div>{company.aliases.length > 0 && <p className="mt-3 text-sm text-body">Aliases: {company.aliases.join(", ")}</p>}</article>)}</div>
-          ) : articles.length === 0 ? <EmptyState title={selectedMetric === "critical-risk" ? "No critical-risk articles found." : "No matching articles found."} /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={`${article.article_id}-${article.risk_level ?? "article"}`} article={article} />)}</div>}
+              ))}
+            </div>
+          ) : isCompanies ? (
+            pagedCompanies.length === 0 ? (
+              <EmptyState title="No monitored companies found." />
+            ) : (
+              <div className="space-y-3">
+                {pagedCompanies.map((company) => (
+                  <article key={company.id} className="rounded-lg border border-border bg-surface-raised p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-text">{company.name}</h3>
+                        <p className="mt-1 text-sm text-muted">{company.is_active ? "Active monitoring" : "Inactive"}</p>
+                      </div>
+                      <Badge>{company.monitoring_topics.length} monitoring {company.monitoring_topics.length === 1 ? "category" : "categories"}</Badge>
+                    </div>
+                    {company.aliases.length > 0 && (
+                      <p className="mt-3 text-sm text-body">Aliases: {company.aliases.join(", ")}</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )
+          ) : pagedArticles.length === 0 ? (
+            <EmptyState
+              title={selectedMetric === "critical-risk" ? "No critical-risk articles found." : "No matching articles found."}
+            />
+          ) : (
+            <div className="space-y-3">
+              {pagedArticles.map((article) => (
+                <ArticleRow
+                  key={`${article.article_id}-${article.risk_level ?? "article"}`}
+                  article={article}
+                />
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* ── Pagination footer — only shown when there is more than one page ── */}
+        {!loading && !error && totalPages > 1 && (
+          <footer className="shrink-0 flex items-center justify-between gap-3 border-t border-border bg-surface-raised px-5 py-3 sm:px-6">
+            <p className="text-xs text-muted">
+              Page {page} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => goToPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                aria-label="Previous page"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-text-body transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft size={15} aria-hidden="true" />
+                Prev
+              </button>
+
+              {/* Page number pills — show up to 5 around current */}
+              <div className="hidden sm:flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                  .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === "…" ? (
+                      <span key={`ellipsis-${idx}`} className="px-1.5 text-xs text-muted select-none">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => goToPage(item as number)}
+                        aria-label={`Go to page ${item}`}
+                        aria-current={page === item ? "page" : undefined}
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
+                          page === item
+                            ? "bg-primary text-white"
+                            : "border border-border bg-surface text-text-body hover:bg-surface-sunken"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => goToPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                aria-label="Next page"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-text-body transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+                <ChevronRight size={15} aria-hidden="true" />
+              </button>
+            </div>
+          </footer>
+        )}
       </section>
     </div>
   );
 }
+
 
 export function OverviewContent({ 
   initialOverview, 
@@ -249,14 +394,15 @@ export function OverviewContent({
       </section>
 
       {selectedMetric && (
-        <DetailModal 
-          selectedMetric={selectedMetric} 
-          articles={articles} 
-          companies={companies} 
-          detailCount={detailCount} 
-          loading={loading} 
-          error={error} 
-          onClose={() => setSelectedMetric(null)} 
+        <DetailModal
+          key={selectedMetric}
+          selectedMetric={selectedMetric}
+          articles={articles}
+          companies={companies}
+          detailCount={detailCount}
+          loading={loading}
+          error={error}
+          onClose={() => setSelectedMetric(null)}
         />
       )}
     </div>

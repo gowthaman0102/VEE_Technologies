@@ -1,32 +1,16 @@
-import { ArticleViewButton } from "./article-view-button";
-
 import { formatLabel } from "@/lib/format";
 import type { DashboardIntelligenceItem } from "@/lib/api";
 import { PublisherLogo } from "./publisher-logo";
-import { Bookmark } from "lucide-react";
+import { ArticleMetadata } from "./article-metadata";
 
 export function LatestArticleCard({ article }: { article: DashboardIntelligenceItem }) {
-  const publishedDate = article.published_at
-    ? new Intl.DateTimeFormat(undefined, { 
-        day: "numeric", 
-        month: "short", 
-        year: "numeric", 
-        hour: "numeric", 
-        minute: "numeric", 
-        timeZoneName: "short" 
-      }).format(new Date(article.published_at))
-    : "Unknown date";
-
   return (
     <article className="group flex flex-col justify-between rounded-xl border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong" style={{ minHeight: "260px" }}>
       <div>
         <div className="flex items-start gap-3">
           <PublisherLogo publisherName={article.publisher_name} size={42} className="rounded-[8px] border border-border shadow-sm" />
           <div className="flex flex-col mt-0.5">
-            <span className="text-[12px] font-bold text-text uppercase tracking-wide leading-none">{article.publisher_name}</span>
-            <span suppressHydrationWarning className="text-[11px] font-medium text-muted mt-1.5 leading-none">
-              {publishedDate}
-            </span>
+            <ArticleMetadata publisherName={article.publisher_name} publishedAt={article.published_at} collectedAt={article.collected_at} compact />
           </div>
         </div>
 
@@ -60,18 +44,9 @@ export function LatestArticleCard({ article }: { article: DashboardIntelligenceI
         </div>
 
         <div className="flex items-center justify-between border-t border-border pt-4">
-          <ArticleViewButton
-            articleId={article.article_id}
-            sourceUrl={article.url}
-            sourceName={article.source_name}
-          />
-          <button 
-            type="button" 
-            aria-label="Bookmark article"
-            className="text-muted hover:text-text transition-colors p-1"
-          >
-            <Bookmark size={18} strokeWidth={2} />
-          </button>
+          <a href={article.url} className="inline-flex items-center justify-center rounded-[8px] border border-border bg-white px-3.5 py-1.5 text-[13px] font-bold text-text transition-colors duration-150 hover:border-primary hover:bg-surface-raised">
+            View <span aria-hidden="true" className="ml-1.5">→</span>
+          </a>
         </div>
       </div>
     </article>

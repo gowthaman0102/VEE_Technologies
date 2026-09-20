@@ -11,6 +11,7 @@ import { formatLabel } from "@/lib/format";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { RiskDrilldownModal } from "@/components/risk-drilldown-modal";
 import { chartColor } from "@/lib/chart-colors";
+import { PageAmbient } from "@/components/page-ambient";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -62,9 +63,10 @@ type KpiCardConfig = {
   iconBg: string;
   iconColor: string;
   onClick?: () => void;
+  animationDelay?: string;
 };
 
-function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, onClick }: KpiCardConfig) {
+function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, onClick, animationDelay }: KpiCardConfig) {
   const [changed, setChanged] = useState(false);
   const prevValue = useRef<number | null>(null);
 
@@ -79,7 +81,8 @@ function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, on
 
   const card = (
     <div
-      className={`flex items-start gap-4 rounded-xl border bg-surface p-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors duration-150 hover:border-border-strong ${changed ? "ring-2 ring-primary-border/60" : "border-border"} ${onClick ? "cursor-pointer" : ""}`}
+      className={`risk-kpi-enter flex items-start gap-4 rounded-xl border bg-surface p-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors duration-150 hover:border-border-strong ${changed ? "ring-2 ring-primary-border/60" : "border-border"} ${onClick ? "cursor-pointer" : ""}`}
+      style={{ animationDelay }}
     >
       <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
         <Icon size={20} className={iconColor} strokeWidth={2.2} />
@@ -101,6 +104,21 @@ function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, on
 // ─── SVG Vertical Bar Chart ──────────────────────────────────────────────────
 
 type RiskLevel = { label: string; count: number };
+
+function collapseEventTypes(data: Array<{ label: string; count: number }>) {
+  const sorted = [...data].sort((a, b) => b.count - a.count);
+  if (sorted.length <= 4) return sorted;
+
+  const top = sorted.slice(0, 3);
+  const remaining = sorted.slice(3).reduce((sum, item) => sum + item.count, 0);
+  const existingOther = top.findIndex((item) => item.label.toLowerCase() === "other");
+  if (existingOther >= 0) {
+    top[existingOther] = { ...top[existingOther], count: top[existingOther].count + remaining };
+    return top;
+  }
+
+  return [...top, { label: "other", count: remaining }];
+}
 
 function RiskBarChart({
   data,
@@ -130,7 +148,8 @@ function RiskBarChart({
   });
 
   const maxCount = Math.max(...normalized.map(d => d.count), 1);
-  const chartH = 200;
+  const chartTop = 24;
+  const chartH = 184;
   const barW = 56;
   const gap = 48;
   const totalW = normalized.length * (barW + gap) - gap;
@@ -138,7 +157,7 @@ function RiskBarChart({
   const padBottom = 28;
 
   return (
-    <div>
+    <div className="risk-chart-enter">
       <svg
         viewBox={`0 0 ${totalW + padLeft + 16} ${chartH + padBottom + 24}`}
         className="w-full"
@@ -146,7 +165,7 @@ function RiskBarChart({
       >
         {/* Y gridlines */}
         {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-          const y = 8 + (1 - frac) * chartH;
+          const y = chartTop + (1 - frac) * chartH;
           return (
             <g key={frac}>
               <line x1={padLeft} y1={y} x2={totalW + padLeft + 16} y2={y} stroke="var(--border)" strokeWidth={1} />
@@ -160,7 +179,7 @@ function RiskBarChart({
         {normalized.map((d, i) => {
           const barH = animated ? Math.max(2, (d.count / maxCount) * chartH) : 2;
           const x = padLeft + i * (barW + gap);
-          const y = 8 + chartH - barH;
+          const y = chartTop + chartH - barH;
           const color = riskColor(d.label);
 
           return (
@@ -171,12 +190,22 @@ function RiskBarChart({
                 style={{ transition: "height 0.8s ease-out, y 0.8s ease-out" }}
                 className={d.count > 0 ? "opacity-90 hover:opacity-100" : "opacity-30"}
               />
-              {/* Count label above bar */}
-              <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize={13} fontWeight="700" fill="var(--color-text)">
+              {/* Count label above bar — always shown clearly above the bar top */}
+              <text
+                x={x + barW / 2}
+                y={d.count === 0
+                  ? chartTop + chartH - 26  /* fixed 26px above baseline — clear of the axis */
+                  : y - 8                   /* always above the bar top */
+                }
+                textAnchor="middle"
+                fontSize={14}
+                fontWeight="700"
+                fill={d.count === 0 ? "var(--color-muted)" : "var(--color-text)"}
+              >
                 {d.count}
               </text>
               {/* X label */}
-              <text x={x + barW / 2} y={chartH + 8 + padBottom - 6} textAnchor="middle" fontSize={12} fill="var(--color-muted)" fontWeight="500">
+              <text x={x + barW / 2} y={chartTop + chartH + padBottom - 6} textAnchor="middle" fontSize={12} fill="var(--color-muted)" fontWeight="500">
                 {formatLabel(d.label)}
               </text>
               {/* Invisible wider hit target */}
@@ -227,19 +256,14 @@ function EventBars({
   const [animated, setAnimated] = useState(false);
   useEffect(() => { const t = setTimeout(() => setAnimated(true), 120); return () => clearTimeout(t); }, []);
 
-  let sorted = [...data].sort((a, b) => b.count - a.count);
-  if (sorted.length > 4) {
-    const top = sorted.slice(0, 3);
-    const otherCount = sorted.slice(3).reduce((acc, curr) => acc + curr.count, 0);
-    sorted = [...top, { label: "Other", count: otherCount }];
-  }
+  const sorted = collapseEventTypes(data);
   
   const maxCount = Math.max(...sorted.map(d => d.count), 1);
 
   if (sorted.length === 0) return <p className="py-8 text-center text-sm text-muted">No event types available.</p>;
 
   return (
-    <div className="space-y-2.5">
+    <div className="risk-chart-enter space-y-2.5">
       {sorted.map((d, i) => {
         const width = animated ? Math.max(2, (d.count / maxCount) * 100) : 0;
         const color = chartColor(i);
@@ -251,7 +275,7 @@ function EventBars({
             onClick={() => onRowClick(d.label, d.count)}
             aria-label={`View ${formatLabel(d.label)} articles: ${d.count}`}
             className="group w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
-            style={{ animationDelay: `${i * 40}ms` }}
+            style={{ animationDelay: `${i * 70}ms` }}
           >
             <div className="flex items-center gap-3">
               <span className="w-[140px] shrink-0 truncate text-[13px] font-medium text-text group-hover:text-primary transition-colors">
@@ -285,12 +309,7 @@ function DonutChart({
   useEffect(() => { const t = setTimeout(() => setAnimated(true), 160); return () => clearTimeout(t); }, []);
 
   const totalEvents = data.reduce((s, d) => s + d.count, 0);
-  let sorted = [...data].sort((a, b) => b.count - a.count);
-  if (sorted.length > 4) {
-    const top = sorted.slice(0, 3);
-    const otherCount = sorted.slice(3).reduce((acc, curr) => acc + curr.count, 0);
-    sorted = [...top, { label: "Other", count: otherCount }];
-  }
+  const sorted = collapseEventTypes(data);
 
   const R = 80;
   const cx = 100;
@@ -325,7 +344,7 @@ function DonutChart({
 
   return (
     <div>
-      <div className="flex justify-center">
+      <div className="risk-donut-enter flex justify-center">
         <div className="relative">
           <svg viewBox="0 0 200 200" className="h-[190px] w-[190px] -rotate-90">
             {/* Track */}
@@ -471,25 +490,25 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
 
   const kpis: KpiCardConfig[] = [
     {
-      label: "Total Assessments", value: data.total_assessments, icon: ClipboardList,
+      label: "Total Assessments", value: data.total_assessments, icon: ClipboardList, animationDelay: "0ms",
       iconBg: "bg-blue-50", iconColor: "text-blue-500",
       onClick: () => openDrilldown("total_assessments", "All Risk Assessments", data.total_assessments),
     },
     {
-      label: "Average Risk Score", value: data.average_risk_score, decimals: 1, icon: Gauge,
+      label: "Average Risk Score", value: data.average_risk_score, decimals: 1, icon: Gauge, animationDelay: "70ms",
       iconBg: "bg-amber-50", iconColor: "text-amber-500",
     },
     {
-      label: "Highest Risk Score", value: data.highest_risk_score, decimals: 1, icon: ShieldAlert,
+      label: "Highest Risk Score", value: data.highest_risk_score, decimals: 1, icon: ShieldAlert, animationDelay: "140ms",
       iconBg: "bg-red-50", iconColor: "text-red-500",
     },
     {
-      label: "Human Review", value: data.human_review_count, icon: Users,
+      label: "Human Review", value: data.human_review_count, icon: Users, animationDelay: "210ms",
       iconBg: "bg-violet-50", iconColor: "text-violet-500",
       onClick: () => openDrilldown("human_review", "Human Review Articles", data.human_review_count),
     },
     {
-      label: "Immediate Alerts", value: data.immediate_alert_count, icon: Bell,
+      label: "Immediate Alerts", value: data.immediate_alert_count, icon: Bell, animationDelay: "280ms",
       iconBg: data.immediate_alert_count > 0 ? "bg-high-bg" : "bg-primary-soft",
       iconColor: data.immediate_alert_count > 0 ? "text-high" : "text-primary",
       onClick: () => openDrilldown("immediate_alert", "Immediate Alert Articles", data.immediate_alert_count),
@@ -497,8 +516,9 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
   ];
 
   return (
-    <main className="w-full min-h-screen bg-surface-raised">
-      <div className="mx-auto w-full max-w-[1600px] px-6 py-7 lg:px-10 space-y-6">
+    <main className="relative w-full min-h-screen overflow-hidden bg-surface-raised">
+          <PageAmbient kind="risk" />
+          <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-7 lg:px-10 space-y-6">
 
         {/* ── Header ─── */}
         <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
