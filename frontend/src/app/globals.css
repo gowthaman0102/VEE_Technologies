@@ -81,12 +81,6 @@ body {
   color: var(--text-body);
 }
 
-.sidebar-shell a,
-.sidebar-shell p,
-.sidebar-shell svg {
-  color: #ffffff !important;
-}
-
 a {
   color: inherit;
   text-decoration: none;

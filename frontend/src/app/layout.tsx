@@ -7,6 +7,7 @@ import {
 import {
   Sidebar,
 } from "@/components/sidebar";
+import { AppToaster } from "@/components/ui/toast";
 
 import "./globals.css";
 
@@ -18,7 +19,7 @@ const nunitoSans = Nunito_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "VEE Technologies · Media Intelligence",
+  title: "Nova Cops · Media Intelligence",
   description:
     "Real-time AI-powered media monitoring and crisis intelligence dashboard.",
 };
@@ -45,6 +46,7 @@ export default function RootLayout({
               </main>
             </div>
           </div>
+          <AppToaster />
       </body>
     </html>
   );

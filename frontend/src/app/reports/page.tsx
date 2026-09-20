@@ -27,6 +27,8 @@ import {
 } from "@/lib/api";
 import { Badge, toneForStatus } from "@/components/ui/badge";
 import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toast";
 
 type ReportType =
   | "daily"
@@ -115,6 +117,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingBatch, setPendingBatch] = useState<ReportBatchHistoryItem | null>(null);
 
   const loadReports = useCallback(async (resolvedCompanyId: number) => {
     const reports = await getReportHistory(resolvedCompanyId);
@@ -204,16 +207,21 @@ export default function ReportsPage() {
       const anyError = Object.values(result.formats).find((f) => f.error);
 
       if (allSuccess) {
-        setSuccessMessage(
-          `Report batch generated successfully (PDF, Excel, CSV). Period: ${formatDateTime(result.period_start)} → ${formatDateTime(result.period_end)}`
-        );
+        const message = `Report batch generated successfully (PDF, Excel, CSV). Period: ${formatDateTime(result.period_start)} → ${formatDateTime(result.period_end)}`;
+        setSuccessMessage(message);
+        toast.success(message);
       } else if (anyError) {
         setError(anyError.error ?? "Report generation failed for one or more formats.");
+        toast.error(anyError.error ?? "Report generation failed for one or more formats.");
       } else {
-        setSuccessMessage("Report generation completed.");
+        const message = "Report generation completed.";
+        setSuccessMessage(message);
+        toast.success(message);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to generate report.");
+      const message = cause instanceof Error ? cause.message : "Unable to generate report.";
+      setError(message);
+      toast.error(message);
       try {
         await loadReports(companyId);
       } catch {
@@ -225,11 +233,13 @@ export default function ReportsPage() {
   }
 
   async function removeBatch(batch: ReportBatchHistoryItem) {
-    const confirmed = window.confirm(
-      "Delete this report batch? This will permanently remove all formats (PDF, Excel, CSV)."
-    );
-    if (!confirmed) return;
+    setPendingBatch(batch);
+  }
 
+  async function confirmRemoveBatch() {
+    if (!pendingBatch) return;
+    const batch = pendingBatch;
+    setPendingBatch(null);
     setError("");
 
     try {
@@ -237,9 +247,13 @@ export default function ReportsPage() {
         Object.values(batch.formats).map((item) => deleteReport(item.id))
       );
       setHistory((current) => current.filter((record) => record.batch_id !== batch.batch_id));
-      setSuccessMessage(`Deleted report batch for ${formatReportType(batch.report_type)} period.`);
+      const message = `Deleted report batch for ${formatReportType(batch.report_type)} period.`;
+      setSuccessMessage(message);
+      toast.success(message);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to delete report batch.");
+      const message = cause instanceof Error ? cause.message : "Unable to delete report batch.";
+      setError(message);
+      toast.error(message);
     }
   }
 
@@ -601,6 +615,15 @@ export default function ReportsPage() {
           )}
         </section>
       </div>
+      <ConfirmDialog
+        open={pendingBatch !== null}
+        title="Delete report batch"
+        description={pendingBatch ? `Delete this report batch? This will permanently remove all formats (PDF, Excel, CSV) for ${formatReportType(pendingBatch.report_type)}.` : undefined}
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={confirmRemoveBatch}
+        onCancel={() => setPendingBatch(null)}
+      />
     </main>
   );
 }

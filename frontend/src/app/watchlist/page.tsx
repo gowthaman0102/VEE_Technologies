@@ -11,6 +11,8 @@ import {
   getActiveCompany, getArticleCategories, updateArticleCategory,
 } from "@/lib/api";
 import { inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toast";
 
 type Priority = "high" | "medium" | "low";
 const PRIORITIES: Array<{ key: Priority; label: string; tint: string; icon: ReactNode }> = [
@@ -69,6 +71,7 @@ export default function WatchlistPage() {
   const [priority, setPriority] = useState<Priority>("medium");
   const [adding, setAdding] = useState(false);
   const [viewingPriority, setViewingPriority] = useState<Priority | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ArticleCategory | null>(null);
 
   async function loadCategories(id: number) { setItems((await getArticleCategories(id)).items); }
 
@@ -104,7 +107,8 @@ export default function WatchlistPage() {
     try {
       const created = await createArticleCategory({ company_id: companyId, name, priority });
       setItems((current) => [...current, created]); setCategoryName(""); setPriority("medium"); setModalOpen(false);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create article category."); }
+      toast.success(`Category created: ${created.name}`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to create article category."); toast.error("Unable to create article category."); }
     finally { setAdding(false); }
   }
 
@@ -118,10 +122,21 @@ export default function WatchlistPage() {
   }
 
   async function remove(item: ArticleCategory) {
-    if (!window.confirm(`Are you sure you want to remove the category "${item.name}"?`)) return;
+    setPendingDelete(item);
+  }
+
+  async function confirmRemove() {
+    if (!pendingDelete) return;
+    const item = pendingDelete;
+    setPendingDelete(null);
     setItems((current) => current.filter((candidate) => candidate.id !== item.id));
-    try { await deleteArticleCategory(item.id); } catch (cause) {
-      setItems((current) => [...current, item]); setError(cause instanceof Error ? cause.message : "Unable to delete article category.");
+    try {
+      await deleteArticleCategory(item.id);
+      toast.success(`Category deleted: ${item.name}`);
+    } catch (cause) {
+      setItems((current) => [...current, item]);
+      setError(cause instanceof Error ? cause.message : "Unable to delete article category.");
+      toast.error("Unable to delete article category.");
     }
   }
 
@@ -133,5 +148,6 @@ export default function WatchlistPage() {
   </div>
   {modalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-text/20 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setModalOpen(false); }}><div role="dialog" aria-modal="true" aria-labelledby="add-category-title" className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-[0_20px_60px_rgba(18,32,31,0.18)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">NEW CATEGORY</p><h2 id="add-category-title" className="mt-1 text-xl font-semibold text-text">Add article category</h2></div><button type="button" onClick={() => setModalOpen(false)} aria-label="Close dialog" className="rounded-lg p-2 text-muted hover:bg-surface-raised hover:text-text"><X className="h-4 w-4" /></button></div><form onSubmit={submit} className="mt-5 space-y-4"><label className="block text-sm font-medium text-body">Category name<input autoFocus value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="e.g. AI Safety" className={`mt-2 ${inputClasses}`} /></label><label className="block text-sm font-medium text-body">Priority<select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className={`mt-2 ${inputClasses}`}><option value="high">High Priority</option><option value="medium">Medium Priority</option><option value="low">Low Priority</option></select></label><div className="flex items-center gap-3 rounded-xl border border-border bg-surface-raised p-3"><div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary-border bg-primary-soft text-primary">{getCategoryIcon(categoryName || "New category")}</div><div><p className="text-xs font-semibold text-text">Assigned icon preview</p><p className="text-xs text-muted">Automatically selected from the category name.</p></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setModalOpen(false)} className={secondaryButton}>Cancel</button><button type="submit" disabled={adding || !categoryName.trim()} className={primaryButton}>{adding ? "Adding..." : "Add Category"}</button></div></form></div></div>}
   {viewingPriority && <div className="fixed inset-0 z-50 flex items-center justify-center bg-text/20 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setViewingPriority(null); }}><div role="dialog" aria-modal="true" aria-labelledby="view-categories-title" className="w-full max-w-lg rounded-2xl border border-border bg-surface p-5 shadow-[0_20px_60px_rgba(18,32,31,0.18)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">COMPLETE VIEW</p><h2 id="view-categories-title" className="mt-1 text-xl font-semibold text-text">{PRIORITIES.find((option) => option.key === viewingPriority)?.label}</h2></div><button type="button" onClick={() => setViewingPriority(null)} aria-label="Close complete view" className="rounded-lg p-2 text-muted hover:bg-surface-raised hover:text-text"><X className="h-4 w-4" /></button></div><div className="mt-4 max-h-[60vh] space-y-2 overflow-y-auto">{grouped[viewingPriority].map((item) => <CategoryCard key={item.id} item={item} onToggle={() => void toggle(item)} onRemove={() => void remove(item)} />)}</div></div></div>}
+  <ConfirmDialog open={pendingDelete !== null} title="Delete category" description={pendingDelete ? `Are you sure you want to remove the category "${pendingDelete.name}"?` : undefined} confirmLabel="Delete" tone="danger" onConfirm={confirmRemove} onCancel={() => setPendingDelete(null)} />
   </main>;
 }

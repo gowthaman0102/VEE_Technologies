@@ -10,6 +10,7 @@ import { DashboardRiskAnalytics, getDashboardRiskAnalytics } from "@/lib/api";
 import { formatLabel } from "@/lib/format";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { RiskDrilldownModal } from "@/components/risk-drilldown-modal";
+import { chartColor } from "@/lib/chart-colors";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -32,15 +33,15 @@ const EVENT_COLORS: Record<string, string> = {
 
 function eventColor(label: string): string {
   const key = label.toLowerCase().replace(/[\s-]+/g, "_");
-  return EVENT_COLORS[key] ?? "#94A3B8";
+  return EVENT_COLORS[key] ?? "var(--color-primary)";
 }
 
 function riskColor(label: string): string {
   const l = label.toLowerCase();
-  if (l.includes("critical")) return "#8A2328";
-  if (l.includes("high"))     return "#EF3340";
-  if (l.includes("medium"))   return "#F59E0B";
-  return "#15A77A";
+  if (l.includes("critical")) return "var(--color-critical)";
+  if (l.includes("high")) return "var(--color-high)";
+  if (l.includes("medium")) return "var(--color-medium)";
+  return "var(--color-low)";
 }
 
 // ─── Animated number ─────────────────────────────────────────────────────────
@@ -104,12 +105,12 @@ function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, on
         <Icon size={20} className={iconColor} strokeWidth={2.2} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-[#60718A] leading-tight">{label}</p>
-        <p className={`mt-1.5 text-[30px] font-bold leading-none tracking-tight text-[#0A1730] transition-transform duration-300 ${changed ? "scale-105" : "scale-100"}`}>
+        <p className="text-[13px] font-medium text-muted leading-tight">{label}</p>
+        <p className={`mt-1.5 text-[30px] font-bold leading-none tracking-tight text-text transition-transform duration-300 ${changed ? "scale-105" : "scale-100"}`}>
           <AnimatedNumber value={value} decimals={decimals} />
         </p>
       </div>
-      {onClick && <ChevronRight size={16} className="mt-1 shrink-0 text-[#A0B0C0]" />}
+      {onClick && <ChevronRight size={16} className="mt-1 shrink-0 text-muted" />}
     </div>
   );
 
@@ -134,7 +135,7 @@ function RiskBarChart({
   useEffect(() => { const t = setTimeout(() => setAnimated(true), 80); return () => clearTimeout(t); }, []);
 
   if (data.length === 0) {
-    return <p className="py-10 text-center text-sm text-[#60718A]">No risk assessments available.</p>;
+    return <p className="py-10 text-center text-sm text-muted">No risk assessments available.</p>;
   }
 
   // Ensure High / Medium / Low are present even if zero
@@ -168,8 +169,8 @@ function RiskBarChart({
           const y = 8 + (1 - frac) * chartH;
           return (
             <g key={frac}>
-              <line x1={padLeft} y1={y} x2={totalW + padLeft + 16} y2={y} stroke="#E2EAF0" strokeWidth={1} />
-              <text x={padLeft - 6} y={y + 4} textAnchor="end" fontSize={10} fill="#94A3B8">
+              <line x1={padLeft} y1={y} x2={totalW + padLeft + 16} y2={y} stroke="var(--border)" strokeWidth={1} />
+              <text x={padLeft - 6} y={y + 4} textAnchor="end" fontSize={10} fill="var(--color-muted)">
                 {Math.round(frac * maxCount)}
               </text>
             </g>
@@ -191,11 +192,11 @@ function RiskBarChart({
                 className={d.count > 0 ? "opacity-90 hover:opacity-100" : "opacity-30"}
               />
               {/* Count label above bar */}
-              <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize={13} fontWeight="700" fill="#0A1730">
+              <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize={13} fontWeight="700" fill="var(--color-text)">
                 {d.count}
               </text>
               {/* X label */}
-              <text x={x + barW / 2} y={chartH + 8 + padBottom - 6} textAnchor="middle" fontSize={12} fill="#60718A" fontWeight="500">
+              <text x={x + barW / 2} y={chartH + 8 + padBottom - 6} textAnchor="middle" fontSize={12} fill="var(--color-muted)" fontWeight="500">
                 {formatLabel(d.label)}
               </text>
               {/* Invisible wider hit target */}
@@ -222,10 +223,10 @@ function RiskBarChart({
                 <span className="h-2 w-2 rounded-full" style={{ background: color }} />
                 {formatLabel(d.label)}
               </span>
-              <span className="mt-1 text-[22px] font-bold text-[#0A1730] leading-none">
+              <span className="mt-1 text-[22px] font-bold text-text leading-none">
                 <AnimatedNumber value={d.count} />
               </span>
-              <span className="text-[12px] font-medium text-[#60718A]">{pct}%</span>
+              <span className="text-[12px] font-medium text-muted">{pct}%</span>
             </button>
           );
         })}
@@ -249,7 +250,7 @@ function EventBars({
   const sorted = [...data].sort((a, b) => b.count - a.count);
   const maxCount = Math.max(...sorted.map(d => d.count), 1);
 
-  if (sorted.length === 0) return <p className="py-8 text-center text-sm text-[#60718A]">No event types available.</p>;
+  if (sorted.length === 0) return <p className="py-8 text-center text-sm text-muted">No event types available.</p>;
 
   return (
     <div className="space-y-2.5">
@@ -267,16 +268,16 @@ function EventBars({
             style={{ animationDelay: `${i * 40}ms` }}
           >
             <div className="flex items-center gap-3">
-              <span className="w-[140px] shrink-0 truncate text-[13px] font-medium text-[#0A1730] group-hover:text-[#3C9CF4] transition-colors">
+              <span className="w-[140px] shrink-0 truncate text-[13px] font-medium text-text group-hover:text-primary transition-colors">
                 {formatLabel(d.label)}
               </span>
-              <div className="flex-1 h-[10px] rounded-full bg-[#EEF2F6] overflow-hidden">
+              <div className="flex-1 h-[10px] rounded-full bg-surface-raised overflow-hidden">
                 <div
                   className="h-full rounded-full transition-[width] duration-700 ease-out"
                   style={{ width: `${width}%`, backgroundColor: color }}
                 />
               </div>
-              <span className="w-8 shrink-0 text-right text-[13px] font-bold tabular-nums text-[#0A1730]">{d.count}</span>
+              <span className="w-8 shrink-0 text-right text-[13px] font-bold tabular-nums text-text">{d.count}</span>
             </div>
           </button>
         );
@@ -310,9 +311,9 @@ function DonutChart({
     return (
       <div className="flex flex-col items-center gap-3 py-6">
         <svg viewBox="0 0 200 200" className="h-[180px] w-[180px]">
-          <circle cx={cx} cy={cy} r={R} fill="none" stroke="#E2EAF0" strokeWidth={strokeW} />
-          <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight="700" fill="#0A1730">0</text>
-          <text x={cx} y={cy + 14} textAnchor="middle" fontSize={11} fill="#94A3B8">Total Events</text>
+          <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--border)" strokeWidth={strokeW} />
+          <text x={cx} y={cy - 6} textAnchor="middle" fontSize={22} fontWeight="700" fill="var(--color-text)">0</text>
+          <text x={cx} y={cy + 14} textAnchor="middle" fontSize={11} fill="var(--color-muted)">Total Events</text>
         </svg>
         <p className="text-sm text-[#60718A]">No events for this period.</p>
       </div>
@@ -356,8 +357,8 @@ function DonutChart({
           </svg>
           {/* Center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[28px] font-bold text-[#0A1730] leading-none">{totalEvents.toLocaleString()}</span>
-            <span className="text-[11px] font-medium text-[#60718A] mt-1">Total Events</span>
+            <span className="text-[28px] font-bold text-text leading-none">{totalEvents.toLocaleString()}</span>
+            <span className="text-[11px] font-medium text-muted mt-1">Total Events</span>
           </div>
         </div>
       </div>
@@ -375,8 +376,8 @@ function DonutChart({
               className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-raised"
             >
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
-              <span className="truncate text-[12px] text-[#0A1730] font-medium">{formatLabel(d.label)}</span>
-              <span className="ml-auto shrink-0 text-[11px] font-semibold text-[#60718A] tabular-nums">{d.count} ({pct}%)</span>
+              <span className="truncate text-[12px] text-text font-medium">{formatLabel(d.label)}</span>
+              <span className="ml-auto shrink-0 text-[11px] font-semibold text-muted tabular-nums">{d.count} ({pct}%)</span>
             </button>
           );
         })}
