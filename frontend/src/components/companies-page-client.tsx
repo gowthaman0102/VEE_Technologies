@@ -20,6 +20,7 @@ import {
 import { formatLabel } from "@/lib/format";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
 type MetricKey = "triage" | "risks" | "high" | "critical" | "alerts";
 type MetricTone = "blue" | "amber" | "red" | "critical" | "purple";
@@ -359,19 +360,10 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
     <main className="companies-page relative min-h-[calc(100vh-74px)] w-full overflow-hidden bg-surface-raised">
           <PageAmbient kind="companies" />
           <div className="relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
+        <CosmicPageHero variant="intelligence" eyebrow="COMPANIES" title="Live Intelligence Overview" description={`Real-time analysis from ${company.name} across monitored sources.`} />
         {/* Live Intelligence Card */}
         <section className="shrink-0 rounded-[22px] border border-border bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
           <div className="flex flex-col justify-between gap-3 border-b border-border pb-3 md:flex-row md:items-center">
-            <div className="flex items-center gap-4">
-              <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] bg-primary-soft text-primary">
-                <Layers size={22} strokeWidth={2.2} />
-              </div>
-              <div>
-                <h2 className="text-[22px] lg:text-[26px] font-bold text-text leading-none">Live Intelligence Overview</h2>
-                <p className="mt-2 text-[15px] font-medium text-muted">Real-time analysis from {company.name} across monitored sources</p>
-              </div>
-            </div>
-            
             <div className="flex items-center gap-5">
               {liveStatus === "live" && (
                 <div className="flex items-center gap-2 text-[14px] font-bold text-low">

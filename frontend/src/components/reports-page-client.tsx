@@ -30,6 +30,7 @@ import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/compo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toast";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
 type ReportType =
   | "daily"
@@ -245,7 +246,8 @@ export function ReportsPageClient() {
     <main className="relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-4 py-6 sm:px-6 lg:px-8">
       <PageAmbient kind="reports" />
       <div className="relative z-10 mx-auto w-full max-w-[1400px]">
-        <header className="mb-6 border-b border-border pb-5">
+        <CosmicPageHero variant="analytics" eyebrow="REPORTS" title={companyName || "Active Company"} description="Generate executive media-intelligence reports. All formats (PDF, Excel, CSV) are created in a single snapshot-consistent batch." />
+        <header className="hidden mb-6 border-b border-border pb-5">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">REPORTS</p>

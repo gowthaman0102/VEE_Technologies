@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
 type SearchMode = "keyword" | "semantic";
 
@@ -282,27 +283,7 @@ export function SearchPageClient() {
     <main className="search-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-5 py-6 sm:px-6 lg:px-8 lg:py-7">
           <PageAmbient kind="search" />
           <div className="relative z-10 mx-auto w-full max-w-[1400px]">
-        <header className="relative overflow-hidden border-b border-border pb-5">
-          <div className="relative z-10 max-w-[620px]">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">SEARCH</p>
-            <h1 className="mt-1.5 text-[32px] font-bold leading-tight tracking-[-0.04em] text-text">Article Discovery</h1>
-            <p className="mt-2 text-[14px] text-muted">Search for monitored intelligence on {companyName || "your active company"} and the broader media landscape.</p>
-          </div>
-          <div className="pointer-events-none absolute -right-3 -top-8 h-[180px] w-[470px] text-primary opacity-[0.15]" aria-hidden="true">
-            <svg viewBox="0 0 470 180" className="h-full w-full fill-none">
-              <path d="M0 138 C56 101 83 104 128 124 S196 151 246 111 S318 28 365 73 S426 116 470 82" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M0 157 C57 120 90 124 134 143 S201 169 254 128 S319 48 368 91 S427 136 470 102" stroke="currentColor" strokeWidth="0.75" />
-              <path d="M28 96 C82 54 123 52 166 86 S228 138 274 85 S338 18 386 56 S431 89 470 53" stroke="currentColor" strokeWidth="0.7" strokeDasharray="3 5" />
-              <circle cx="128" cy="124" r="3.5" fill="currentColor" /><circle cx="246" cy="111" r="3.5" fill="currentColor" />
-              <circle cx="365" cy="73" r="3.5" fill="currentColor" /><circle cx="431" cy="105" r="2.5" fill="currentColor" />
-            </svg>
-          </div>
-          <div className="pointer-events-none absolute right-3 top-3 z-10 hidden text-right md:block">
-            <p className="text-[12px] leading-5 text-muted">From signal<br />to understanding.</p>
-            <div className="ml-auto mt-2 h-px w-7 bg-primary" />
-            <p className="mt-2 text-[9px] font-bold uppercase tracking-[0.22em] text-primary">NOVA COPS</p>
-          </div>
-        </header>
+        <CosmicPageHero variant="search" eyebrow="SEARCH" title="Article Discovery" description={`Search for monitored intelligence on ${companyName || "your active company"} and the broader media landscape.`} />
 
         <form onSubmit={submit} className="mt-5 space-y-4">
           <section className="overflow-hidden rounded-[16px] border border-border bg-surface shadow-[0_8px_24px_rgba(18,32,31,0.06)]">

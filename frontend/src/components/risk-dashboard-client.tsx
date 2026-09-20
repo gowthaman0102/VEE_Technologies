@@ -12,6 +12,7 @@ import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { RiskDrilldownModal } from "@/components/risk-drilldown-modal";
 import { chartColor } from "@/lib/chart-colors";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -520,28 +521,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
           <PageAmbient kind="risk" />
           <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-7 lg:px-10 space-y-6">
 
-        {/* ── Header ─── */}
-        <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">Risk Analytics</p>
-            <h1 className="mt-1 text-[32px] font-bold tracking-tight text-text leading-tight">Risk Intelligence Overview</h1>
-            <p className="mt-1.5 max-w-xl text-[14px] text-muted leading-relaxed">
-              Deterministic risk scoring across monitored intelligence, including review and alert signals.
-            </p>
-          </div>
-
-          {/* Live status */}
-          <div suppressHydrationWarning className="flex items-center gap-3 self-start md:self-auto">
-            <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-bold shadow-sm ${liveStatus === "live" ? "border-low-border bg-low-bg text-low" : "border-medium-border bg-medium-bg text-medium"}`}>
-              <span className={`h-2 w-2 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : "bg-medium"}`} />
-              <div>
-                <div>{liveStatus === "live" ? "Live Data" : "Update Delayed"}</div>
-                <div className="text-[11px] font-medium opacity-70">Updated {formatRelative(lastUpdated)}</div>
-              </div>
-            </div>
-          </div>
-        </header>
-
+        <CosmicPageHero variant="risk" eyebrow="RISK ANALYTICS" title="Risk Intelligence Overview" description="Deterministic risk scoring across monitored intelligence, including review and alert signals." status={<div suppressHydrationWarning className="flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-bold"><span className={`h-2 w-2 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : "bg-medium"}`} /><div><div>{liveStatus === "live" ? "Live Data" : "Update Delayed"}</div><div className="text-[11px] font-medium opacity-70">Updated {formatRelative(lastUpdated)}</div></div></div>} />
         {/* ── KPI Row ─── */}
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Key performance indicators">
           {kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}

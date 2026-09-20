@@ -21,6 +21,7 @@ import { formatArticleTimestamp, formatLabel, formatRelativeTime } from "@/lib/f
 import { PublisherLogo } from "@/components/publisher-logo";
 import { Badge, toneForRisk } from "@/components/ui/badge";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 import { focusRing } from "@/components/ui/button-styles";
 
 type Props = {
@@ -243,22 +244,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     <main className="relative min-h-screen overflow-hidden bg-canvas px-6 py-8 lg:px-8">
           <PageAmbient kind="intelligence" />
           <div className="relative z-10 mx-auto w-full max-w-[1500px]">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-5 border-b border-border pb-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Near Real-Time Monitoring</p>
-            <h1 className="mt-2 text-[44px] font-semibold tracking-[-0.06em] text-text leading-[1.03]">Intelligence Feed</h1>
-            <p className="mt-2 max-w-[760px] text-[15px] text-muted">Latest fully processed media intelligence with AI triage, deterministic risk scoring, and recommended actions.</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-primary-border bg-primary-soft px-3 py-1.5 text-[13px] font-medium text-primary shadow-[0_0_0_1px_rgba(62,47,130,0.08)]">
-              <span className={`h-2.5 w-2.5 rounded-full ${liveStatus === "live" ? "bg-primary animate-pulse" : liveStatus === "updating" ? "bg-medium" : "bg-high"}`} />
-              {liveStatus === "live" ? "Live Monitoring" : liveStatus === "updating" ? "Updating" : "Update delayed"}
-            </div>
-            <div className="text-[12px] text-muted">{lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : "Updated just now"}</div>
-          </div>
-        </div>
-
+        <CosmicPageHero variant="intelligence" eyebrow="INTELLIGENCE" title="Intelligence Feed" description="Latest fully processed media intelligence with AI triage, deterministic risk scoring, and recommended actions." status={<div className="flex items-center gap-3 rounded-full border px-3 py-1.5 text-[13px] font-medium"><span className={`h-2.5 w-2.5 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : liveStatus === "updating" ? "bg-medium" : "bg-high"}`} />{liveStatus === "live" ? "Live Monitoring" : liveStatus === "updating" ? "Updating" : "Update delayed"}<span className="text-[12px] opacity-70">{lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : ""}</span></div>} />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metricCards.map(({ label, value, accent, icon: Icon }, index) => (
             <div
