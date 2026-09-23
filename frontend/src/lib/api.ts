@@ -144,6 +144,61 @@ export async function getAnalyticsOverview(
   return response.json();
 }
 
+export type EventAnalyticsResponse = {
+  company_id: number;
+  total_events: number;
+  largest_events: Array<{ label: string; count: number }>;
+};
+
+export async function getEventAnalytics(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<EventAnalyticsResponse> {
+  const params = new URLSearchParams();
+  if (companyId) params.set("company_id", String(companyId));
+  params.set("start", start);
+  params.set("end", end);
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/events?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Event analytics API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export type SourceAnalyticsResponse = {
+  company_id: number;
+  sources: Array<{ source_name: string; count: number }>;
+};
+
+export async function getSourceAnalytics(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<SourceAnalyticsResponse> {
+  const params = new URLSearchParams();
+  if (companyId) params.set("company_id", String(companyId));
+  params.set("start", start);
+  params.set("end", end);
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/sources?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Source analytics API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export type ArticleTrendPoint = {
   bucket: string | null;
   article_count: number;

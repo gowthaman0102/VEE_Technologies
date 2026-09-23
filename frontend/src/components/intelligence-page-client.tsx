@@ -96,6 +96,8 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("All");
   const [topicFilter, setTopicFilter] = useState("All");
+  const [sentimentFilter, setSentimentFilter] = useState("All");
+  const [impactFilter, setImpactFilter] = useState("All");
   const [sortOrder, setSortOrder] = useState("Latest first");
   const [page, setPage] = useState(1);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("live");
@@ -163,6 +165,12 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
       nextItems = nextItems.filter((item) => getRiskMatchKey(item.risk_level) === riskFilter.replace(" Risk", ""));
     }
 
+    if (sentimentFilter !== "All") {
+      nextItems = nextItems.filter(
+        (item) => item.sentiment?.toLowerCase() === sentimentFilter.toLowerCase()
+      );
+    }
+
     if (topicFilter !== "All") {
       nextItems = nextItems.filter((item) => matchesTopic(item, topicFilter));
     }
@@ -181,7 +189,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     });
 
     return nextItems;
-  }, [items, search, riskFilter, topicFilter, sortOrder]);
+  }, [items, search, riskFilter, topicFilter, sentimentFilter, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -193,10 +201,18 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const handleFilterChange = (nextSearch?: string, nextRiskFilter?: string, nextTopicFilter?: string, nextSort?: string, nextPageSize?: number) => {
+  const handleFilterChange = (
+    nextSearch?: string, 
+    nextRiskFilter?: string, 
+    nextTopicFilter?: string, 
+    nextSentimentFilter?: string, 
+    nextSort?: string, 
+    nextPageSize?: number
+  ) => {
     if (nextSearch !== undefined) setSearch(nextSearch);
     if (nextRiskFilter !== undefined) setRiskFilter(nextRiskFilter);
     if (nextTopicFilter !== undefined) setTopicFilter(nextTopicFilter);
+    if (nextSentimentFilter !== undefined) setSentimentFilter(nextSentimentFilter);
     if (nextSort !== undefined) setSortOrder(nextSort);
     if (nextPageSize !== undefined) setPageSize(nextPageSize);
     setPage(1);
@@ -240,6 +256,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
 
   const riskFilters = ["All", "High Risk", "Medium Risk", "Low Risk"];
   const topicFilters = ["All", "Regulatory Action", "Fraud Security", "OpenAI", "Other"];
+  const sentimentFilters = ["All", "Positive", "Neutral", "Negative"];
 
   return (
     <>
@@ -256,54 +273,52 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
           variant="intelligence"
           eyebrow="INTELLIGENCE"
           title="Intelligence Feed"
-          description="Latest fully processed media intelligence with AI triage, deterministic risk scoring, and recommended actions."
+          description="Latest processed media intelligence with AI triage, semantic sentiment, deterministic risk scoring, and business-impact analysis."
           imageSrc="/intelligence-hero.png"
         />
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {metricCards.map(({ label, value, accent, icon: Icon }, index) => (
-            <div
-              key={label}
-              className="group animate-[fadeIn_0.35s_ease-out_forwards] rounded-xl border border-border bg-surface p-4 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors duration-150 hover:border-border-strong"
-              style={{ animationDelay: `${index * 80}ms` }}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className={`flex h-11 w-11 items-center justify-center rounded-[12px] ${accent}`}>
-                  <Icon className="h-5 w-5" strokeWidth={2.1} />
-                </div>
-              </div>
 
-              <div className="mt-4">
-                <p className="text-[12px] font-medium text-muted">{label}</p>
-                <div className="mt-1 flex items-end justify-between gap-3">
-                  <p className="text-[32px] font-semibold leading-none tracking-[-0.05em] text-text">{value}</p>
+        {/* SECTION 1 - ANALYST TOOLBAR */}
+        <div className="mt-6 rounded-[12px] border border-border bg-surface px-4 py-4 shadow-[0_2px_10px_rgba(28,23,52,0.04)]">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <label className="relative block min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                <input
+                  type="search"
+                  value={search}
+                  placeholder="Search articles, publishers, topics..."
+                  className={`w-full rounded-[10px] border border-border bg-surface-raised py-2.5 pl-9 pr-3 text-[14px] text-text placeholder:text-muted focus:border-primary-border focus:outline-none ${focusRing}`}
+                  onChange={(event) => handleFilterChange(event.target.value, riskFilter, topicFilter, sentimentFilter, sortOrder, pageSize)}
+                  aria-label="Search intelligence articles"
+                />
+              </label>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <select
+                    aria-label="Sort intelligence articles"
+                    value={sortOrder}
+                    onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, event.target.value, pageSize)}
+                    className="appearance-none rounded-[10px] border border-border bg-surface-raised px-3 py-2 pr-8 text-[12px] font-medium text-text-body focus:border-primary-border focus:outline-none"
+                  >
+                    <option>Latest first</option>
+                    <option>Oldest first</option>
+                    <option>Highest risk first</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                 </div>
               </div>
             </div>
-          ))}
-        </div>
 
-        <div className="mt-6 rounded-[12px] border border-border bg-surface px-3 py-3 shadow-[0_2px_10px_rgba(28,23,52,0.04)]">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <label className="relative block min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input
-                type="search"
-                value={search}
-                placeholder="Search articles, publishers, topics..."
-                className={`w-full rounded-[10px] border border-border bg-surface-raised py-2.5 pl-9 pr-3 text-[14px] text-text placeholder:text-muted focus:border-primary-border focus:outline-none ${focusRing}`}
-                onChange={(event) => handleFilterChange(event.target.value, riskFilter, topicFilter, sortOrder, pageSize)}
-                aria-label="Search intelligence articles"
-              />
-            </label>
-
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-2">
+              <span className="text-[12px] font-medium text-muted mt-2 mr-1">Risk:</span>
               <div className="flex flex-wrap items-center gap-2">
                 {riskFilters.map((filter) => (
                   <button
                     key={filter}
                     type="button"
-                    onClick={() => handleFilterChange(search, filter, topicFilter, sortOrder, pageSize)}
-                    className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                    onClick={() => handleFilterChange(search, filter, topicFilter, sentimentFilter, sortOrder, pageSize)}
+                    className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
                       riskFilter === filter
                         ? "border-primary bg-primary text-white"
                         : "border-border bg-surface-raised text-text-body"
@@ -313,15 +328,18 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   </button>
                 ))}
               </div>
+            </div>
 
+            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+              <span className="text-[12px] font-medium text-muted mt-2 mr-1">Sentiment:</span>
               <div className="flex flex-wrap items-center gap-2">
-                {topicFilters.map((filter) => (
+                {sentimentFilters.map((filter) => (
                   <button
                     key={filter}
                     type="button"
-                    onClick={() => handleFilterChange(search, riskFilter, filter, sortOrder, pageSize)}
-                    className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                      topicFilter === filter
+                    onClick={() => handleFilterChange(search, riskFilter, topicFilter, filter, sortOrder, pageSize)}
+                    className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+                      sentimentFilter === filter
                         ? "border-primary bg-primary text-white"
                         : "border-border bg-surface-raised text-text-body"
                     }`}
@@ -330,19 +348,25 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   </button>
                 ))}
               </div>
+            </div>
 
-              <div className="relative">
-                <select
-                  aria-label="Sort intelligence articles"
-                  value={sortOrder}
-                  onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, event.target.value, pageSize)}
-                  className="appearance-none rounded-[10px] border border-border bg-surface-raised px-3 py-2 pr-8 text-[12px] font-medium text-text-body focus:border-primary-border focus:outline-none"
-                >
-                  <option>Latest first</option>
-                  <option>Oldest first</option>
-                  <option>Highest risk first</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+              <span className="text-[12px] font-medium text-muted mt-2 mr-1">Topic/Event:</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {topicFilters.map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => handleFilterChange(search, riskFilter, filter, sentimentFilter, sortOrder, pageSize)}
+                    className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+                      topicFilter === filter
+                        ? "border-primary bg-primary text-white"
+                        : "border-border bg-surface-raised text-text-body"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -431,7 +455,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
             ) : (
               <div className="p-6 text-center text-muted">
                 <p className="text-[15px] font-medium">No intelligence matches these filters.</p>
-                <button type="button" onClick={() => { setSearch(""); setRiskFilter("All"); setTopicFilter("All"); }} className="mt-3 rounded-full border border-border bg-surface-raised px-3 py-1.5 text-[12px] font-medium text-text-body">
+                <button type="button" onClick={() => { setSearch(""); setRiskFilter("All"); setTopicFilter("All"); setSentimentFilter("All"); }} className="mt-3 rounded-full border border-border bg-surface-raised px-3 py-1.5 text-[12px] font-medium text-text-body">
                   Clear filters
                 </button>
               </div>
@@ -440,13 +464,13 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
 
           <section className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_4px_18px_rgba(28,23,52,0.06)]">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-[15px] font-semibold text-text">Latest Articles</h2>
+              <h2 className="text-[15px] font-semibold text-text">Live Intelligence Queue</h2>
               <button
                 type="button"
                 onClick={() => setViewAllOpen(true)}
                 className="text-[12px] font-medium text-primary hover:underline"
               >
-                View all
+                View full queue
               </button>
             </div>
 
@@ -539,7 +563,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                     <select
                       aria-label="Select articles per page"
                       value={pageSize}
-                      onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sortOrder, Number(event.target.value))}
+                      onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, sortOrder, Number(event.target.value))}
                       className="rounded-[8px] border border-border bg-surface-raised px-2 py-1.5 text-[12px] font-medium text-text-body"
                     >
                       {PAGE_SIZE_OPTIONS.map((option) => (

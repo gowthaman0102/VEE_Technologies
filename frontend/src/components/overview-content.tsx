@@ -11,24 +11,36 @@ import { ArticleMetadata } from "@/components/article-metadata";
 import { Badge, toneForRisk } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
+  AnalyticsOverview,
   DashboardArticleItem,
   DashboardArticleMetric,
   DashboardCompanyItem,
   DashboardOverview,
   DashboardIntelligenceItem,
+  EventAnalyticsResponse,
+  SourceAnalyticsResponse,
   getDashboardArticles,
   getDashboardCompanies,
   getDashboardOverview,
   getDashboardIntelligence,
+  getAnalyticsOverview,
+  getEventAnalytics,
+  getSourceAnalytics
 } from "@/lib/api";
 import { formatLabel } from "@/lib/format";
 
 import { OverviewHero } from "./overview-hero";
 import { OverviewMetricCard } from "./overview-metric-card";
-import { RiskOverviewCard } from "./risk-overview-card";
-import { LatestIntelligenceGrid } from "./latest-intelligence-grid";
 import { PublisherLogo } from "./publisher-logo";
 import { KpiArticleIcon, KpiIntelligenceIcon, KpiCompanyIcon, KpiHighRiskIcon, KpiCriticalRiskIcon } from "./kpi-icons";
+import { 
+  RiskSnapshot, 
+  SentimentSnapshot, 
+  BusinessImpactSnapshot, 
+  SourceCoverageSnapshot, 
+  EmergingTopicsSnapshot 
+} from "./overview-snapshots";
+import { OverviewIntelligenceBrief } from "./overview-intelligence-brief";
 
 type SelectedMetric = DashboardArticleMetric | "companies";
 
@@ -272,17 +284,30 @@ function DetailModal({
 }
 
 
+
 export function OverviewContent({ 
   initialOverview, 
   initialIntelligence,
-  companyName 
+  companyName,
+  initialAnalyticsOverview,
+  initialEventAnalytics,
+  initialSourceAnalytics,
+  timeWindow,
 }: { 
   initialOverview: DashboardOverview;
   initialIntelligence: DashboardIntelligenceItem[];
   companyName: string;
+  initialAnalyticsOverview: AnalyticsOverview;
+  initialEventAnalytics: EventAnalyticsResponse;
+  initialSourceAnalytics: SourceAnalyticsResponse;
+  timeWindow: { start: string, end: string };
 }) {
   const [overview, setOverview] = useState<DashboardOverview>(initialOverview);
   const [intelligence, setIntelligence] = useState<DashboardIntelligenceItem[]>(initialIntelligence);
+  const [analyticsOverview, setAnalyticsOverview] = useState<AnalyticsOverview>(initialAnalyticsOverview);
+  const [eventAnalytics, setEventAnalytics] = useState<EventAnalyticsResponse>(initialEventAnalytics);
+  const [sourceAnalytics, setSourceAnalytics] = useState<SourceAnalyticsResponse>(initialSourceAnalytics);
+  
   const [liveStatus, setLiveStatus] = useState<"live" | "updating" | "delayed">("live");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
 
@@ -297,12 +322,19 @@ export function OverviewContent({
     async () => {
       setLiveStatus("updating");
       try {
-        const [newOverview, newIntel] = await Promise.all([
+        const [newOverview, newIntel, newAnalytics, newEvents, newSources] = await Promise.all([
           getDashboardOverview(),
-          getDashboardIntelligence(6)
+          getDashboardIntelligence(6),
+          getAnalyticsOverview(undefined, timeWindow.start, timeWindow.end),
+          getEventAnalytics(timeWindow.start, timeWindow.end),
+          getSourceAnalytics(timeWindow.start, timeWindow.end)
         ]);
         setOverview(newOverview);
         setIntelligence(newIntel.items);
+        setAnalyticsOverview(newAnalytics);
+        setEventAnalytics(newEvents);
+        setSourceAnalytics(newSources);
+        
         setLiveStatus("live");
         setLastUpdated(new Date());
       } catch {
@@ -344,9 +376,9 @@ export function OverviewContent({
         lastUpdated={lastUpdated}
       />
       
+      {/* SECTION 1: COVERAGE KPIs */}
       <section className="mt-2">
         <h2 className="mb-4 text-base font-semibold text-text">Coverage</h2>
-
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <OverviewMetricCard 
             label="Total Articles" 
@@ -389,8 +421,47 @@ export function OverviewContent({
         </div>
       </section>
 
+      {/* SECTION 2: TODAY'S INTELLIGENCE BRIEF */}
       <section className="mt-8">
-        <LatestIntelligenceGrid items={intelligence} />
+        <OverviewIntelligenceBrief analytics={analyticsOverview} events={eventAnalytics} />
+      </section>
+
+      {/* SECTION 3: INTELLIGENCE SNAPSHOT */}
+      <section className="mt-8">
+        <h2 className="mb-4 text-base font-semibold text-text">Intelligence Snapshot</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <RiskSnapshot risk={analyticsOverview.risk ?? {}} />
+          <SentimentSnapshot sentiment={analyticsOverview.sentiment ?? {}} />
+          <BusinessImpactSnapshot impact={analyticsOverview.business_impact ?? {}} />
+        </div>
+      </section>
+
+      {/* SECTION 4 & 5: GLOBAL MEDIA COVERAGE & EMERGING TOPICS */}
+      <section className="mt-8">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SourceCoverageSnapshot sources={sourceAnalytics.sources ?? []} />
+          <EmergingTopicsSnapshot events={eventAnalytics.largest_events ?? []} />
+        </div>
+      </section>
+
+      {/* SECTION 6: CRITICAL SIGNALS */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-text">Critical Signals</h2>
+          <Link href="/intelligence" className="text-sm font-semibold text-primary hover:underline">
+            View All Intelligence →
+          </Link>
+        </div>
+        <div className="space-y-3">
+          {intelligence.length > 0 ? intelligence.map((article) => (
+            <ArticleRow
+              key={article.article_id}
+              article={article as unknown as DashboardArticleItem}
+            />
+          )) : (
+            <EmptyState title="No critical signals active." />
+          )}
+        </div>
       </section>
 
       {selectedMetric && (

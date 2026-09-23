@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Building2 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format";
@@ -107,7 +107,7 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
             Intelligence Command Center
           </h1>
           <p className="mt-2 text-[15px] text-sidebar-text max-w-xl leading-relaxed opacity-90">
-            Real-time media intelligence, risk signals, and actionable insights for a safer tomorrow.
+            Near real-time media intelligence, risk signals, and actionable insights for <span className="font-semibold text-white">{companyName}</span>.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-4">
