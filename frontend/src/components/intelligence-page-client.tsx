@@ -11,6 +11,7 @@ import {
   Search,
   ShieldAlert,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import {
   getDashboardIntelligence,
@@ -19,10 +20,11 @@ import {
 import type { DashboardOverview, DashboardIntelligenceItem } from "@/lib/api";
 import { formatArticleTimestamp, formatLabel, formatRelativeTime } from "@/lib/format";
 import { PublisherLogo } from "@/components/publisher-logo";
-import { Badge, toneForRisk } from "@/components/ui/badge";
+import { Badge, toneForRisk, toneForSentiment } from "@/components/ui/badge";
 import { PageAmbient } from "@/components/page-ambient";
 import { CosmicPageHero } from "@/components/cosmic-page-hero";
 import { focusRing } from "@/components/ui/button-styles";
+import { ArticleReaderModal } from "@/components/article-reader-modal";
 
 type Props = {
   initialItems: DashboardIntelligenceItem[];
@@ -100,6 +102,8 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>(new Date());
   const [error, setError] = useState<string | null>(null);
   const [featuredArticleId, setFeaturedArticleId] = useState<number | null>(null);
+  const [readerArticleId, setReaderArticleId] = useState<number | null>(null);
+  const [viewAllOpen, setViewAllOpen] = useState(false);
 
   const fetchOverview = async () => {
     const overviewData = await getDashboardOverview();
@@ -186,7 +190,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
 
   const openOriginalArticle = (url: string | null | undefined) => {
     if (!url) return;
-    window.location.assign(url);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleFilterChange = (nextSearch?: string, nextRiskFilter?: string, nextTopicFilter?: string, nextSort?: string, nextPageSize?: number) => {
@@ -200,10 +204,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   };
 
   const openArticleReader = (articleId: number) => {
-    const article = items.find((item) => item.article_id === articleId);
-    if (article?.url) {
-      openOriginalArticle(article.url);
-    }
+    setReaderArticleId(articleId);
   };
 
   const metricCards = [
@@ -241,11 +242,24 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const topicFilters = ["All", "Regulatory Action", "Fraud Security", "OpenAI", "Other"];
 
   return (
+    <>
     <main className="relative min-h-screen overflow-hidden bg-canvas px-6 py-8 lg:px-8">
           <PageAmbient kind="intelligence" />
           <div className="relative z-10 mx-auto w-full max-w-[1500px]">
-        <CosmicPageHero variant="intelligence" eyebrow="INTELLIGENCE" title="Intelligence Feed" description="Latest fully processed media intelligence with AI triage, deterministic risk scoring, and recommended actions." status={<div className="flex items-center gap-3 rounded-full border px-3 py-1.5 text-[13px] font-medium"><span className={`h-2.5 w-2.5 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : liveStatus === "updating" ? "bg-medium" : "bg-high"}`} />{liveStatus === "live" ? "Live Monitoring" : liveStatus === "updating" ? "Updating" : "Update delayed"}<span className="text-[12px] opacity-70">{lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : ""}</span></div>} />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-4 flex justify-end">
+          <div className="page-live-chip" aria-live="polite">
+            <span className="page-live-label">LIVE</span>
+          </div>
+        </div>
+
+        <CosmicPageHero
+          variant="intelligence"
+          eyebrow="INTELLIGENCE"
+          title="Intelligence Feed"
+          description="Latest fully processed media intelligence with AI triage, deterministic risk scoring, and recommended actions."
+          imageSrc="/intelligence-hero.png"
+        />
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metricCards.map(({ label, value, accent, icon: Icon }, index) => (
             <div
               key={label}
@@ -347,6 +361,9 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                     {formatLabel(featuredItem.risk_level)} {featuredItem.risk_score.toFixed(1)}
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {featuredItem.sentiment && (
+                      <Badge tone={toneForSentiment(featuredItem.sentiment)} className="text-[10px] px-2 py-1">{formatLabel(featuredItem.sentiment)}</Badge>
+                    )}
                     {featuredItem.monitoring_topic && (
                       <Badge className="text-[10px] px-2 py-1">{formatLabel(featuredItem.monitoring_topic)}</Badge>
                     )}
@@ -424,10 +441,13 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
           <section className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_4px_18px_rgba(28,23,52,0.06)]">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="text-[15px] font-semibold text-text">Latest Articles</h2>
-              <div className="flex items-center gap-2 text-[12px] text-muted">
-                <span>{filteredItems.length} of {items.length}</span>
-                <button type="button" className="text-primary font-medium">View all</button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setViewAllOpen(true)}
+                className="text-[12px] font-medium text-primary hover:underline"
+              >
+                View all
+              </button>
             </div>
 
             {error ? (
@@ -472,6 +492,11 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${toneForRisk(item.risk_level)} ${toneForRisk(item.risk_level).includes("bg-") ? "" : ""}`}>
                             {formatLabel(item.risk_level)} {item.risk_score.toFixed(1)}
                           </span>
+                          {item.sentiment && (
+                            <Badge tone={toneForSentiment(item.sentiment)} className="text-[10px] px-2 py-0.5">
+                              {formatLabel(item.sentiment)}
+                            </Badge>
+                          )}
                           {tags.map((tag) => (
                             <span key={`${item.article_id}-${tag}`} className="inline-flex items-center rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[10px] font-medium text-text-body">
                               {formatLabel(tag ?? "Other")}
@@ -530,5 +555,95 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
       </div>
 
     </main>
+
+    {/* Article reader popup */}
+    {readerArticleId !== null && (
+      <ArticleReaderModal articleId={readerArticleId} onClose={() => setReaderArticleId(null)} />
+    )}
+
+    {/* View all articles popup */}
+    {viewAllOpen && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-text/40 p-4 sm:p-6"
+        role="presentation"
+        onMouseDown={(e) => { if (e.target === e.currentTarget) setViewAllOpen(false); }}
+      >
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="view-all-title"
+          className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+        >
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-primary">Intelligence Feed</p>
+              <h2 id="view-all-title" className="mt-1 text-xl font-bold text-text">
+                All Articles
+                <span className="ml-2 text-[15px] font-medium text-muted">· {filteredItems.length}</span>
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewAllOpen(false)}
+              aria-label="Close all articles"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </header>
+          <div className="flex-1 overflow-y-auto bg-surface-raised px-4 py-4">
+            <div className="space-y-2">
+              {filteredItems.map((item, index) => {
+                const tags = [item.monitoring_topic, item.event_type].filter(Boolean).slice(0, 2);
+                return (
+                  <div key={item.article_id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-3 hover:bg-surface-raised transition-colors">
+                    <div className="w-6 pt-1 text-right text-[12px] font-medium text-muted">{index + 1}</div>
+                    <div className="flex shrink-0 pt-0.5">
+                      <PublisherLogo publisherName={item.publisher_name || item.source_name || "Nova Cops"} size={38} className="rounded-[8px]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="line-clamp-2 text-[13px] font-semibold leading-[1.4] text-text">{item.headline || item.title}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                            <span>{item.publisher_name || item.source_name}</span>
+                            <span>·</span>
+                            <span>{item.published_at ? formatArticleTimestamp(item.published_at) : "Unknown date"}</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setViewAllOpen(false); openArticleReader(item.article_id); }}
+                          className="inline-flex shrink-0 items-center justify-center rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-[12px] font-medium text-text-body hover:bg-surface-raised transition-colors"
+                        >
+                          View
+                        </button>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${toneForRisk(item.risk_level)}`}>
+                          {formatLabel(item.risk_level)} {item.risk_score.toFixed(1)}
+                        </span>
+                        {item.sentiment && (
+                          <Badge tone={toneForSentiment(item.sentiment)} className="text-[10px] px-2 py-0.5">
+                            {formatLabel(item.sentiment)}
+                          </Badge>
+                        )}
+                        {tags.map((tag) => (
+                          <span key={`${item.article_id}-${tag}`} className="inline-flex items-center rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[10px] font-medium text-text-body">
+                            {formatLabel(tag ?? "Other")}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      </div>
+    )}
+    </>
   );
 }
+

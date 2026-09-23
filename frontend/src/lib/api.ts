@@ -63,6 +63,8 @@ export type DashboardIntelligenceItem = {
   recommended_action: string;
   attention_level: string;
 
+  sentiment: string | null;
+
   updated_at: string;
 };
 

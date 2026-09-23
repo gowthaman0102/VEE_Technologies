@@ -76,9 +76,9 @@ def test_risk_level_boundaries():
     assert risk_level_from_score(59.99) == "medium"
 
     assert risk_level_from_score(60.0) == "high"
-    assert risk_level_from_score(84.99) == "high"
+    assert risk_level_from_score(79.99) == "high"
 
-    assert risk_level_from_score(85.0) == "critical"
+    assert risk_level_from_score(80.0) == "critical"
     assert risk_level_from_score(100.0) == "critical"
 
 
@@ -94,7 +94,7 @@ def test_high_priority_high_urgency_risk():
     assert result.urgency_score == 75.0
     assert result.confidence_score == 90.0
     assert result.risk_score == 80.0
-    assert result.risk_level == "high"
+    assert result.risk_level == "critical"
 
 
 def test_low_priority_low_urgency_risk():

@@ -56,7 +56,7 @@ def event_type_to_monitoring_topic(
 def risk_level_from_score(
     score: float,
 ) -> str:
-    if score >= 85.0:
+    if score >= 80.0:
         return "critical"
 
     if score >= 60.0:

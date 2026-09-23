@@ -1,6 +1,5 @@
 "use client";
 
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   FormEvent,
   useEffect,
@@ -39,7 +38,7 @@ import {
   resolveTimeRange,
   TimeRangePreset,
 } from "@/lib/time-range";
-import { Badge } from "@/components/ui/badge";
+import { Badge, toneForSentiment } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
 import { PageAmbient } from "@/components/page-ambient";
@@ -70,7 +69,7 @@ export function SearchPageClient() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [searched, setSearched] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(true);
 
   useEffect(() => {
@@ -214,10 +213,10 @@ export function SearchPageClient() {
           );
 
       setResults(data.results);
-      setSearched(true);
+      setResultsOpen(true);
     } catch (cause) {
       setResults([]);
-      setSearched(true);
+      setResultsOpen(false);
       setError(
         cause instanceof Error
           ? cause.message
@@ -283,7 +282,13 @@ export function SearchPageClient() {
     <main className="search-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-5 py-6 sm:px-6 lg:px-8 lg:py-7">
           <PageAmbient kind="search" />
           <div className="relative z-10 mx-auto w-full max-w-[1400px]">
-        <CosmicPageHero variant="search" eyebrow="SEARCH" title="Article Discovery" description={`Search for monitored intelligence on ${companyName || "your active company"} and the broader media landscape.`} />
+        <CosmicPageHero
+  variant="search"
+  imageSrc="/search-hero.png"
+  eyebrow="SEARCH"
+  title="Article Discovery"
+  description={`Search for monitored intelligence on ${companyName || "your active company"} and the broader media landscape.`}
+/>
 
         <form onSubmit={submit} className="mt-5 space-y-4">
           <section className="overflow-hidden rounded-[16px] border border-border bg-surface shadow-[0_8px_24px_rgba(18,32,31,0.06)]">
@@ -325,46 +330,6 @@ export function SearchPageClient() {
               </div>
             </div>
           </section>
-
-          <section className="rounded-[16px] border border-border bg-surface p-4 shadow-[0_5px_18px_rgba(18,32,31,0.04)] sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-soft text-primary"><Clock3 size={19} aria-hidden="true" /></span>
-                <div><h2 className="text-[16px] font-bold text-text">Time Range</h2><p className="mt-0.5 text-[12px] text-muted">Limit results by article publication time.</p></div>
-              </div>
-              <button type="button" onClick={clearFilters} className={`${secondaryButton} rounded-xl px-3.5 py-2 text-xs`}><RotateCcw size={15} aria-hidden="true" />Clear filters</button>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-              <TimeRangeSelector value={timePreset} onChange={setTimePreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} />
-              <div className="flex items-center gap-3"><div className="flex items-center gap-2 rounded-xl border border-border bg-surface-raised px-3 py-2 text-xs text-body"><CalendarDays size={15} className="text-primary" aria-hidden="true" /><span>{dateRangeLabel()}</span></div><span className="hidden h-7 w-px bg-border sm:block" aria-hidden="true" /></div>
-            </div>
-          </section>
-
-          <section className="rounded-[16px] border border-border bg-surface p-4 shadow-[0_5px_18px_rgba(18,32,31,0.04)] sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-soft text-primary"><Filter size={19} aria-hidden="true" /></span><div><h2 className="text-[16px] font-bold text-text">Advanced Filters</h2><p className="mt-0.5 text-[12px] text-muted">Refine your search with additional criteria.</p></div></div>
-              <button type="button" onClick={() => setShowAdvancedFilters((visible) => !visible)} aria-expanded={showAdvancedFilters} className={`${secondaryButton} rounded-xl px-3.5 py-2 text-xs`}>
-                {showAdvancedFilters ? "Hide filters" : "Show filters"}{showAdvancedFilters ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              </button>
-            </div>
-            <div className={`grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-300 ${showAdvancedFilters ? "mt-5 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"}`}>
-              <div className="min-h-0 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <FilterInput label="Source" value={sourceName} placeholder="e.g. Reuters" onChange={setSourceName} icon={FileText} />
-                <FilterInput label="Sentiment" value={sentiment} placeholder="e.g. negative" onChange={setSentiment} icon={Smile} />
-                <FilterInput label="Risk Level" value={riskLevel} placeholder="e.g. high" onChange={setRiskLevel} icon={Shield} />
-                <FilterInput label="Business Impact" value={businessImpact} placeholder="e.g. regulatory" onChange={setBusinessImpact} icon={BriefcaseBusiness} />
-                <FilterInput label="Event Type" value={eventType} placeholder="e.g. regulatory_action" onChange={setEventType} icon={Tag} />
-                <FilterInput label="Event Cluster ID" value={eventClusterId} placeholder="e.g. 7" onChange={setEventClusterId} inputMode="numeric" icon={Waypoints} />
-                {mode === "semantic" && <FilterInput label="Minimum Similarity" value={minimumSimilarity} placeholder="Optional, -1 to 1" onChange={setMinimumSimilarity} inputMode="decimal" icon={Hash} />}
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4" aria-label="Active filters">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Active filters</span>
-              {activeFilters.length === 0 && <span className="text-xs text-muted">None</span>}
-              {activeFilters.map((filter) => <button key={filter.label} type="button" onClick={filter.clear} className="inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-xs text-primary transition-colors hover:border-primary hover:bg-primary"><span>{filter.label}</span><X size={12} aria-hidden="true" /></button>)}
-              {activeFilters.length > 0 && <button type="button" onClick={clearFilters} className={`${secondaryButton} ml-auto rounded-lg px-2.5 py-1.5 text-xs`}><RotateCcw size={13} />Clear all</button>}
-            </div>
-          </section>
         </form>
 
         {error && (
@@ -373,46 +338,169 @@ export function SearchPageClient() {
           </div>
         )}
 
-        <div className="mt-6 space-y-4">
-          {searched && !loading && !error && (
-            <p className="text-sm text-muted">
-              {results.length} result
-              {results.length === 1 ? "" : "s"} found.
-            </p>
-          )}
-
-                    {loading && (
-            <div className="space-y-4">
-              <Skeleton className="h-[20px] w-[120px] mb-6" />
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-border bg-surface p-5">
-                  <div className="flex gap-4 mb-3">
-                    <Skeleton className="h-6 w-full" />
-                  </div>
-                  <Skeleton className="h-4 w-3/4 mb-2" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {results.map((result) => (
-            <SearchResultCard
-              key={result.article_id}
-              result={result}
-              mode={mode}
-            />
-          ))}
-
-          {searched
-            && !loading
-            && !error
-            && results.length === 0 && (
-              <EmptyState title="No articles matched the current search and filters." />
-            )}
-        </div>
       </div>
+      {resultsOpen && (
+        <SearchResultsModal
+          results={results}
+          mode={mode}
+          query={query}
+          sentiment={sentiment}
+          riskLevel={riskLevel}
+          onSentimentChange={setSentiment}
+          onRiskLevelChange={setRiskLevel}
+          onClose={() => setResultsOpen(false)}
+        />
+      )}
     </main>
+  );
+}
+
+function SearchResultsModal({
+  results,
+  mode,
+  query,
+  sentiment,
+  riskLevel,
+  onSentimentChange,
+  onRiskLevelChange,
+  onClose,
+}: {
+  results: SearchResult[];
+  mode: SearchMode;
+  query: string;
+  sentiment: string;
+  riskLevel: string;
+  onSentimentChange: (v: string) => void;
+  onRiskLevelChange: (v: string) => void;
+  onClose: () => void;
+}) {
+  const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  // Client-side filter on top of results
+  const filtered = results.filter((r) => {
+    const sentimentMatch = !sentiment.trim() || (r.sentiment ?? "").toLowerCase().includes(sentiment.trim().toLowerCase());
+    const riskMatch = !riskLevel.trim() || (r.risk_level ?? "").toLowerCase().includes(riskLevel.trim().toLowerCase());
+    return sentimentMatch && riskMatch;
+  });
+
+  const hasActiveFilters = sentiment.trim() || riskLevel.trim();
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-text/40 p-4 sm:p-6"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="search-results-title"
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+      >
+        {/* Header */}
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-primary">Search Results</p>
+            <h2 id="search-results-title" className="mt-1 text-xl font-bold text-text">
+              {filtered.length > 0
+                ? `${filtered.length} result${filtered.length === 1 ? "" : "s"} found`
+                : "No articles found"}
+            </h2>
+            {filtered.length === 0 && <p className="mt-1 text-sm text-muted">No articles matched &quot;{query.trim()}&quot;.</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${showFilters ? "border-primary bg-primary-soft text-primary" : "border-border bg-surface-raised text-text hover:border-primary-border hover:text-primary"}`}
+            >
+              <Filter size={14} aria-hidden="true" />
+              Advanced Filters
+              {hasActiveFilters && <span className="flex h-2 w-2 rounded-full bg-primary" aria-label="Filters active" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close search results"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <X size={19} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+          <div className="shrink-0 border-b border-border bg-surface-raised px-5 py-4 sm:px-6">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Advanced Filters</p>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => { onSentimentChange(""); onRiskLevelChange(""); }}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                >
+                  <RotateCcw size={11} aria-hidden="true" /> Clear filters
+                </button>
+              )}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium text-muted flex items-center gap-1.5">
+                  <Smile size={13} aria-hidden="true" />
+                  Sentiment
+                </label>
+                <select
+                  value={sentiment}
+                  onChange={(e) => onSentimentChange(e.target.value)}
+                  className="rounded-[10px] border border-border bg-surface px-3 py-2 text-[13px] text-text focus:border-primary-border focus:outline-none"
+                  aria-label="Filter by sentiment"
+                >
+                  <option value="">All Sentiments</option>
+                  <option value="positive">Positive</option>
+                  <option value="neutral">Neutral</option>
+                  <option value="negative">Negative</option>
+                </select>
+              </div>
+              <FilterInput label="Risk Level" value={riskLevel} placeholder="e.g. high" onChange={onRiskLevelChange} icon={Shield} />
+            </div>
+            {hasActiveFilters && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {sentiment.trim() && (
+                  <button type="button" onClick={() => onSentimentChange("")} className="inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-xs text-primary hover:bg-primary hover:text-white transition-colors">
+                    Sentiment: {sentiment} <X size={11} aria-hidden="true" />
+                  </button>
+                )}
+                {riskLevel.trim() && (
+                  <button type="button" onClick={() => onRiskLevelChange("")} className="inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-xs text-primary hover:bg-primary hover:text-white transition-colors">
+                    Risk: {riskLevel} <X size={11} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Results */}
+        <div className="min-h-0 space-y-4 overflow-y-auto bg-surface-raised p-4 sm:p-6">
+          {filtered.length > 0 ? filtered.map((result) => (
+            <SearchResultCard key={result.article_id} result={result} mode={mode} />
+          )) : (
+            <EmptyState title="No articles matched the current search and filters." />
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -481,10 +569,11 @@ function SearchResultCard({
           label="Event"
           value={result.event_type}
         />
-        <ResultTag
-          label="Sentiment"
-          value={result.sentiment}
-        />
+        {result.sentiment && (
+          <Badge tone={toneForSentiment(result.sentiment)}>
+            Sentiment: {result.sentiment}
+          </Badge>
+        )}
         <ResultTag
           label="Risk"
           value={
@@ -529,3 +618,4 @@ function ResultTag({
     </span>
   );
 }
+

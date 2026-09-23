@@ -10,11 +10,15 @@ type CosmicPageHeroProps = {
   action?: ReactNode;
   status?: ReactNode;
   rangeControl?: ReactNode;
+  imageSrc?: string;
 };
 
-function HeroVisual({ variant }: { variant: CosmicHeroVariant }) {
+function HeroVisual({ variant, imageSrc }: { variant: CosmicHeroVariant; imageSrc?: string }) {
+  const visualSrc = imageSrc ?? "/hero-globe.png";
+
   return (
     <div className={`cosmic-hero-visual cosmic-hero-visual-${variant}`} aria-hidden="true">
+      <img src={visualSrc} alt="" className="cosmic-hero-image" />
       <div className="cosmic-hero-bg cosmic-hero-bg-anim" />
       <div className="cosmic-hero-bg cosmic-hero-lines-anim" />
       <svg className="cosmic-hero-network" viewBox="0 0 700 300" fill="none">
@@ -41,10 +45,10 @@ function HeroVisual({ variant }: { variant: CosmicHeroVariant }) {
   );
 }
 
-export function CosmicPageHero({ variant, eyebrow, title, description, action, status, rangeControl }: CosmicPageHeroProps) {
+export function CosmicPageHero({ variant, eyebrow, title, description, action, status, rangeControl, imageSrc }: CosmicPageHeroProps) {
   return (
     <header className="cosmic-page-hero">
-      <HeroVisual variant={variant} />
+      <HeroVisual variant={variant} imageSrc={imageSrc} />
       <div className="cosmic-page-hero-content">
         <div className="cosmic-page-hero-copy">
           <span className="cosmic-page-hero-accent" />

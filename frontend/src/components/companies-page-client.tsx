@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { 
   Activity, AlertTriangle, BarChart3, Bell, ChevronRight,
-  FileText, Skull, X, Layers, Clock,
+  FileText, Skull, X, Layers,
   Settings, Eye
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -182,7 +182,7 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
 
   return (
     <article 
-      className={`group companies-topic-card relative flex min-h-[210px] flex-col overflow-hidden rounded-xl border ${styles.border} ${styles.bg} p-3 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong animate-[fadeIn_0.5s_ease-out_both]`}
+      className={`group companies-topic-card relative flex flex-col overflow-hidden rounded-xl border ${styles.border} ${styles.bg} p-3 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong animate-[fadeIn_0.5s_ease-out_both]`}
       style={{ animationDelay: `${250 + index * 60}ms` }}
     >
       <styles.Visual
@@ -201,10 +201,16 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
             <p className="mt-0.5 text-[11px] font-medium text-muted">{styles.desc}</p>
           </div>
         </div>
-        <div className={`flex items-center gap-1 text-[13px] font-bold ${styles.iconColor}`}>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          aria-label={`${expanded ? "Collapse" : "Show all"} ${priority} priority topics`}
+          aria-expanded={expanded}
+          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-bold ${styles.iconColor} transition-opacity hover:bg-white/40 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35`}
+        >
           {topics.length} {topics.length === 1 ? "Topic" : "Topics"}
-          <ChevronRight size={16} aria-hidden="true" />
-        </div>
+          <ChevronRight size={16} aria-hidden="true" className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
+        </button>
       </div>
 
       <ul className="relative z-10 mt-3 flex-1 space-y-1.5">
@@ -251,7 +257,7 @@ function MetricModal({ metric, articles, loading, onClose }: { metric: MetricKey
             <h2 id="company-metric-title" className="mt-1 text-lg font-bold text-text">{config.label}</h2>
             <p className="mt-1 text-sm text-muted">{loading ? "Loading current data..." : `${articles.length} ${articles.length === 1 ? "item" : "items"}`}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted hover:border-primary hover:text-primary hover:bg-primary-soft transition-colors">
+          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <X size={17} aria-hidden="true" />
           </button>
         </header>
@@ -304,7 +310,6 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
   const [selectedMetric, setSelectedMetric] = useState<MetricKey | null>(null);
   const [articles, setArticles] = useState<DashboardArticleItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
   const company = data.items[0];
 
@@ -312,7 +317,6 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
     try {
       setData(await getDashboardCompanies());
       setLiveStatus("live");
-      setLastUpdated(new Date());
     } catch {
       setLiveStatus("delayed");
     }
@@ -348,19 +352,17 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
     }
   };
 
-  const formatRelativeTime = (date: Date) => {
-    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-    const diff = (date.getTime() - new Date().getTime()) / 1000;
-    if (Math.abs(diff) < 60) return 'just now';
-    if (Math.abs(diff) < 3600) return rtf.format(Math.round(diff / 60), 'minute');
-    return rtf.format(Math.round(diff / 3600), 'hour');
-  };
-
   return (
     <main className="companies-page relative min-h-[calc(100vh-74px)] w-full overflow-hidden bg-surface-raised">
           <PageAmbient kind="companies" />
           <div className="relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
-        <CosmicPageHero variant="intelligence" eyebrow="COMPANIES" title="Live Intelligence Overview" description={`Real-time analysis from ${company.name} across monitored sources.`} />
+        <CosmicPageHero
+  variant="intelligence"
+  imageSrc="/companies-hero.png"
+  eyebrow="COMPANIES"
+  title="Live Intelligence Overview"
+  description={`Real-time analysis from ${company.name} across monitored sources.`}
+/>
         {/* Live Intelligence Card */}
         <section className="shrink-0 rounded-[22px] border border-border bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
           <div className="flex flex-col justify-between gap-3 border-b border-border pb-3 md:flex-row md:items-center">
@@ -405,24 +407,20 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
               </div>
               <div>
                 <h2 className="text-[22px] lg:text-[24px] font-bold text-text">
-                  Monitoring Topics <span className="text-muted font-semibold">· {company.monitoring_topics.length}</span>
+                  Monitoring Topics
                 </h2>
-                <p className="mt-1.5 text-[15px] font-medium text-muted">AI is monitoring these topics across global media and online sources</p>
+                <p className="mt-1.5 text-[15px] font-medium text-muted">AI is monitoring <span className="font-semibold text-text">{company.monitoring_topics.length} topics</span> across global media and online sources</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
-              <div suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
-                <Clock size={15} />
-                Last updated {formatRelativeTime(lastUpdated)}
-              </div>
               <Link href="/watchlist" className="flex items-center gap-2 rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong">
                 <Settings size={16} /> Manage Topics
               </Link>
             </div>
           </div>
 
-          <div className="mt-5 grid min-h-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
+          <div className="mt-5 grid min-h-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6 items-start">
             <PriorityTopicCard priority="high" topics={topics.high} index={0} />
             <PriorityTopicCard priority="medium" topics={topics.medium} index={1} />
             <PriorityTopicCard priority="low" topics={topics.low} index={2} />

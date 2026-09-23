@@ -97,7 +97,7 @@ async def test_assess_article_risk_success(
     )
 
     assert result.risk.risk_score == 80.0
-    assert result.risk.risk_level == "high"
+    assert result.risk.risk_level == "critical"
 
 
 @pytest.mark.asyncio

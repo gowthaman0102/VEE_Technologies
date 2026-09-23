@@ -22,6 +22,8 @@ export function ArticleViewButton({
   return (
       <a
         href={sourceUrl ?? undefined}
+        target="_blank"
+        rel="noopener noreferrer"
         aria-label={ariaLabel}
         className={`inline-flex items-center justify-center rounded-[8px] border border-border bg-white px-3.5 py-1.5 text-[13px] font-bold text-text transition-colors duration-150 hover:bg-surface-raised hover:border-primary ${focusRing} ${className}`}
       >

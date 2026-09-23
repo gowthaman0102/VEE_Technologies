@@ -1,21 +1,52 @@
-﻿from app.models.article import Article
+from app.models.article import Article
 from app.services.company_semantic_context_service import (
     CompanySemanticContext,
 )
+
+_MAX_CONTENT_CHARS = 8000
+
+
+def _article_text(article: Article) -> str:
+    """
+    Build the best available article text for sentiment classification.
+
+    Priority:
+    1. cleaned_content (most complete)
+    2. title + description (fallback when extraction failed / short article)
+    3. title alone (last resort)
+    """
+    cleaned = (article.cleaned_content or "").strip()
+
+    if cleaned:
+        return cleaned[:_MAX_CONTENT_CHARS]
+
+    parts: list[str] = []
+
+    if article.title:
+        parts.append(article.title.strip())
+
+    if article.description:
+        parts.append(article.description.strip())
+
+    combined = "\n\n".join(parts)
+
+    if combined:
+        return combined[:_MAX_CONTENT_CHARS]
+
+    # Last resort — title alone keeps the classifier from crashing
+    # but the result will be low-confidence
+    return (article.title or "").strip()
 
 
 def build_article_sentiment_prompt(
     article: Article,
     company_context: CompanySemanticContext,
 ) -> str:
-    article_text = (
-        article.cleaned_content or ""
-    ).strip()
+    article_text = _article_text(article)
 
     if not article_text:
         raise ValueError(
-            "Article cleaned content is required "
-            "for sentiment analysis."
+            "Article has no usable content for sentiment analysis."
         )
 
     company_text = (

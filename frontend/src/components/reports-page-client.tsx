@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   FormEvent,
@@ -246,7 +246,7 @@ export function ReportsPageClient() {
     <main className="relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-4 py-6 sm:px-6 lg:px-8">
       <PageAmbient kind="reports" />
       <div className="relative z-10 mx-auto w-full max-w-[1400px]">
-        <CosmicPageHero variant="analytics" eyebrow="REPORTS" title={companyName || "Active Company"} description="Generate executive media-intelligence reports. All formats (PDF, Excel, CSV) are created in a single snapshot-consistent batch." />
+        <CosmicPageHero variant="analytics" eyebrow="REPORTS" imageSrc="/reports-hero.png" title={companyName || "Active Company"} description="Generate executive media-intelligence reports. All formats (PDF, Excel, CSV) are created in a single snapshot-consistent batch." />
         <header className="hidden mb-6 border-b border-border pb-5">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
@@ -611,3 +611,4 @@ export function ReportsPageClient() {
     </main>
   );
 }
+

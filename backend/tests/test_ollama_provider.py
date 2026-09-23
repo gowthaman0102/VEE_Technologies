@@ -1,4 +1,4 @@
-﻿from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -51,6 +51,9 @@ async def test_ollama_generate_success(monkeypatch):
         "model": "qwen2.5:7b",
         "prompt": "Test prompt",
         "stream": False,
+        "options": {
+            "temperature": 0.0,
+        },
     }
 
 

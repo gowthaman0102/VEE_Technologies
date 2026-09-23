@@ -3,7 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, Building2, Check, FileCheck2, Gavel, GraduationCap,
-  Handshake, Layers3, LockKeyhole, Megaphone, Plus, RefreshCcw, Scale,
+  Handshake, Layers3, LockKeyhole, Megaphone, Plus, Scale,
   Server, Shield, Sparkles, Star, Tag, Trash2, Users, X,
 } from "lucide-react";
 import {
@@ -66,7 +66,6 @@ export default function WatchlistPage() {
   const [companyName, setCompanyName] = useState("");
   const [items, setItems] = useState<ArticleCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
@@ -93,13 +92,6 @@ export default function WatchlistPage() {
   const grouped = useMemo(() => PRIORITIES.reduce<Record<Priority, ArticleCategory[]>>((result, option) => {
     result[option.key] = items.filter((item) => normalizedPriority(item.priority) === option.key); return result;
   }, { high: [], medium: [], low: [] }), [items]);
-
-  async function refresh() {
-    if (companyId === null) return;
-    setRefreshing(true); setError("");
-    try { await loadCategories(companyId); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to refresh article settings."); }
-    finally { setRefreshing(false); }
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const name = categoryName.trim();
@@ -142,10 +134,11 @@ export default function WatchlistPage() {
     }
   }
 
-  return <main className="relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-4 py-5 sm:px-6 lg:px-8"><PageAmbient kind="settings" /><div className="relative z-10 mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-[1400px] flex-col">
-    <CosmicPageHero variant="article-settings" eyebrow="ARTICLE SETTINGS" title={companyName || "Active Company"} description="Control which article categories are enabled or disabled for monitoring and display." action={<button type="button" onClick={() => { setError(""); setModalOpen(true); }} className={`${primaryButton} shrink-0`}><Plus className="h-4 w-4" /> Add Category</button>} />
+  return <main className="relative min-h-[calc(100vh-74px)] overflow-x-hidden bg-canvas px-4 py-5 sm:px-6 lg:px-8"><PageAmbient kind="settings" /><div className="relative z-10 mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-[1400px] flex-col">
+    <CosmicPageHero variant="article-settings"
+          imageSrc="/article-settings-hero.png" eyebrow="ARTICLE SETTINGS" title={companyName || "Active Company"} description="Control which article categories are enabled or disabled for monitoring and display." />
     {error && <div className="mt-4 shrink-0 rounded-lg border border-critical-border bg-critical-bg px-4 py-3 text-sm text-critical">{error}</div>}
-    <div className="mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><span className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-muted"><strong className="text-text">{items.length}</strong> Total</span>{PRIORITIES.map((option) => <span key={option.key} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-muted"><strong className="text-text">{grouped[option.key].length}</strong> {option.key}</span>)}</div><button type="button" onClick={() => void refresh()} disabled={refreshing || loading} className={`${secondaryButton} h-9 px-3 text-xs`}>{refreshing ? <RefreshCcw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />} Refresh</button></div>
+    <div className="mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><span className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-muted"><strong className="text-text">{items.length}</strong> Total</span>{PRIORITIES.map((option) => <span key={option.key} className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-muted"><strong className="text-text">{grouped[option.key].length}</strong> {option.key}</span>)}</div><div className="flex items-center gap-2"><button type="button" onClick={() => { setError(""); setModalOpen(true); }} className={`${primaryButton} h-9 px-3 text-xs`}><Plus className="h-3.5 w-3.5" /> Add Category</button></div></div>
     <section className="mt-4 grid h-[min(58vh,560px)] min-h-[360px] gap-4 lg:grid-cols-3">{PRIORITIES.map((option) => { const visibleItems = grouped[option.key].slice(0, 5); const hasMore = grouped[option.key].length > visibleItems.length; return <div key={option.key} className={`flex h-full min-w-0 flex-col rounded-2xl border p-3 ${option.tint}`}><div className="flex shrink-0 items-center justify-between px-1 pb-3"><div className="flex items-center gap-2 text-sm font-semibold text-text">{option.icon}{option.label}</div><span className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-semibold text-muted">{grouped[option.key].length}</span></div><div className="min-h-0 flex-1 space-y-2 overflow-hidden">{loading ? Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-[66px] animate-pulse rounded-xl border border-border bg-surface/70" />) : visibleItems.length ? visibleItems.map((item) => <CategoryCard key={item.id} item={item} onToggle={() => void toggle(item)} onRemove={() => void remove(item)} />) : <div className="flex h-full min-h-[160px] items-center justify-center rounded-xl border border-dashed border-border bg-surface/40 p-5 text-center text-xs text-muted">No categories in this priority.</div>}</div>{hasMore && <button type="button" onClick={() => setViewingPriority(option.key)} className="mt-3 flex shrink-0 items-center justify-center rounded-lg border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-surface">View all {grouped[option.key].length} categories</button>}</div>; })}</section>
   </div>
   {modalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-text/20 p-4" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setModalOpen(false); }}><div role="dialog" aria-modal="true" aria-labelledby="add-category-title" className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-[0_20px_60px_rgba(18,32,31,0.18)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">NEW CATEGORY</p><h2 id="add-category-title" className="mt-1 text-xl font-semibold text-text">Add article category</h2></div><button type="button" onClick={() => setModalOpen(false)} aria-label="Close dialog" className="rounded-lg p-2 text-muted hover:bg-surface-raised hover:text-text"><X className="h-4 w-4" /></button></div><form onSubmit={submit} className="mt-5 space-y-4"><label className="block text-sm font-medium text-body">Category name<input autoFocus value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="e.g. AI Safety" className={`mt-2 ${inputClasses}`} /></label><label className="block text-sm font-medium text-body">Priority<select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className={`mt-2 ${inputClasses}`}><option value="high">High Priority</option><option value="medium">Medium Priority</option><option value="low">Low Priority</option></select></label><div className="flex items-center gap-3 rounded-xl border border-border bg-surface-raised p-3"><div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary-border bg-primary-soft text-primary">{getCategoryIcon(categoryName || "New category")}</div><div><p className="text-xs font-semibold text-text">Assigned icon preview</p><p className="text-xs text-muted">Automatically selected from the category name.</p></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setModalOpen(false)} className={secondaryButton}>Cancel</button><button type="submit" disabled={adding || !categoryName.trim()} className={primaryButton}>{adding ? "Adding..." : "Add Category"}</button></div></form></div></div>}

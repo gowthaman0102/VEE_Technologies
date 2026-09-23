@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Building2 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/format";
@@ -31,12 +31,12 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
         backgroundColor: "var(--color-sidebar)",
       }}
     >
-      {/* ── Animated live background ── */}
+      {/* â”€â”€ Animated live background â”€â”€ */}
       <div
         aria-hidden="true"
         className="hero-bg-anim pointer-events-none absolute inset-0 z-0"
         style={{
-          backgroundImage: "url('/hero-globe.png')",
+          backgroundImage: "url('/overview-hero.png')",
           backgroundSize: "cover",
           backgroundPosition: "center right",
           backgroundRepeat: "no-repeat",
@@ -49,7 +49,7 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
         aria-hidden="true"
         className="hero-lines-anim pointer-events-none absolute inset-0 z-0"
         style={{
-          backgroundImage: "url('/hero-globe.png')",
+          backgroundImage: "url('/overview-hero.png')",
           backgroundSize: "cover",
           backgroundPosition: "center right",
           backgroundRepeat: "no-repeat",
@@ -90,17 +90,17 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
         }}
       />
 
-      {/* Dark gradient overlay – left readable, right shows the globe */}
+      {/* Dark gradient overlay â€“ left readable, right shows the globe */}
       <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-r from-sidebar/96 via-sidebar/72 to-transparent" />
 
-      {/* ── Top row: eyebrow only ── */}
+      {/* â”€â”€ Top row: eyebrow only â”€â”€ */}
       <div className="relative z-10 flex items-center px-6 pt-6 pb-2">
         <p className="text-[10px] sm:text-[11px] font-bold tracking-[0.15em] text-primary-border uppercase">
           NEAR REAL-TIME MONITORING
         </p>
       </div>
 
-      {/* ── Main content ── */}
+      {/* â”€â”€ Main content â”€â”€ */}
       <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between px-6 pb-6 pt-2 gap-6">
         <div className="max-w-2xl">
           <h1 className="text-3xl lg:text-[38px] font-bold tracking-tight text-white leading-tight">
@@ -188,3 +188,4 @@ export function OverviewHero({ companyName, liveStatus, lastUpdated }: OverviewH
     </div>
   );
 }
+

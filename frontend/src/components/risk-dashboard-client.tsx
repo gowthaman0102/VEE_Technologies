@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
@@ -14,7 +14,7 @@ import { chartColor } from "@/lib/chart-colors";
 import { PageAmbient } from "@/components/page-ambient";
 import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
-// ─── Color helpers ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Color helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Chart colors imported from lib/chart-colors.ts
 
@@ -26,7 +26,7 @@ function riskColor(label: string): string {
   return "var(--color-low)";
 }
 
-// ─── Animated number ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Animated number â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
   const [display, setDisplay] = useState(value);
@@ -54,7 +54,7 @@ function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: num
   return <>{Number(display).toFixed(decimals)}</>;
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ KPI Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type KpiCardConfig = {
   label: string;
@@ -102,7 +102,7 @@ function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, on
   return card;
 }
 
-// ─── SVG Vertical Bar Chart ──────────────────────────────────────────────────
+// â”€â”€â”€ SVG Vertical Bar Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type RiskLevel = { label: string; count: number };
 
@@ -191,11 +191,11 @@ function RiskBarChart({
                 style={{ transition: "height 0.8s ease-out, y 0.8s ease-out" }}
                 className={d.count > 0 ? "opacity-90 hover:opacity-100" : "opacity-30"}
               />
-              {/* Count label above bar — always shown clearly above the bar top */}
+              {/* Count label above bar â€” always shown clearly above the bar top */}
               <text
                 x={x + barW / 2}
                 y={d.count === 0
-                  ? chartTop + chartH - 26  /* fixed 26px above baseline — clear of the axis */
+                  ? chartTop + chartH - 26  /* fixed 26px above baseline â€” clear of the axis */
                   : y - 8                   /* always above the bar top */
                 }
                 textAnchor="middle"
@@ -245,7 +245,7 @@ function RiskBarChart({
   );
 }
 
-// ─── Horizontal Event Bars ────────────────────────────────────────────────────
+// â”€â”€â”€ Horizontal Event Bars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EventBars({
   data,
@@ -297,7 +297,7 @@ function EventBars({
   );
 }
 
-// ─── SVG Donut Chart ──────────────────────────────────────────────────────────
+// â”€â”€â”€ SVG Donut Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DonutChart({
   data,
@@ -397,7 +397,7 @@ function DonutChart({
   );
 }
 
-// ─── Chart Panel Card ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Chart Panel Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ChartCard({
   title,
@@ -426,7 +426,7 @@ function ChartCard({
   );
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function formatRelative(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -435,11 +435,11 @@ function formatRelative(date: Date): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-// ─── Modal State ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Modal State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type ModalState = { isOpen: boolean; metric: string; value?: string; title: string; total: number };
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function RiskDashboardClient({ initialData }: { initialData: DashboardRiskAnalytics }) {
   const [data, setData] = useState(initialData);
@@ -521,16 +521,22 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
           <PageAmbient kind="risk" />
           <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-7 lg:px-10 space-y-6">
 
-        <CosmicPageHero variant="risk" eyebrow="RISK ANALYTICS" title="Risk Intelligence Overview" description="Deterministic risk scoring across monitored intelligence, including review and alert signals." status={<div suppressHydrationWarning className="flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-bold"><span className={`h-2 w-2 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : "bg-medium"}`} /><div><div>{liveStatus === "live" ? "Live Data" : "Update Delayed"}</div><div className="text-[11px] font-medium opacity-70">Updated {formatRelative(lastUpdated)}</div></div></div>} />
-        {/* ── KPI Row ─── */}
+        <div className="mb-4 flex justify-end">
+          <div suppressHydrationWarning className="page-live-chip page-live-chip--risk" aria-live="polite">
+            <span className="page-live-label">LIVE</span>
+          </div>
+        </div>
+
+        <CosmicPageHero variant="risk" imageSrc="/risk-analytics-hero.png" eyebrow="RISK ANALYTICS" title="Risk Intelligence Overview" description="Deterministic risk scoring across monitored intelligence, including review and alert signals." />
+        {/* â”€â”€ KPI Row â”€â”€â”€ */}
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Key performance indicators">
           {kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
         </section>
 
-        {/* ── Analytics Grid ─── */}
+        {/* â”€â”€ Analytics Grid â”€â”€â”€ */}
         <section className="grid gap-5 xl:grid-cols-[34fr_38fr_28fr]" aria-label="Risk analytics charts">
 
-          {/* Panel A — Risk Level Distribution */}
+          {/* Panel A â€” Risk Level Distribution */}
           <ChartCard
             title="Risk Level Distribution"
             subtitle="Assessment count by deterministic risk level."
@@ -547,7 +553,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
             />
           </ChartCard>
 
-          {/* Panel B — Event Type Distribution */}
+          {/* Panel B â€” Event Type Distribution */}
           <ChartCard
             title="Event Type Distribution"
             subtitle="Intelligence events currently represented in risk scoring."
@@ -558,7 +564,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
             />
           </ChartCard>
 
-          {/* Panel C — Event Type Share */}
+          {/* Panel C â€” Event Type Share */}
           <ChartCard
             title="Event Type Share"
             subtitle="Proportion of intelligence events by type."
@@ -570,7 +576,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
           </ChartCard>
         </section>
 
-        {/* ── Insight Strip ─── */}
+        {/* â”€â”€ Insight Strip â”€â”€â”€ */}
         <section className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-7 py-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] md:flex-row md:items-center md:justify-between" aria-label="Key insights">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -617,3 +623,5 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
     </main>
   );
 }
+
+

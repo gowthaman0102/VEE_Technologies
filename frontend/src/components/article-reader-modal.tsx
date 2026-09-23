@@ -5,7 +5,7 @@ import { X, ExternalLink } from "lucide-react";
 import { ArticleDetail, getArticleDetail } from "@/lib/api";
 import { EmptyState } from "./ui/empty-state";
 import { formatLabel } from "@/lib/format";
-import { Badge, toneForRisk } from "./ui/badge";
+import { Badge, toneForRisk, toneForSentiment } from "./ui/badge";
 
 export function ArticleReaderModal({
   articleId,
@@ -55,8 +55,8 @@ export function ArticleReaderModal({
                 Original <ExternalLink size={14} />
               </a>
             )}
-            <button type="button" onClick={onClose} aria-label="Close reader" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-raised hover:text-text transition-colors">
-              <X size={20} />
+            <button type="button" onClick={onClose} aria-label="Close reader" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
         </header>
@@ -81,6 +81,11 @@ export function ArticleReaderModal({
                   {article.risk_level && (
                     <Badge tone={toneForRisk(article.risk_level)}>
                       {formatLabel(article.risk_level)} Risk {article.risk_score !== null ? `· ${article.risk_score}` : ""}
+                    </Badge>
+                  )}
+                  {article.sentiment && (
+                    <Badge tone={toneForSentiment(article.sentiment)}>
+                      {formatLabel(article.sentiment)} Sentiment
                     </Badge>
                   )}
                   {article.event_type && <Badge>{formatLabel(article.event_type)}</Badge>}

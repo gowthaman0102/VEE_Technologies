@@ -175,7 +175,7 @@ function ImpactArticlesModal({
             <h2 id="impact-articles-title" className="mt-1 text-xl font-bold text-text">{formatLabel(category)} articles</h2>
             <p className="mt-1 text-sm text-muted">{loading ? "Loading matching articles..." : `${articles.length} ${articles.length === 1 ? "article" : "articles"}`}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close articles" className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted transition-colors hover:bg-surface-raised hover:text-text"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Close articles" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={18} aria-hidden="true" /></button>
         </header>
         <div className="flex-1 overflow-y-auto bg-surface-raised px-5 py-5 sm:px-6">
           {loading ? <div className="flex h-full items-center justify-center text-sm text-muted">Loading matching articles...</div> : articles.length === 0 ? <EmptyState title="No matching articles found." /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={article.article_id} article={article} />)}</div>}
@@ -192,7 +192,7 @@ export default function AnalyticsPage() {
     useState("");
 
   const [preset, setPreset] =
-    useState<TimeRangePreset>("24h");
+    useState<TimeRangePreset>("7d");
 
   const [customStart, setCustomStart] =
     useState("");
@@ -334,7 +334,13 @@ export default function AnalyticsPage() {
     <main className="analytics-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-[radial-gradient(circle_at_70%_8%,rgba(130,100,255,0.09),transparent_34%),linear-gradient(180deg,#FBFBFF_0%,#F6F7FC_100%)] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <PageAmbient kind="analytics" />
       <div className="relative z-10 mx-auto w-full max-w-[1440px]">
-        <CosmicPageHero variant="analytics" eyebrow="ANALYTICS" title={companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"} description="Explore stored media intelligence across configurable reporting periods." rangeControl={<TimeRangeSelector value={preset} onChange={setPreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} includeCustom={false} />} status={data ? <div className="flex items-center gap-3 text-[12px]"><span className="flex items-center gap-1.5"><span className="h-2 w-2 animate-pulse rounded-full bg-low" /> Live data</span><span className="hidden sm:inline">{formatDate(data.start)} - {formatDate(data.end)}</span></div> : undefined} />
+        <CosmicPageHero variant="analytics" imageSrc="/analytics-hero.png" eyebrow="ANALYTICS" title={companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"} description="Explore stored media intelligence across configurable reporting periods." />
+
+        <div className="mt-4 flex justify-end">
+          <div className="rounded-2xl border border-border bg-surface px-3 py-2 shadow-[0_6px_18px_rgba(27,22,62,0.06)]">
+            <TimeRangeSelector value={preset} onChange={setPreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} includeCustom={false} />
+          </div>
+        </div>
 
         {error && (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-critical-border bg-critical-bg p-4 text-sm text-critical">
@@ -415,3 +421,4 @@ export default function AnalyticsPage() {
     </main>
   );
 }
+
