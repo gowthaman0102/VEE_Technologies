@@ -37,3 +37,6 @@ class ArticleResponse(ArticleCreate):
     extraction_status: str
     extraction_error: str | None = None
     processed_at: datetime | None = None
+
+    # Intelligence enrichments — populated when a company context is available
+    sentiment: str | None = None

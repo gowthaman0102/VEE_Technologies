@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
-  Bell, ChevronRight, ClipboardList, Gauge, ShieldAlert, Users, Lightbulb, CheckCircle
+  ChevronRight, Lightbulb, CheckCircle
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 import { DashboardRiskAnalytics, getDashboardRiskAnalytics } from "@/lib/api";
 import { formatLabel } from "@/lib/format";
@@ -12,8 +11,9 @@ import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { RiskDrilldownModal } from "@/components/risk-drilldown-modal";
 import { chartColor } from "@/lib/chart-colors";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
-// ─── Color helpers ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Color helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Chart colors imported from lib/chart-colors.ts
 
@@ -25,7 +25,7 @@ function riskColor(label: string): string {
   return "var(--color-low)";
 }
 
-// ─── Animated number ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Animated number â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
   const [display, setDisplay] = useState(value);
@@ -53,55 +53,9 @@ function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: num
   return <>{Number(display).toFixed(decimals)}</>;
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ KPI Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type KpiCardConfig = {
-  label: string;
-  value: number;
-  decimals?: number;
-  icon: LucideIcon;
-  iconBg: string;
-  iconColor: string;
-  onClick?: () => void;
-  animationDelay?: string;
-};
-
-function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, onClick, animationDelay }: KpiCardConfig) {
-  const [changed, setChanged] = useState(false);
-  const prevValue = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (prevValue.current === null) { prevValue.current = value; return; }
-    if (prevValue.current === value) return;
-    prevValue.current = value;
-    setChanged(true);
-    const t = setTimeout(() => setChanged(false), 700);
-    return () => clearTimeout(t);
-  }, [value]);
-
-  const card = (
-    <div
-      className={`risk-kpi-enter flex items-start gap-4 rounded-xl border bg-surface p-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors duration-150 hover:border-border-strong ${changed ? "ring-2 ring-primary-border/60" : "border-border"} ${onClick ? "cursor-pointer" : ""}`}
-      style={{ animationDelay }}
-    >
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
-        <Icon size={20} className={iconColor} strokeWidth={2.2} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-muted leading-tight">{label}</p>
-        <p className={`mt-1.5 text-[30px] font-bold leading-none tracking-tight text-text transition-transform duration-300 ${changed ? "scale-105" : "scale-100"}`}>
-          <AnimatedNumber value={value} decimals={decimals} />
-        </p>
-      </div>
-      {onClick && <ChevronRight size={16} className="mt-1 shrink-0 text-muted" />}
-    </div>
-  );
-
-  if (onClick) return <button type="button" onClick={onClick} className="text-left w-full">{card}</button>;
-  return card;
-}
-
-// ─── SVG Vertical Bar Chart ──────────────────────────────────────────────────
+// â”€â”€â”€ SVG Vertical Bar Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type RiskLevel = { label: string; count: number };
 
@@ -190,11 +144,11 @@ function RiskBarChart({
                 style={{ transition: "height 0.8s ease-out, y 0.8s ease-out" }}
                 className={d.count > 0 ? "opacity-90 hover:opacity-100" : "opacity-30"}
               />
-              {/* Count label above bar — always shown clearly above the bar top */}
+              {/* Count label above bar â€” always shown clearly above the bar top */}
               <text
                 x={x + barW / 2}
                 y={d.count === 0
-                  ? chartTop + chartH - 26  /* fixed 26px above baseline — clear of the axis */
+                  ? chartTop + chartH - 26  /* fixed 26px above baseline â€” clear of the axis */
                   : y - 8                   /* always above the bar top */
                 }
                 textAnchor="middle"
@@ -244,7 +198,7 @@ function RiskBarChart({
   );
 }
 
-// ─── Horizontal Event Bars ────────────────────────────────────────────────────
+// â”€â”€â”€ Horizontal Event Bars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EventBars({
   data,
@@ -296,7 +250,7 @@ function EventBars({
   );
 }
 
-// ─── SVG Donut Chart ──────────────────────────────────────────────────────────
+// â”€â”€â”€ SVG Donut Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DonutChart({
   data,
@@ -396,7 +350,7 @@ function DonutChart({
   );
 }
 
-// ─── Chart Panel Card ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Chart Panel Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ChartCard({
   title,
@@ -425,7 +379,7 @@ function ChartCard({
   );
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function formatRelative(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -434,11 +388,9 @@ function formatRelative(date: Date): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-// ─── Modal State ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Modal State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type ModalState = { isOpen: boolean; metric: string; value?: string; title: string; total: number };
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function RiskDashboardClient({ initialData }: { initialData: DashboardRiskAnalytics }) {
   const [data, setData] = useState(initialData);
@@ -488,69 +440,22 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
     insightBody = `High-risk assessments represent ${highPct.toFixed(1)}% of all assessed intelligence.`;
   }
 
-  const kpis: KpiCardConfig[] = [
-    {
-      label: "Total Assessments", value: data.total_assessments, icon: ClipboardList, animationDelay: "0ms",
-      iconBg: "bg-blue-50", iconColor: "text-blue-500",
-      onClick: () => openDrilldown("total_assessments", "All Risk Assessments", data.total_assessments),
-    },
-    {
-      label: "Average Risk Score", value: data.average_risk_score, decimals: 1, icon: Gauge, animationDelay: "70ms",
-      iconBg: "bg-amber-50", iconColor: "text-amber-500",
-    },
-    {
-      label: "Highest Risk Score", value: data.highest_risk_score, decimals: 1, icon: ShieldAlert, animationDelay: "140ms",
-      iconBg: "bg-red-50", iconColor: "text-red-500",
-    },
-    {
-      label: "Human Review", value: data.human_review_count, icon: Users, animationDelay: "210ms",
-      iconBg: "bg-violet-50", iconColor: "text-violet-500",
-      onClick: () => openDrilldown("human_review", "Human Review Articles", data.human_review_count),
-    },
-    {
-      label: "Immediate Alerts", value: data.immediate_alert_count, icon: Bell, animationDelay: "280ms",
-      iconBg: data.immediate_alert_count > 0 ? "bg-high-bg" : "bg-primary-soft",
-      iconColor: data.immediate_alert_count > 0 ? "text-high" : "text-primary",
-      onClick: () => openDrilldown("immediate_alert", "Immediate Alert Articles", data.immediate_alert_count),
-    },
-  ];
-
   return (
     <main className="relative w-full min-h-screen overflow-hidden bg-surface-raised">
           <PageAmbient kind="risk" />
           <div className="relative z-10 mx-auto w-full max-w-[1600px] px-6 py-7 lg:px-10 space-y-6">
 
-        {/* ── Header ─── */}
-        <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">Risk Analytics</p>
-            <h1 className="mt-1 text-[32px] font-bold tracking-tight text-text leading-tight">Risk Intelligence Overview</h1>
-            <p className="mt-1.5 max-w-xl text-[14px] text-muted leading-relaxed">
-              Deterministic risk scoring across monitored intelligence, including review and alert signals.
-            </p>
+        <div className="mb-4 flex justify-end">
+          <div suppressHydrationWarning className="page-live-chip page-live-chip--risk" aria-live="polite">
+            <span className="page-live-label">LIVE</span>
           </div>
+        </div>
 
-          {/* Live status */}
-          <div suppressHydrationWarning className="flex items-center gap-3 self-start md:self-auto">
-            <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-bold shadow-sm ${liveStatus === "live" ? "border-low-border bg-low-bg text-low" : "border-medium-border bg-medium-bg text-medium"}`}>
-              <span className={`h-2 w-2 rounded-full ${liveStatus === "live" ? "bg-low animate-pulse" : "bg-medium"}`} />
-              <div>
-                <div>{liveStatus === "live" ? "Live Data" : "Update Delayed"}</div>
-                <div className="text-[11px] font-medium opacity-70">Updated {formatRelative(lastUpdated)}</div>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* ── KPI Row ─── */}
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Key performance indicators">
-          {kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
-        </section>
-
-        {/* ── Analytics Grid ─── */}
+        <CosmicPageHero variant="risk" imageSrc="/risk-analytics-hero.png" eyebrow="RISK ANALYTICS" title="Risk Intelligence Overview" description="Deterministic risk scoring across monitored intelligence, including review and alert signals." />
+        {/* â”€â”€ Analytics Grid â”€â”€â”€ */}
         <section className="grid gap-5 xl:grid-cols-[34fr_38fr_28fr]" aria-label="Risk analytics charts">
 
-          {/* Panel A — Risk Level Distribution */}
+          {/* Panel A â€” Risk Level Distribution */}
           <ChartCard
             title="Risk Level Distribution"
             subtitle="Assessment count by deterministic risk level."
@@ -567,7 +472,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
             />
           </ChartCard>
 
-          {/* Panel B — Event Type Distribution */}
+          {/* Panel B â€” Event Type Distribution */}
           <ChartCard
             title="Event Type Distribution"
             subtitle="Intelligence events currently represented in risk scoring."
@@ -578,7 +483,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
             />
           </ChartCard>
 
-          {/* Panel C — Event Type Share */}
+          {/* Panel C â€” Event Type Share */}
           <ChartCard
             title="Event Type Share"
             subtitle="Proportion of intelligence events by type."
@@ -590,7 +495,7 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
           </ChartCard>
         </section>
 
-        {/* ── Insight Strip ─── */}
+        {/* â”€â”€ Insight Strip â”€â”€â”€ */}
         <section className="flex flex-col gap-4 rounded-xl border border-border bg-surface px-7 py-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] md:flex-row md:items-center md:justify-between" aria-label="Key insights">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -637,3 +542,5 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
     </main>
   );
 }
+
+

@@ -25,8 +25,6 @@ import { formatLabel } from "@/lib/format";
 
 import { OverviewHero } from "./overview-hero";
 import { OverviewMetricCard } from "./overview-metric-card";
-import { RiskOverviewCard } from "./risk-overview-card";
-import { LatestIntelligenceGrid } from "./latest-intelligence-grid";
 import { PublisherLogo } from "./publisher-logo";
 import { KpiArticleIcon, KpiIntelligenceIcon, KpiCompanyIcon, KpiHighRiskIcon, KpiCriticalRiskIcon } from "./kpi-icons";
 
@@ -148,7 +146,7 @@ function DetailModal({
             type="button"
             onClick={onClose}
             aria-label="Close detail modal"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             <X size={17} aria-hidden="true" />
           </button>
@@ -272,10 +270,11 @@ function DetailModal({
 }
 
 
+
 export function OverviewContent({ 
   initialOverview, 
   initialIntelligence,
-  companyName 
+  companyName,
 }: { 
   initialOverview: DashboardOverview;
   initialIntelligence: DashboardIntelligenceItem[];
@@ -283,6 +282,7 @@ export function OverviewContent({
 }) {
   const [overview, setOverview] = useState<DashboardOverview>(initialOverview);
   const [intelligence, setIntelligence] = useState<DashboardIntelligenceItem[]>(initialIntelligence);
+  
   const [liveStatus, setLiveStatus] = useState<"live" | "updating" | "delayed">("live");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
 
@@ -299,10 +299,11 @@ export function OverviewContent({
       try {
         const [newOverview, newIntel] = await Promise.all([
           getDashboardOverview(),
-          getDashboardIntelligence(6)
+          getDashboardIntelligence(6),
         ]);
         setOverview(newOverview);
         setIntelligence(newIntel.items);
+        
         setLiveStatus("live");
         setLastUpdated(new Date());
       } catch {
@@ -344,9 +345,9 @@ export function OverviewContent({
         lastUpdated={lastUpdated}
       />
       
+      {/* SECTION 1: COVERAGE KPIs */}
       <section className="mt-2">
         <h2 className="mb-4 text-base font-semibold text-text">Coverage</h2>
-
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <OverviewMetricCard 
             label="Total Articles" 
@@ -389,8 +390,24 @@ export function OverviewContent({
         </div>
       </section>
 
+      {/* SECTION 6: CRITICAL SIGNALS */}
       <section className="mt-8">
-        <LatestIntelligenceGrid items={intelligence} />
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-text">Critical Signals</h2>
+          <Link href="/intelligence" className="text-sm font-semibold text-primary hover:underline">
+            View All Intelligence →
+          </Link>
+        </div>
+        <div className="space-y-3">
+          {intelligence.length > 0 ? intelligence.map((article) => (
+            <ArticleRow
+              key={article.article_id}
+              article={article as unknown as DashboardArticleItem}
+            />
+          )) : (
+            <EmptyState title="No critical signals active." />
+          )}
+        </div>
       </section>
 
       {selectedMetric && (

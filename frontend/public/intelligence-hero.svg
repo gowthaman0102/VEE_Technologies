@@ -1,0 +1,143 @@
+<svg width="1600" height="520" viewBox="0 0 1600 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlowLeft" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 160) rotate(90) scale(240 280)">
+      <stop offset="0" stop-color="#5B48C7" stop-opacity="0.95"/>
+      <stop offset="0.38" stop-color="#211A56" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#070B1A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bgGlowRight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1180 210) rotate(90) scale(380 600)">
+      <stop offset="0" stop-color="#A06CFF" stop-opacity="0.80"/>
+      <stop offset="0.38" stop-color="#4B39A7" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#070B1A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="planetGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1050 250) rotate(90) scale(295 330)">
+      <stop offset="0" stop-color="#C9B5FF" stop-opacity="0.9"/>
+      <stop offset="0.25" stop-color="#7C5BFF" stop-opacity="0.65"/>
+      <stop offset="0.68" stop-color="#110D2D" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#050915" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="planetCore" x1="704" y1="90" x2="1360" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E1A4B"/>
+      <stop offset="0.52" stop-color="#100E2D"/>
+      <stop offset="1" stop-color="#050915"/>
+    </linearGradient>
+    <linearGradient id="orbitLine" x1="820" y1="90" x2="1460" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EADFFF" stop-opacity="0.92"/>
+      <stop offset="0.32" stop-color="#BFA4FF" stop-opacity="0.75"/>
+      <stop offset="0.7" stop-color="#9280FF" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#F5EDFF" stop-opacity="0.95"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .orbit-slow { animation: orbitSlow 18s linear infinite; transform-origin: 1060px 270px; }
+      .orbit-fast { animation: orbitFast 12s linear infinite; transform-origin: 1060px 270px; }
+      .pulse { animation: pulse 4s ease-in-out infinite; }
+      .node { animation: nodePulse 2.8s ease-in-out infinite; }
+      .star { animation: twinkle 3.2s ease-in-out infinite alternate; }
+      @keyframes orbitSlow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      @keyframes orbitFast { 0% { transform: rotate(360deg); } 100% { transform: rotate(0deg); } }
+      @keyframes pulse { 0%,100% { opacity: 0.7; transform: scale(0.96); } 50% { opacity: 1; transform: scale(1.04); } }
+      @keyframes nodePulse { 0%,100% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.2); } }
+      @keyframes twinkle { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.8; } }
+    </style>
+  </defs>
+
+  <rect width="1600" height="520" fill="#050914"/>
+  <rect width="1600" height="520" fill="url(#bgGlowLeft)"/>
+  <rect width="1600" height="520" fill="url(#bgGlowRight)"/>
+
+  <g class="star" opacity="0.95">
+    <circle cx="80" cy="55" r="2.3" fill="#F5EBFF"/>
+    <circle cx="140" cy="132" r="2" fill="#F3E8FF"/>
+    <circle cx="255" cy="80" r="2.4" fill="#E7D8FF"/>
+    <circle cx="350" cy="135" r="2.3" fill="#F7F0FF"/>
+    <circle cx="450" cy="70" r="2" fill="#E9D9FF"/>
+    <circle cx="640" cy="85" r="2.3" fill="#F1E7FF"/>
+    <circle cx="760" cy="58" r="2.4" fill="#F8F1FF"/>
+    <circle cx="860" cy="98" r="2.1" fill="#E5D5FF"/>
+    <circle cx="1040" cy="80" r="2.5" fill="#F0EAFF"/>
+    <circle cx="1180" cy="60" r="2.1" fill="#F7F1FF"/>
+    <circle cx="1300" cy="100" r="2.2" fill="#E7DAFF"/>
+    <circle cx="1470" cy="140" r="2.5" fill="#F4EBFF"/>
+    <circle cx="1530" cy="250" r="2.4" fill="#F4EBFF"/>
+    <circle cx="1320" cy="420" r="2.2" fill="#EBDFFF"/>
+    <circle cx="1100" cy="450" r="2.3" fill="#E9D7FF"/>
+    <circle cx="810" cy="440" r="2.5" fill="#F2E7FF"/>
+    <circle cx="630" cy="420" r="2" fill="#DCCEFF"/>
+    <circle cx="470" cy="460" r="2.4" fill="#EFE2FF"/>
+    <circle cx="240" cy="380" r="2.2" fill="#F4EBFF"/>
+    <circle cx="110" cy="260" r="2" fill="#F2E8FF"/>
+    <circle cx="520" cy="205" r="2.3" fill="#E9DFFD"/>
+    <circle cx="940" cy="200" r="2.2" fill="#E9DFFD"/>
+    <circle cx="1020" cy="260" r="2.3" fill="#F6EEFF"/>
+  </g>
+
+  <g opacity="0.9">
+    <path d="M150 300C180 255 220 218 285 192C360 160 448 154 520 170" stroke="#B99EFF" stroke-width="1.6" stroke-dasharray="7 12" opacity="0.7"/>
+    <path d="M1010 120C1130 105 1290 137 1440 214" stroke="url(#orbitLine)" stroke-width="2" stroke-linecap="round" stroke-dasharray="10 15" opacity="0.8"/>
+    <path d="M950 360C1085 306 1202 296 1350 332C1416 348 1478 368 1535 386" stroke="url(#orbitLine)" stroke-width="2" stroke-linecap="round" stroke-dasharray="8 18" opacity="0.8"/>
+    <path d="M910 130C1006 165 1085 207 1170 230C1266 257 1360 266 1486 245" stroke="url(#orbitLine)" stroke-width="2" stroke-linecap="round" stroke-dasharray="12 16" opacity="0.7"/>
+  </g>
+
+  <g class="orbit-slow" opacity="0.65">
+    <ellipse cx="1060" cy="270" rx="250" ry="80" stroke="#E2D2FF" stroke-width="2" stroke-dasharray="12 17"/>
+    <ellipse cx="1060" cy="270" rx="175" ry="58" stroke="#C8BCFF" stroke-width="2" stroke-dasharray="6 18"/>
+  </g>
+
+  <g class="orbit-fast" opacity="0.7">
+    <path d="M867 190C965 155 1065 141 1182 154C1291 166 1380 205 1468 266" stroke="#DCC9FF" stroke-width="2" stroke-dasharray="8 18"/>
+    <path d="M864 327C944 367 1036 389 1136 388C1240 387 1339 351 1434 296" stroke="#DCC9FF" stroke-width="2" stroke-dasharray="7 17"/>
+  </g>
+
+  <g opacity="0.95">
+    <circle cx="115" cy="110" r="30" fill="#A388FF" fill-opacity="0.18"/>
+    <circle cx="115" cy="110" r="18" fill="#D3C6FF"/>
+    <circle cx="125" cy="118" r="5" fill="#F9F2FF"/>
+  </g>
+
+  <g filter="url(#softGlow)">
+    <circle cx="1060" cy="270" r="290" fill="url(#planetGlow)"/>
+    <circle cx="1060" cy="270" r="270" fill="url(#planetCore)"/>
+    <path d="M878 276C934 212 1017 179 1117 174C1219 169 1314 195 1388 246C1350 319 1285 370 1190 391C1088 414 963 391 878 276Z" fill="#0E1130" fill-opacity="0.72"/>
+    <path d="M796 326C828 270 873 233 932 208C986 185 1046 175 1117 180C1198 186 1277 216 1340 268L1347 278C1298 345 1226 392 1150 411C1064 436 949 431 796 326Z" fill="#13173E" fill-opacity="0.8"/>
+    <path d="M988 173L1042 223L1078 199L1115 252L1161 215L1196 260L1235 231L1260 273L1307 248L1326 285L1379 300L1344 333L1312 363L1270 350L1233 390L1174 352L1119 392L1068 360L1014 412L982 383L934 421L918 376L875 357L905 323L864 295L900 262L952 283L988 173Z" fill="#B6B7F5" fill-opacity="0.18"/>
+  </g>
+
+  <g class="pulse" opacity="0.98">
+    <circle cx="970" cy="218" r="8" fill="#F8F2FF"/>
+    <circle cx="1148" cy="180" r="8" fill="#F8F2FF"/>
+    <circle cx="1365" cy="235" r="8" fill="#F8F2FF"/>
+    <circle cx="1280" cy="322" r="8" fill="#F8F2FF"/>
+    <circle cx="1010" cy="350" r="7" fill="#F8F2FF"/>
+  </g>
+
+  <g>
+    <circle class="node" cx="970" cy="218" r="6" fill="#F8F3FF"/>
+    <circle class="node" cx="1148" cy="180" r="6" fill="#F8F3FF"/>
+    <circle class="node" cx="1365" cy="235" r="6" fill="#F8F3FF"/>
+    <circle class="node" cx="1280" cy="322" r="6" fill="#F8F3FF"/>
+    <circle class="node" cx="1010" cy="350" r="6" fill="#F8F3FF"/>
+  </g>
+
+  <g opacity="0.88">
+    <path d="M970 218L1148 180L1365 235" stroke="#F4ECFF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M1148 180L1280 322" stroke="#F4ECFF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M1280 322L1010 350" stroke="#F4ECFF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M970 218L1010 350" stroke="#F4ECFF" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g opacity="0.9">
+    <circle cx="1410" cy="170" r="2" fill="#FFFFFF"/>
+    <circle cx="1500" cy="120" r="2.2" fill="#FFFFFF"/>
+    <circle cx="1505" cy="320" r="2.2" fill="#FFFFFF"/>
+    <circle cx="880" cy="90" r="2" fill="#FFFFFF"/>
+    <circle cx="700" cy="130" r="2.3" fill="#FFFFFF"/>
+    <circle cx="520" cy="120" r="2" fill="#FFFFFF"/>
+  </g>
+</svg>

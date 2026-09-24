@@ -4,7 +4,7 @@ import { TimeRangePreset } from "@/lib/time-range";
 import { inputClasses, focusRing } from "@/components/ui/button-styles";
 
 type TimeRangeSelectorProps = { value: TimeRangePreset; onChange: (value: TimeRangePreset) => void; customStart?: string; customEnd?: string; onCustomStartChange?: (value: string) => void; onCustomEndChange?: (value: string) => void; includeCustom?: boolean };
-const presets: { value: TimeRangePreset; label: string }[] = [{ value: "24h", label: "24h" }, { value: "7d", label: "7d" }, { value: "30d", label: "30d" }, { value: "90d", label: "90d" }, { value: "365d", label: "1 Year" }, { value: "custom", label: "Custom" }];
+const presets: { value: TimeRangePreset; label: string }[] = [{ value: "7d", label: "7d" }, { value: "30d", label: "30d" }, { value: "90d", label: "90d" }, { value: "365d", label: "1 Year" }, { value: "custom", label: "Custom" }];
 
 export function TimeRangeSelector({ value, onChange, customStart = "", customEnd = "", onCustomStartChange, onCustomEndChange, includeCustom = true }: TimeRangeSelectorProps) {
   const visiblePresets = includeCustom ? presets : presets.filter((preset) => preset.value !== "custom");

@@ -17,6 +17,7 @@ from app.schemas.company_relevance import (
     CompanySemanticRelevanceRequest,
     CompanySemanticRelevanceResponse,
 )
+from app.schemas.company_overview import CompanyOverviewResponse
 from app.services.client_service import get_client
 from app.services.active_company_profile_service import (
     get_active_company_profile,
@@ -33,9 +34,27 @@ from app.services.company_service import (
 from app.services.company_relevance_service import (
     score_company_article_relevance,
 )
+from app.services.company_overview_service import get_company_overview
 
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
+
+
+@router.get(
+    "/{company_id}/overview",
+    response_model=CompanyOverviewResponse,
+)
+async def get_company_overview_endpoint(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> CompanyOverviewResponse:
+    overview = await get_company_overview(db, company_id)
+    if overview is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found.",
+        )
+    return overview
 
 
 @router.get("/active", response_model=ActiveCompanyResponse)

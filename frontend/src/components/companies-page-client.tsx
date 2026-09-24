@@ -2,136 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { 
-  Activity, AlertTriangle, BarChart3, Bell, ChevronRight,
-  FileText, Skull, X, Layers, Clock,
-  Settings, Eye
+  AlertTriangle, BarChart3, ChevronRight, Layers,
+  Settings, Eye, Activity, Building2, Globe2, ExternalLink
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { ArticleMetadata } from "@/components/article-metadata";
-import { ArticleViewButton } from "@/components/article-view-button";
-import { Badge, toneForRisk } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { 
-  getDashboardArticles, getDashboardCompanies, getRiskDrilldown, 
-  type DashboardArticleItem, type DashboardArticleMetric, 
-  type DashboardCompanyItem, type DashboardCompaniesResponse 
+import {
+  getCompanyOverview,
+  getDashboardCompanies,
+  type CompanyOverview,
+  type DashboardCompanyItem,
+  type DashboardCompaniesResponse,
 } from "@/lib/api";
-import { formatLabel } from "@/lib/format";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { PageAmbient } from "@/components/page-ambient";
-
-type MetricKey = "triage" | "risks" | "high" | "critical" | "alerts";
-type MetricTone = "blue" | "amber" | "red" | "critical" | "purple";
-
-const METRIC_CONFIG: Array<{ key: MetricKey; label: string; description: string; tone: MetricTone; icon: LucideIcon }> = [
-  { key: "triage", label: "Triage", description: "Items under review", tone: "blue", icon: FileText },
-  { key: "risks", label: "Risks", description: "Potential risks identified", tone: "amber", icon: AlertTriangle },
-  { key: "high", label: "High", description: "High priority matches", tone: "red", icon: BarChart3 },
-  { key: "alerts", label: "Alerts", description: "Total alerts generated", tone: "purple", icon: Bell },
-  { key: "critical", label: "Critical", description: "Critical threats detected", tone: "critical", icon: Skull },
-];
-
-function AnimatedValue({ value }: { value: number }) {
-  const [displayValue, setDisplayValue] = useState(0);
-  const previousValue = useRef<number | null>(null);
-
-  useEffect(() => {
-    const previous = previousValue.current ?? 0;
-    previousValue.current = value;
-    if (previous === value) {
-      setDisplayValue(value);
-      return;
-    }
-    const startedAt = performance.now();
-    const duration = 700;
-    let frame = 0;
-    const update = (now: number) => {
-      const progress = Math.min((now - startedAt) / duration, 1);
-      // easeOutExpo
-      const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      setDisplayValue(Math.round(previous + (value - previous) * ease));
-      if (progress < 1) frame = requestAnimationFrame(update);
-    };
-    frame = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(frame);
-  }, [value]);
-
-  return <>{displayValue}</>;
-}
-
-function LiveMetricRing({ config, value, progress, onClick, index }: { config: (typeof METRIC_CONFIG)[number]; value: number; progress: number | null; onClick: () => void; index: number }) {
-  const [changed, setChanged] = useState(false);
-  const previousValue = useRef(value);
-
-  const baseStyles = {
-    blue: { ring: "var(--color-primary)", track: "var(--color-primary-soft)", text: "text-primary" },
-    amber: { ring: "var(--color-medium)", track: "var(--color-medium-bg)", text: "text-medium" },
-    red: { ring: "var(--color-critical)", track: "var(--color-critical-bg)", text: "text-critical" },
-    critical: { ring: "var(--color-muted)", track: "var(--color-surface-sunken)", text: "text-muted" },
-    purple: { ring: "var(--color-primary)", track: "var(--color-primary-soft)", text: "text-primary" },
-  };
-
-  const isCriticalActive = config.tone === "critical" && value > 0;
-  const tone = isCriticalActive 
-    ? { ring: "var(--color-high)", track: "var(--color-critical-bg)", text: "text-critical" }
-    : baseStyles[config.tone];
-
-  const MetricIcon = config.icon;
-  const radius = 72; 
-  const strokeWidth = 12;
-  const size = 160;
-  const circumference = 2 * Math.PI * radius;
-  const visualProgress = progress ?? 1;
-  const [animatedProgress, setAnimatedProgress] = useState(0);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setAnimatedProgress(visualProgress));
-    return () => cancelAnimationFrame(frame);
-  }, [visualProgress]);
-
-  useEffect(() => {
-    if (previousValue.current === value) return;
-    previousValue.current = value;
-    setChanged(true);
-    const timeout = window.setTimeout(() => setChanged(false), 650);
-    return () => window.clearTimeout(timeout);
-  }, [value]);
-
-  return (
-    <button 
-      type="button" 
-      onClick={onClick} 
-      aria-label={`${config.label}: ${value}`} 
-      className="group relative flex flex-col items-center rounded-xl p-4 text-center transition-colors duration-150 hover:bg-surface-raised animate-[fadeIn_0.5s_ease-out_both] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
-      style={{ animationDelay: `${80 + index * 50}ms` }}
-    >
-      <div className="relative h-[120px] w-[120px] lg:h-[120px] lg:w-[120px] xl:h-[128px] xl:w-[128px]">
-        <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90 drop-shadow-sm" aria-hidden="true">
-          <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={tone.track} strokeWidth={strokeWidth} />
-          <circle 
-            cx={size/2} cy={size/2} r={radius} fill="none" stroke={tone.ring} 
-            strokeLinecap="round" strokeWidth={strokeWidth} 
-            strokeDasharray={circumference} 
-            strokeDashoffset={circumference * (1 - animatedProgress)}
-            className="transition-[stroke-dashoffset] duration-1000 ease-out" 
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 xl:gap-1.5 text-center">
-          <MetricIcon size={24} className={tone.text} strokeWidth={2.5} aria-hidden="true" />
-          <span className={`text-[32px] font-bold leading-none tracking-tight text-text transition-transform duration-300 xl:text-[36px] ${changed ? 'scale-110 text-primary' : ''}`}>
-            <AnimatedValue value={value} />
-          </span>
-        </div>
-      </div>
-      
-      <div className="mt-3">
-        <span className={`text-[12px] font-bold uppercase tracking-[0.08em] ${tone.text}`}>{config.label}</span>
-        <p className="mt-1 px-2 text-[12px] leading-tight text-muted">{config.description}</p>
-      </div>
-    </button>
-  );
-}
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
+import { CoverageGlobe } from "@/components/coverage-globe";
 
 function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "medium" | "low"; topics: string[]; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -139,12 +25,12 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
 
   const styles = {
     high: {
-      bg: "bg-critical-bg",
-      border: "border-critical-border",
-      iconBg: "bg-critical-bg",
-      iconColor: "text-critical",
-      titleColor: "text-critical",
-      dot: "bg-critical",
+      bg: "bg-high-bg",
+      border: "border-high-border",
+      iconBg: "bg-high-bg",
+      iconColor: "text-high",
+      titleColor: "text-high",
+      dot: "bg-high",
       desc: "High risk and time-sensitive subjects",
       footer: "Highest priority monitoring",
       Icon: AlertTriangle,
@@ -181,7 +67,7 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
 
   return (
     <article 
-      className={`group companies-topic-card relative flex min-h-[210px] flex-col overflow-hidden rounded-xl border ${styles.border} ${styles.bg} p-3 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong animate-[fadeIn_0.5s_ease-out_both]`}
+      className={`group companies-topic-card relative flex h-full flex-col overflow-hidden rounded-xl border ${styles.border} ${styles.bg} p-3 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong animate-[fadeIn_0.5s_ease-out_both]`}
       style={{ animationDelay: `${250 + index * 60}ms` }}
     >
       <styles.Visual
@@ -200,10 +86,16 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
             <p className="mt-0.5 text-[11px] font-medium text-muted">{styles.desc}</p>
           </div>
         </div>
-        <div className={`flex items-center gap-1 text-[13px] font-bold ${styles.iconColor}`}>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          aria-label={`${expanded ? "Collapse" : "Show all"} ${priority} priority topics`}
+          aria-expanded={expanded}
+          className={`flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-bold ${styles.iconColor} transition-opacity hover:bg-white/40 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35`}
+        >
           {topics.length} {topics.length === 1 ? "Topic" : "Topics"}
-          <ChevronRight size={16} aria-hidden="true" />
-        </div>
+          <ChevronRight size={16} aria-hidden="true" className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
+        </button>
       </div>
 
       <ul className="relative z-10 mt-3 flex-1 space-y-1.5">
@@ -231,62 +123,6 @@ function PriorityTopicCard({ priority, topics, index }: { priority: "high" | "me
   );
 }
 
-function MetricModal({ metric, articles, loading, onClose }: { metric: MetricKey; articles: DashboardArticleItem[]; loading: boolean; onClose: () => void }) {
-  const config = METRIC_CONFIG.find((item) => item.key === metric)!;
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-  
-  const emptyTitle = metric === "critical" ? "No critical threats detected." : metric === "alerts" ? "No alert-linked articles found." : "No matching articles found.";
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-text/40 p-0 sm:items-center sm:p-6 transition-opacity animate-[fadeIn_0.2s_ease-out]" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section role="dialog" aria-modal="true" aria-labelledby="company-metric-title" className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[0_2px_8px_rgba(28,23,52,0.10)] animate-[slideUp_0.3s_ease-out]">
-        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Live Intelligence Detail</p>
-            <h2 id="company-metric-title" className="mt-1 text-lg font-bold text-text">{config.label}</h2>
-            <p className="mt-1 text-sm text-muted">{loading ? "Loading current data..." : `${articles.length} ${articles.length === 1 ? "item" : "items"}`}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted hover:border-primary hover:text-primary hover:bg-primary-soft transition-colors">
-            <X size={17} aria-hidden="true" />
-          </button>
-        </header>
-        <div className="overflow-y-auto px-5 py-5 sm:px-6 bg-surface-raised">
-          {loading ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center">
-              <Activity className="animate-spin text-primary mb-3" size={24} />
-              <p className="text-sm text-muted">Loading current data...</p>
-            </div>
-          ) : articles.length === 0 ? (
-            <EmptyState title={emptyTitle} />
-          ) : (
-            <div className="space-y-3">
-              {articles.map((article) => (
-                <article key={`${article.article_id}-${article.risk_level ?? "article"}`} className="rounded-xl border border-border bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <ArticleMetadata publisherName={article.publisher_name} publishedAt={article.published_at} collectedAt={article.collected_at} compact />
-                      <h3 className="mt-3 break-words text-[15px] font-bold leading-relaxed text-text">{article.title}</h3>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {article.risk_level && <Badge tone={toneForRisk(article.risk_level)}>{formatLabel(article.risk_level)}</Badge>}
-                        {article.event_type && <Badge>{formatLabel(article.event_type)}</Badge>}
-                      </div>
-                    </div>
-                    <ArticleViewButton articleId={article.article_id} sourceUrl={article.url} sourceName={article.source_name} className="shrink-0 self-start" />
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function groupTopics(company: DashboardCompanyItem) {
   const grouped = { high: [] as string[], medium: [] as string[], low: [] as string[] };
   for (const topic of company.monitoring_topics) {
@@ -297,113 +133,53 @@ function groupTopics(company: DashboardCompanyItem) {
   return grouped;
 }
 
-export function CompaniesPageClient({ initialData }: { initialData: DashboardCompaniesResponse }) {
+export function CompaniesPageClient({
+  initialData,
+  initialOverview,
+}: {
+  initialData: DashboardCompaniesResponse;
+  initialOverview: CompanyOverview | null;
+}) {
   const [data, setData] = useState(initialData);
-  const [liveStatus, setLiveStatus] = useState<"live" | "delayed">("live");
-  const [selectedMetric, setSelectedMetric] = useState<MetricKey | null>(null);
-  const [articles, setArticles] = useState<DashboardArticleItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [overview, setOverview] = useState(initialOverview);
+  const [showCoverage, setShowCoverage] = useState(false);
+  const countryListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showCoverage && countryListRef.current) {
+      countryListRef.current.scrollTop = 0;
+    }
+  }, [showCoverage]);
   
   const company = data.items[0];
 
   useAutoRefresh(async () => {
     try {
-      setData(await getDashboardCompanies());
-      setLiveStatus("live");
-      setLastUpdated(new Date());
-    } catch {
-      setLiveStatus("delayed");
+      const nextData = await getDashboardCompanies();
+      setData(nextData);
+      if (nextData.items[0]) {
+        setOverview(await getCompanyOverview(nextData.items[0].id));
+      }
+    } catch (error) {
+      console.error("Failed to refresh companies data", error);
     }
   }, { intervalMs: 60_000 });
 
   if (!company) return <main className="px-6 py-8 lg:px-8"><EmptyState title="No monitored companies found." /></main>;
   
   const topics = groupTopics(company);
-  const totalRisks = company.risk_assessment_count;
-  const metricValues: Record<MetricKey, number> = { 
-    triage: company.triage_count, 
-    risks: company.risk_assessment_count, 
-    high: company.high_risk_count, 
-    critical: company.critical_risk_count, 
-    alerts: company.alert_count 
-  };
-
-  const openMetric = async (metric: MetricKey) => {
-    setSelectedMetric(metric);
-    setArticles([]);
-    setLoading(true);
-    try {
-      if (metric === "risks") {
-        setArticles((await getRiskDrilldown("total_assessments")).items);
-      } else if (metric === "alerts") {
-        setArticles((await getRiskDrilldown("immediate_alert")).items);
-      } else {
-        const apiMetric: DashboardArticleMetric = metric === "triage" ? "processed" : metric === "high" ? "high-risk" : "critical-risk";
-        setArticles((await getDashboardArticles(apiMetric)).items);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatRelativeTime = (date: Date) => {
-    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-    const diff = (date.getTime() - new Date().getTime()) / 1000;
-    if (Math.abs(diff) < 60) return 'just now';
-    if (Math.abs(diff) < 3600) return rtf.format(Math.round(diff / 60), 'minute');
-    return rtf.format(Math.round(diff / 3600), 'hour');
-  };
 
   return (
     <main className="companies-page relative min-h-[calc(100vh-74px)] w-full overflow-hidden bg-surface-raised">
           <PageAmbient kind="companies" />
           <div className="relative z-10 mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-5 px-5 py-5 sm:px-6 lg:px-8">
-        {/* Live Intelligence Card */}
-        <section className="shrink-0 rounded-[22px] border border-border bg-white p-4 shadow-[0_8px_25px_rgba(20,50,60,0.04)] animate-[fadeIn_0.5s_ease-out_100ms_both] lg:p-4">
-          <div className="flex flex-col justify-between gap-3 border-b border-border pb-3 md:flex-row md:items-center">
-            <div className="flex items-center gap-4">
-              <div className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] bg-primary-soft text-primary">
-                <Layers size={22} strokeWidth={2.2} />
-              </div>
-              <div>
-                <h2 className="text-[22px] lg:text-[26px] font-bold text-text leading-none">Live Intelligence Overview</h2>
-                <p className="mt-2 text-[15px] font-medium text-muted">Real-time analysis from {company.name} across monitored sources</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-5">
-              {liveStatus === "live" && (
-                <div className="flex items-center gap-2 text-[14px] font-bold text-low">
-                  <Activity size={16} strokeWidth={2.5} className="animate-pulse" />
-                  Scanning new content...
-                </div>
-              )}
-              <div className={`flex items-center gap-2.5 rounded-full border px-4 py-2 text-[14px] font-bold shadow-sm ${liveStatus === "live" ? "border-low-border bg-low-bg text-low" : "border-medium-border bg-medium-bg text-medium"}`}>
-                <span className={`h-2.5 w-2.5 rounded-full ${liveStatus === 'live' ? 'bg-low animate-pulse' : 'bg-medium'}`} />
-                {liveStatus === "live" ? "Live" : "Update delayed"}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-2 grid grid-cols-2 items-start gap-2 md:grid-cols-3 lg:grid-cols-5 lg:gap-3 xl:gap-4">
-            {METRIC_CONFIG.map((config, index) => (
-              <LiveMetricRing 
-                key={config.key} 
-                config={config} 
-                index={index}
-                value={metricValues[config.key]} 
-                progress={
-                  config.key === "high" || config.key === "critical" 
-                    ? (totalRisks > 0 ? metricValues[config.key] / totalRisks : 0) 
-                    : null
-                } 
-                onClick={() => void openMetric(config.key)} 
-              />
-            ))}
-          </div>
-        </section>
-
+        <CosmicPageHero
+  variant="intelligence"
+  imageSrc="/companies-hero.png"
+  eyebrow="COMPANIES"
+  title="Live Intelligence Overview"
+  description={`Real-time analysis from ${company.name} across monitored sources.`}
+/>
         {/* Monitoring Topics */}
         <section className="min-h-0 flex-1 animate-[fadeIn_0.5s_ease-out_200ms_both]">
           <div className="flex flex-col justify-between gap-4 border-b border-border pb-4 md:flex-row md:items-end">
@@ -413,32 +189,192 @@ export function CompaniesPageClient({ initialData }: { initialData: DashboardCom
               </div>
               <div>
                 <h2 className="text-[22px] lg:text-[24px] font-bold text-text">
-                  Monitoring Topics <span className="text-muted font-semibold">· {company.monitoring_topics.length}</span>
+                  Monitoring Topics
                 </h2>
-                <p className="mt-1.5 text-[15px] font-medium text-muted">AI is monitoring these topics across global media and online sources</p>
+                <p className="mt-1.5 text-[15px] font-medium text-muted">AI is monitoring <span className="font-semibold text-text">{company.monitoring_topics.length} topics</span> across global media and online sources</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
-              <div suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-muted">
-                <Clock size={15} />
-                Last updated {formatRelativeTime(lastUpdated)}
-              </div>
               <Link href="/watchlist" className="flex items-center gap-2 rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-text shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-border-strong">
                 <Settings size={16} /> Manage Topics
               </Link>
             </div>
           </div>
 
-          <div className="mt-5 grid min-h-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
+          <div className="mt-5 grid min-h-0 grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6 items-stretch">
             <PriorityTopicCard priority="high" topics={topics.high} index={0} />
             <PriorityTopicCard priority="medium" topics={topics.medium} index={1} />
             <PriorityTopicCard priority="low" topics={topics.low} index={2} />
           </div>
         </section>
+
+        {overview && (
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <article className="rounded-xl border border-border bg-surface p-4 shadow-[0_1px_2px_rgba(28,23,52,0.06)]">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Building2 size={20} aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-text">Company Profile Summary</h2>
+                  <p className="text-xs font-medium text-muted">Live monitoring configuration</p>
+                </div>
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs font-medium text-muted">Industry</dt>
+                  <dd className="mt-1 font-semibold text-text">{overview.company.industry || "Not configured"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted">Status</dt>
+                  <dd className="mt-1 font-semibold text-text">{overview.company.is_active ? "Active" : "Inactive"}</dd>
+                </div>
+              </dl>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                {overview.company.aliases.map((alias) => (
+                  <span key={alias} className="rounded-full bg-surface-raised px-2.5 py-1 font-medium text-muted">{alias}</span>
+                ))}
+              </div>
+              {overview.company.website && (
+                <a href={overview.company.website} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                  Company website <ExternalLink size={13} aria-hidden="true" />
+                </a>
+              )}
+            </article>
+
+            <article className="rounded-xl border border-border bg-surface p-4 shadow-[0_1px_2px_rgba(28,23,52,0.06)]">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-high-bg text-high">
+                  <Activity size={20} aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-text">Company Health Snapshot</h2>
+                  <p className="text-xs font-medium text-muted">Company-scoped live signals</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-xs text-muted">Articles</span><p className="mt-1 font-bold text-text">{overview.health.total_articles}</p></div>
+                <div><span className="text-xs text-muted">Active alerts</span><p className="mt-1 font-bold text-text">{overview.health.active_alerts}</p></div>
+                <div><span className="text-xs text-muted">High risk</span><p className="mt-1 font-bold text-high">{overview.health.high_risk_count}</p></div>
+                <div><span className="text-xs text-muted">Critical risk</span><p className="mt-1 font-bold text-critical">{overview.health.critical_risk_count}</p></div>
+              </div>
+              <div className="mt-4 border-t border-border pt-3 text-xs font-medium text-muted">
+                Sentiment: <span className="text-success">{overview.health.sentiment.positive} positive</span>, {overview.health.sentiment.neutral} neutral, <span className="text-critical">{overview.health.sentiment.negative} negative</span>
+              </div>
+            </article>
+
+            <button
+              type="button"
+              onClick={() => setShowCoverage(true)}
+              className="rounded-xl border border-border bg-surface p-4 text-left shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors hover:border-primary/40"
+              aria-label="Open global company presence"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-low-bg text-low">
+                  <Globe2 size={20} aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-text">Global Company Presence</h2>
+                  <p className="text-xs font-medium text-muted">Verified company locations and operating geographies</p>
+                </div>
+              </div>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Configured geographies</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {overview.company.geographies.length ? overview.company.geographies.map((geography) => (
+                  <span key={geography} className="rounded-full bg-low-bg px-2.5 py-1 text-xs font-medium text-text">{geography}</span>
+                )) : <span className="text-sm text-muted">No geographies configured</span>}
+              </div>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Official presence</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-xs text-muted">Locations</span><p className="font-bold text-text">{overview.official_location_count}</p></div>
+                <div><span className="text-xs text-muted">Countries</span><p className="font-bold text-text">{overview.location_country_count}</p></div>
+              </div>
+            </button>
+          </section>
+        )}
       </div>
-      
-      {selectedMetric && <MetricModal metric={selectedMetric} articles={articles} loading={loading} onClose={() => setSelectedMetric(null)} />}
+      {showCoverage && overview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#171238]/55 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowCoverage(false);
+          }}
+        >
+          <section
+            className="flex h-[min(760px,calc(100vh-2rem))] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/60 bg-surface p-5 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coverage-dialog-title"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Global company presence</p>
+              <h2 id="coverage-dialog-title" className="mt-1 text-xl font-bold text-text">Official locations and operating regions</h2>
+              <p className="mt-1 text-sm text-muted">Verified company locations and configured geographies for {overview.company.name}.</p>
+              </div>
+              <button type="button" onClick={() => setShowCoverage(false)} className="rounded-lg px-3 py-1 text-2xl leading-none text-muted hover:bg-surface-raised" aria-label="Close coverage dialog">×</button>
+            </div>
+
+            <div className="mt-5 grid min-h-0 gap-5 lg:h-[clamp(480px,58vh,600px)] lg:grid-cols-[1.15fr_0.85fr]">
+              <CoverageGlobe
+                markers={overview.headquarters.map((location) => ({
+                  label: `${location.label}: ${location.city}, ${location.country}`,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  color: "#a5f3fc",
+                  size: 0.55,
+                  locationType: location.location_type,
+                })).concat(overview.official_locations.flatMap((country) => country.locations
+                  .filter((location) => location.location_type !== "headquarters")
+                  .map((location) => ({
+                    label: `${location.label}: ${location.city}, ${location.country}`,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    color: "#c4b5fd",
+                    size: 0.32,
+                    locationType: location.location_type,
+                  })) ))}
+              />
+
+              <div className="flex min-h-0 flex-col">
+              <div className="rounded-xl border border-border bg-surface-raised p-3">
+                <h3 className="text-sm font-bold uppercase tracking-wide text-muted">Global presence summary</h3>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div><p className="text-lg font-bold text-text">{overview.headquarters[0] ? `${overview.headquarters[0].city}, ${overview.headquarters[0].country}` : "Not configured"}</p><p className="text-[11px] text-muted">Headquarters</p></div>
+                  <div><p className="text-lg font-bold text-text">{overview.official_location_count}</p><p className="text-[11px] text-muted">Official locations</p></div>
+                  <div><p className="text-lg font-bold text-text">{overview.location_country_count}</p><p className="text-[11px] text-muted">Countries</p></div>
+                </div>
+                <p className="mt-3 text-xs font-medium text-muted">Only active, verified company locations are shown.</p>
+              </div>
+              <h3 className="mt-5 text-sm font-bold uppercase tracking-wide text-muted">Official locations</h3>
+              <div ref={countryListRef} className="mt-3 min-h-0 space-y-2 overflow-y-auto pr-1 lg:flex-1">
+                {overview.official_locations.map((country) => (
+                  <div
+                    key={country.country}
+                    className="rounded-xl border border-border bg-surface-raised px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-text">{country.country}</span>
+                      <span className="text-xs text-muted">{country.locations.length} location{country.locations.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      {country.locations.map((location) => (
+                        <div key={location.id} className="flex items-center justify-between text-xs">
+                          <span className="text-text">{location.city}{location.region ? `, ${location.region}` : ""}</span>
+                          <span className="text-muted">{location.location_type.replace("_", " ")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

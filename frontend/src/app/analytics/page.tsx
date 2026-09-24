@@ -32,6 +32,7 @@ import {
   getActiveCompany,
   getDashboardArticles,
   getAnalyticsOverview,
+  generateReport,
 } from "@/lib/api";
 import {
   TimeRangeSelector,
@@ -47,6 +48,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useCountUp } from "@/hooks/use-count-up";
 import { ArticleRow } from "@/components/article-row";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
+import { toast } from "@/components/ui/toast";
 
 const IMPACT_ICONS: LucideIcon[] = [
   BriefcaseBusiness,
@@ -132,17 +135,6 @@ function SectionHeading({ title, description }: { title: string; description: st
   );
 }
 
-function SignalWave() {
-  return (
-    <svg className="pointer-events-none absolute right-[22%] top-0 hidden h-32 w-[390px] opacity-60 lg:block" viewBox="0 0 390 128" fill="none" aria-hidden="true">
-      <path d="M2 102C49 101 51 63 94 67C133 71 137 105 177 92C218 79 213 23 258 31C296 38 296 69 337 42C358 28 371 22 388 26" stroke="#B7A3F2" strokeWidth="1.5" />
-      <path d="M2 102C49 101 51 63 94 67C133 71 137 105 177 92C218 79 213 23 258 31C296 38 296 69 337 42C358 28 371 22 388 26" stroke="#D9D0FF" strokeWidth="9" opacity="0.22" />
-      <circle cx="258" cy="31" r="5" fill="#8B6DE8" />
-      <circle cx="258" cy="31" r="11" stroke="#B7A3F2" strokeOpacity="0.35" />
-    </svg>
-  );
-}
-
 function EmptyCompetitors() {
   return (
     <div className="mt-5 flex min-h-[250px] flex-col items-center justify-center rounded-2xl bg-[#FAF9FF] px-6 text-center">
@@ -162,11 +154,15 @@ function ImpactArticlesModal({
   articles,
   loading,
   onClose,
+  onGenerateReport,
+  generating,
 }: {
   category: string;
   articles: DashboardArticleItem[];
   loading: boolean;
   onClose: () => void;
+  onGenerateReport: () => void;
+  generating: boolean;
 }) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -185,7 +181,12 @@ function ImpactArticlesModal({
             <h2 id="impact-articles-title" className="mt-1 text-xl font-bold text-text">{formatLabel(category)} articles</h2>
             <p className="mt-1 text-sm text-muted">{loading ? "Loading matching articles..." : `${articles.length} ${articles.length === 1 ? "article" : "articles"}`}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close articles" className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted transition-colors hover:bg-surface-raised hover:text-text"><X size={18} /></button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onGenerateReport} disabled={generating || articles.length === 0} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-bold text-white disabled:opacity-50">
+              <FileText size={14} aria-hidden="true" /> {generating ? "Generating..." : "Generate report"}
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close articles" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={18} aria-hidden="true" /></button>
+          </div>
         </header>
         <div className="flex-1 overflow-y-auto bg-surface-raised px-5 py-5 sm:px-6">
           {loading ? <div className="flex h-full items-center justify-center text-sm text-muted">Loading matching articles...</div> : articles.length === 0 ? <EmptyState title="No matching articles found." /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={article.article_id} article={article} />)}</div>}
@@ -202,7 +203,7 @@ export default function AnalyticsPage() {
     useState("");
 
   const [preset, setPreset] =
-    useState<TimeRangePreset>("24h");
+    useState<TimeRangePreset>("7d");
 
   const [customStart, setCustomStart] =
     useState("");
@@ -219,6 +220,7 @@ export default function AnalyticsPage() {
   const [impactCategory, setImpactCategory] = useState<string | null>(null);
   const [impactArticles, setImpactArticles] = useState<DashboardArticleItem[]>([]);
   const [impactLoading, setImpactLoading] = useState(false);
+  const [generatingImpactReport, setGeneratingImpactReport] = useState(false);
 
   useEffect(() => {
     async function loadCompany() {
@@ -340,32 +342,40 @@ export default function AnalyticsPage() {
     }
   };
 
+  const generateImpactReport = async () => {
+    if (companyId === null || !data || !impactCategory || impactArticles.length === 0) return;
+    setGeneratingImpactReport(true);
+    try {
+      await generateReport({
+        company_id: companyId,
+        report_type: `analytics_${preset}`,
+        report_scope: "analytics",
+        report_title: `${formatLabel(impactCategory)} articles - ${preset}`,
+        time_mode: "media",
+        start_date: data.start,
+        end_date: data.end,
+        article_ids: impactArticles.map((article) => article.article_id),
+      });
+      toast.success("Analytics report generated. It is available in Analytics reports.");
+      window.location.href = "/reports?section=analytics";
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Unable to generate analytics report.");
+    } finally {
+      setGeneratingImpactReport(false);
+    }
+  };
+
   return (
     <main className="analytics-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-[radial-gradient(circle_at_70%_8%,rgba(130,100,255,0.09),transparent_34%),linear-gradient(180deg,#FBFBFF_0%,#F6F7FC_100%)] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <PageAmbient kind="analytics" />
       <div className="relative z-10 mx-auto w-full max-w-[1440px]">
-        <header className="relative flex flex-col justify-between gap-5 overflow-hidden pb-5 md:flex-row md:items-end">
-          <SignalWave />
-          <div className="relative z-10 min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-primary">Analytics</p>
-            <h1 className="mt-2 text-[30px] font-extrabold leading-tight tracking-tight text-[#171738] lg:text-[36px]">{companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"}</h1>
-            <p className="mt-1.5 text-[14px] text-[#656784]">Explore stored media intelligence across configurable reporting periods.</p>
+        <CosmicPageHero variant="analytics" imageSrc="/analytics-hero.png" eyebrow="ANALYTICS" title={companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"} description="Explore stored media intelligence across configurable reporting periods." />
+
+        <div className="mt-4 flex justify-end">
+          <div className="rounded-2xl border border-border bg-surface px-3 py-2 shadow-[0_6px_18px_rgba(27,22,62,0.06)]">
+            <TimeRangeSelector value={preset} onChange={setPreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} includeCustom={false} />
           </div>
-          <div className="relative z-10 flex shrink-0 flex-col items-start gap-3 md:items-end">
-            <div className="rounded-2xl border border-[rgba(90,72,160,0.14)] bg-white/90 p-1.5 shadow-[0_8px_20px_rgba(65,50,120,0.06)]">
-              <TimeRangeSelector
-                value={preset}
-                onChange={setPreset}
-                customStart={customStart}
-                customEnd={customEnd}
-                onCustomStartChange={setCustomStart}
-                onCustomEndChange={setCustomEnd}
-                includeCustom={false}
-              />
-            </div>
-            {data && <div className="flex items-center gap-3 text-[12px] text-muted"><span className="flex items-center gap-1.5"><span className="h-2 w-2 animate-pulse rounded-full bg-[#16A46A]" /> Live data</span><span className="hidden text-[#8586A2] sm:inline">{formatDate(data.start)} - {formatDate(data.end)}</span></div>}
-          </div>
-        </header>
+        </div>
 
         {error && (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-critical-border bg-critical-bg p-4 text-sm text-critical">
@@ -442,7 +452,7 @@ export default function AnalyticsPage() {
           </>
         )}
       </div>
-      {impactCategory && <ImpactArticlesModal category={impactCategory} articles={impactArticles} loading={impactLoading} onClose={() => setImpactCategory(null)} />}
+      {impactCategory && <ImpactArticlesModal category={impactCategory} articles={impactArticles} loading={impactLoading} onClose={() => setImpactCategory(null)} onGenerateReport={() => void generateImpactReport()} generating={generatingImpactReport} />}
     </main>
   );
 }

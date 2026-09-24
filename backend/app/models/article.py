@@ -80,6 +80,23 @@ class Article(Base):
         nullable=True,
     )
 
+    publisher_country_code: Mapped[str | None] = mapped_column(
+        String(2),
+        nullable=True,
+        index=True,
+    )
+
+    publisher_country: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        index=True,
+    )
+
+    publisher_country_resolution: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
+    )
+
     author: Mapped[str | None] = mapped_column(
         String(300),
         nullable=True,

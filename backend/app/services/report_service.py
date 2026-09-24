@@ -19,7 +19,7 @@ from openpyxl.styles import (
     Side,
 )
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -126,6 +126,7 @@ async def _get_report_articles(
     end_date: datetime,
     snapshot_at: datetime,
     time_mode: str = "media",
+    article_ids: list[int] | None = None,
 ) -> list[Article]:
     enabled_source_names = [
         source.name
@@ -140,14 +141,19 @@ async def _get_report_articles(
             Article.collected_at,
         )
 
-    stmt = (
-        select(Article)
-        .where(
+    conditions = [Article.collected_at <= snapshot_at]
+    if article_ids is None:
+        conditions.extend([
+            Article.source_name.in_(enabled_source_names),
             article_time >= start_date,
             article_time < end_date,
-            Article.collected_at <= snapshot_at,
-            Article.source_name.in_(enabled_source_names),
-        )
+        ])
+    else:
+        conditions.append(Article.id.in_(article_ids))
+
+    stmt = (
+        select(Article)
+        .where(*conditions)
         .order_by(
             article_time.desc(),
             Article.id.desc(),
@@ -668,6 +674,9 @@ async def build_company_report(
     end_date: datetime,
     snapshot_at: datetime,
     time_mode: str = "media",
+    article_ids: list[int] | None = None,
+    report_scope: str = "standard",
+    report_title: str | None = None,
 ) -> dict:
     start_date, end_date = validate_time_window(
         start_date,
@@ -686,6 +695,7 @@ async def build_company_report(
         end_date=end_date,
         snapshot_at=snapshot_at,
         time_mode=time_mode,
+        article_ids=article_ids,
     )
 
     article_ids = [
@@ -1099,6 +1109,8 @@ async def build_company_report(
             articles
         ),
         "articles": article_rows,
+        "report_scope": report_scope,
+        "report_title": report_title,
         "sentiment": sentiment_summary,
         "risk": risk_summary,
         "business_impact": business_summary,
@@ -1310,6 +1322,168 @@ def export_report_csv(
     return output.getvalue().encode(
         "utf-8"
     )
+
+
+def _is_article_collection_report(report_data: dict) -> bool:
+    return report_data.get("report_scope") in {"search", "analytics"}
+
+
+def export_article_collection_csv(report_data: dict) -> bytes:
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(("report", report_data.get("report_title") or "Article report"))
+    writer.writerow(("title", "publisher", "published_at", "sentiment", "critical_level"))
+    for item in report_data.get("articles", []):
+        writer.writerow((
+            item.get("title"),
+            item.get("publisher_name"),
+            item.get("published_at") or item.get("collected_at"),
+            item.get("sentiment"),
+            item.get("risk_level"),
+        ))
+    return output.getvalue().encode("utf-8")
+
+
+def export_article_collection_xlsx(report_data: dict) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Articles"
+    sheet.append([report_data.get("report_title") or "Article report"])
+    sheet.append(["Title", "Publisher", "Published At", "Sentiment", "Critical Level"])
+    for item in report_data.get("articles", []):
+        sheet.append([
+            item.get("title"),
+            item.get("publisher_name"),
+            item.get("published_at") or item.get("collected_at"),
+            item.get("sentiment"),
+            item.get("risk_level"),
+        ])
+    for cell in sheet[1] + sheet[2]:
+        _xlsx_header_style(cell)
+    for column, width in zip("ABCDE", (70, 28, 24, 16, 18)):
+        sheet.column_dimensions[column].width = width
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_article_collection_pdf(report_data: dict) -> bytes:
+    output = io.BytesIO()
+    styles = getSampleStyleSheet()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+    title_style = ParagraphStyle(
+        "ArticleReportTitle",
+        parent=styles["Title"],
+        alignment=TA_LEFT,
+        spaceAfter=12,
+    )
+    header_style = ParagraphStyle(
+        "ArticleReportHeader",
+        parent=styles["BodyText"],
+        alignment=TA_CENTER,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=10,
+    )
+    body_style = ParagraphStyle(
+        "ArticleReportBody",
+        parent=styles["BodyText"],
+        alignment=TA_LEFT,
+        fontSize=8,
+        leading=10,
+        spaceAfter=0,
+    )
+    centered_body_style = ParagraphStyle(
+        "ArticleReportCenteredBody",
+        parent=body_style,
+        alignment=TA_CENTER,
+    )
+    date_body_style = ParagraphStyle(
+        "ArticleReportDateBody",
+        parent=centered_body_style,
+        leading=9,
+    )
+
+    story = [
+        Paragraph(
+            escape(report_data.get("report_title") or "Article report"),
+            title_style,
+        ),
+    ]
+    rows = [[
+        Paragraph("Title", header_style),
+        Paragraph("Publisher", header_style),
+        Paragraph("Published", header_style),
+        Paragraph("Sentiment", header_style),
+        Paragraph("Critical level", header_style),
+    ]]
+    for item in report_data.get("articles", []):
+        published_at = item.get("published_at") or item.get("collected_at")
+        rows.append([
+            Paragraph(escape(str(item.get("title") or "—")), body_style),
+            Paragraph(escape(str(item.get("publisher_name") or "—")), body_style),
+            Paragraph(
+                _pdf_format_timestamp(published_at),
+                date_body_style,
+            ),
+            Paragraph(escape(str(item.get("sentiment") or "—")), centered_body_style),
+            Paragraph(escape(str(item.get("risk_level") or "—")), centered_body_style),
+        ])
+    table = Table(
+        rows,
+        repeatRows=1,
+        colWidths=[2.9 * inch, 1.25 * inch, 1.55 * inch, 0.8 * inch, 1.0 * inch],
+        hAlign="LEFT",
+    )
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#16324F")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D1D5DB")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F7F8FC")]),
+    ]))
+    story.append(table)
+    document.build(story)
+    return output.getvalue()
+
+
+def _pdf_format_timestamp(value: object | None) -> str:
+    if value is None:
+        return "Not available"
+
+    parsed: datetime | None = None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if text:
+            try:
+                parsed = datetime.fromisoformat(
+                    text.replace("Z", "+00:00")
+                )
+            except ValueError:
+                return escape(text)
+
+    if parsed is None:
+        return "Not available"
+
+    return escape(
+        _report_display_time(parsed).strftime(
+            "%d %b %Y\n%H:%M IST"
+        )
+    ).replace("\n", "<br/>")
 
 
 def _xlsx_header_style(
@@ -4712,11 +4886,18 @@ def render_report(
             )
         )
 
-    exporters = {
+    if _is_article_collection_report(report_data):
+        exporters = {
+            "pdf": export_article_collection_pdf,
+            "xlsx": export_article_collection_xlsx,
+            "csv": export_article_collection_csv,
+        }
+    else:
+        exporters = {
         "pdf": export_report_pdf,
         "xlsx": export_report_xlsx,
         "csv": export_report_csv,
-    }
+        }
 
     return exporters[
         file_format
@@ -4994,6 +5175,9 @@ async def generate_report_batch(
     period_start: datetime,
     period_end: datetime,
     time_mode: str = "media",
+    article_ids: list[int] | None = None,
+    report_scope: str = "standard",
+    report_title: str | None = None,
 ) -> list[GeneratedReport]:
     """
     Generate all three report formats (PDF, XLSX, CSV) in a single batch
@@ -5036,6 +5220,9 @@ async def generate_report_batch(
             end_date=period_end,
             snapshot_at=snapshot_at,
             time_mode=time_mode,
+            article_ids=article_ids,
+            report_scope=report_scope,
+            report_title=report_title,
         )
 
         for record in records:

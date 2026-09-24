@@ -63,6 +63,9 @@ async def export_report(
             period_start=start_date,
             period_end=end_date,
             time_mode=payload.time_mode,
+            article_ids=payload.article_ids,
+            report_scope=payload.report_scope,
+            report_title=payload.report_title,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -210,6 +213,9 @@ async def generate_report(
             period_start=start_date,
             period_end=end_date,
             time_mode=payload.time_mode,
+            article_ids=payload.article_ids,
+            report_scope=payload.report_scope,
+            report_title=payload.report_title,
         )
     except ValueError as exc:
         raise HTTPException(

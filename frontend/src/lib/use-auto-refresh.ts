@@ -68,6 +68,8 @@ export function useAutoRefresh(
       }
     }
 
+    void runRefresh();
+
     const interval = window.setInterval(
       () => {
         void runRefresh();

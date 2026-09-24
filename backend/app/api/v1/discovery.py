@@ -25,7 +25,7 @@ router = APIRouter(tags=["Discovery"])
 async def search_keyword(
     q: str = Query(..., min_length=1, max_length=500),
     company_id: int | None = Query(default=None, ge=1),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=5000),
     start: datetime | None = Query(default=None),
     end: datetime | None = Query(default=None),
     source_name: str | None = Query(default=None, max_length=200),

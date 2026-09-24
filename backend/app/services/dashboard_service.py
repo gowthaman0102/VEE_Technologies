@@ -364,6 +364,9 @@ async def get_dashboard_intelligence(
             RiskInsight.updated_at.label(
                 "updated_at"
             ),
+            ArticleSentiment.label.label(
+                "sentiment"
+            ),
         )
         .join(
             ArticleTriage,
@@ -384,6 +387,17 @@ async def get_dashboard_intelligence(
             RiskInsight,
             RiskInsight.risk_assessment_id
             == RiskAssessment.id,
+        )
+        .outerjoin(
+            ArticleSentiment,
+            (
+                ArticleSentiment.article_id
+                == Article.id
+            )
+            & (
+                ArticleSentiment.company_id
+                == ArticleTriage.company_id
+            ),
         )
         .where(
             Company.is_active.is_(True)
@@ -539,14 +553,14 @@ async def get_dashboard_risk_analytics(
     risk_dict = {(row.risk_level or ""): row.count for row in risk_result}
     standard_risks = ["critical", "high", "medium", "low"]
     risk_levels = []
-    
+
     for r in standard_risks:
         if r in risk_dict:
             risk_levels.append(DashboardRiskBucket(label=r, count=risk_dict[r]))
             del risk_dict[r]
-        elif r in ["high", "medium", "low"]:
+        else:
             risk_levels.append(DashboardRiskBucket(label=r, count=0))
-            
+
     for r, count in risk_dict.items():
         if r:
             risk_levels.append(DashboardRiskBucket(label=r, count=count))

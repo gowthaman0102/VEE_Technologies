@@ -21,6 +21,13 @@ export function toneForRisk(level?: string | null): Tone {
   return "neutral";
 }
 
+export function toneForSentiment(sentiment?: string | null): Tone {
+  const value = (sentiment ?? "").toLowerCase();
+  if (value === "positive") return "low";      // green
+  if (value === "negative") return "critical"; // red
+  return "neutral";                            // blue (neutral/unknown)
+}
+
 export function toneForStatus(status?: string | null): Tone {
   const value = (status ?? "").toLowerCase();
   if (value.includes("fail") || value.includes("overdue")) return "critical";

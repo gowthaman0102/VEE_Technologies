@@ -6,17 +6,14 @@ from pydantic import BaseModel, Field
 
 class ReportRequest(BaseModel):
     company_id: int = Field(gt=0)
-    report_type: Literal[
-        "daily",
-        "weekly",
-        "monthly",
-        "custom",
-        "all_history",
-    ] = "custom"
+    report_type: str = Field(default="custom", min_length=1, max_length=50)
     start_date: datetime | None = None
     end_date: datetime | None = None
     time_mode: Literal["media", "ingestion"] = "media"
     include_details: bool = True
+    article_ids: list[int] | None = Field(default=None, min_length=1)
+    report_scope: Literal["standard", "search", "analytics"] = "standard"
+    report_title: str | None = Field(default=None, max_length=200)
 
 
 class ReportMetric(BaseModel):

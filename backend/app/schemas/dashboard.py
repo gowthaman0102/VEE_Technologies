@@ -63,6 +63,8 @@ class DashboardIntelligenceItem(BaseModel):
     recommended_action: str
     attention_level: str
 
+    sentiment: str | None = None
+
     updated_at: datetime
     collected_at: datetime
 

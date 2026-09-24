@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.models.article_sentiment import ArticleSentiment
 from app.schemas.article import ArticleResponse
+from app.services.active_company_profile_service import (
+    get_active_company_profile,
+)
 from app.services.article_service import (
     get_article,
     list_articles,
@@ -70,6 +75,20 @@ async def get_article_by_id(
             detail="Article not found",
         )
 
+    # Fetch sentiment for the active company (optional enrichment)
+    sentiment_label: str | None = None
+
+    profile = await get_active_company_profile(db)
+
+    if profile is not None:
+        row = await db.scalar(
+            select(ArticleSentiment.label).where(
+                ArticleSentiment.article_id == article_id,
+                ArticleSentiment.company_id == profile.company_id,
+            )
+        )
+        sentiment_label = row
+
     return ArticleResponse(
         **article.__dict__,
         publisher_name=publisher_name(
@@ -82,4 +101,5 @@ async def get_article_by_id(
             article.url,
             article.canonical_url,
         ),
+        sentiment=sentiment_label,
     )

@@ -18,6 +18,7 @@ from app.processing.url_resolver import (
     resolve_article_url,
 )
 from app.services.article_service import get_article
+from app.utils.publisher_country import resolve_publisher_country
 
 
 @dataclass
@@ -149,6 +150,15 @@ async def process_article(
     )
 
     article.canonical_url = final_canonical_url
+    country = resolve_publisher_country(
+        article.source_name,
+        article.title,
+        article.url,
+        final_canonical_url,
+    )
+    article.publisher_country_code = country.country_code
+    article.publisher_country = country.country_name
+    article.publisher_country_resolution = country.resolution_method
     article.processed_at = datetime.now(
         timezone.utc
     )

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   FormEvent,
@@ -30,6 +30,7 @@ import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/compo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toast";
 import { PageAmbient } from "@/components/page-ambient";
+import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
 type ReportType =
   | "daily"
@@ -102,6 +103,7 @@ export function ReportsPageClient() {
   const [generating, setGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingBatch, setPendingBatch] = useState<ReportBatchHistoryItem | null>(null);
+  const [historySection, setHistorySection] = useState<"standard" | "search" | "analytics">("standard");
 
   const loadReports = useCallback(async (resolvedCompanyId: number) => {
     const reports = await getReportHistory(resolvedCompanyId);
@@ -109,6 +111,8 @@ export function ReportsPageClient() {
   }, []);
 
   useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("section");
+    if (requested === "search" || requested === "analytics") setHistorySection(requested);
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
@@ -126,10 +130,19 @@ export function ReportsPageClient() {
     return () => { window.clearTimeout(timer); };
   }, [loadReports]);
 
+  const visibleHistory = useMemo(
+    () => history.filter((batch) => {
+      const isSearch = batch.report_type.startsWith("search_");
+      const isAnalytics = batch.report_type.startsWith("analytics_");
+      return historySection === "search" ? isSearch : historySection === "analytics" ? isAnalytics : !isSearch && !isAnalytics;
+    }),
+    [history, historySection],
+  );
+
   const historyLabel = useMemo(() => {
-    if (!history.length) return "0 batches";
-    return `${history.length} ${history.length === 1 ? "batch" : "batches"}`;
-  }, [history.length]);
+    if (!visibleHistory.length) return "0 batches";
+    return `${visibleHistory.length} ${visibleHistory.length === 1 ? "batch" : "batches"}`;
+  }, [visibleHistory.length]);
 
   async function refreshHistory() {
     if (companyId === null) return;
@@ -245,7 +258,8 @@ export function ReportsPageClient() {
     <main className="relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-4 py-6 sm:px-6 lg:px-8">
       <PageAmbient kind="reports" />
       <div className="relative z-10 mx-auto w-full max-w-[1400px]">
-        <header className="mb-6 border-b border-border pb-5">
+        <CosmicPageHero variant="analytics" eyebrow="REPORTS" imageSrc="/reports-hero.png" title={companyName || "Active Company"} description="Generate executive media-intelligence reports. All formats (PDF, Excel, CSV) are created in a single snapshot-consistent batch." />
+        <header className="hidden mb-6 border-b border-border pb-5">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">REPORTS</p>
@@ -439,6 +453,13 @@ export function ReportsPageClient() {
               <p className="mt-2 text-sm text-muted">
                 {historyLabel} · Each batch contains PDF, Excel, and CSV
               </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(["standard", "search", "analytics"] as const).map((section) => (
+                  <button key={section} type="button" onClick={() => setHistorySection(section)} className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${historySection === section ? "bg-primary text-white" : "border border-border bg-surface-raised text-muted"}`}>
+                    {section === "standard" ? "Standard reports" : `${section} reports`}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <button
@@ -492,14 +513,14 @@ export function ReportsPageClient() {
                 Retry
               </button>
             </div>
-          ) : history.length === 0 ? (
+          ) : visibleHistory.length === 0 ? (
             <div className="mt-5 rounded-xl border border-dashed border-border bg-surface-raised p-8 text-center">
               <p className="text-base font-medium text-text">No reports generated yet.</p>
               <p className="mt-2 text-sm text-muted">Generate your first report using the controls above.</p>
             </div>
           ) : (
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {history.map((batch) => {
+              {visibleHistory.map((batch) => {
                 const anySuccess = Object.values(batch.formats).some((item) => item.status === "success");
                 
                 const titleText = `${formatReportType(batch.report_type)} · ${formatCompactDateTime(batch.period_start)} → ${formatCompactDateTime(batch.period_end)}`;

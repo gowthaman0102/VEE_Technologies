@@ -63,6 +63,8 @@ export type DashboardIntelligenceItem = {
   recommended_action: string;
   attention_level: string;
 
+  sentiment: string | null;
+
   updated_at: string;
 };
 
@@ -137,6 +139,61 @@ export async function getAnalyticsOverview(
 
   if (!response.ok) {
     throw new Error(`Analytics overview API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export type EventAnalyticsResponse = {
+  company_id: number;
+  total_events: number;
+  largest_events: Array<{ label: string; count: number }>;
+};
+
+export async function getEventAnalytics(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<EventAnalyticsResponse> {
+  const params = new URLSearchParams();
+  if (companyId) params.set("company_id", String(companyId));
+  params.set("start", start);
+  params.set("end", end);
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/events?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Event analytics API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export type SourceAnalyticsResponse = {
+  company_id: number;
+  sources: Array<{ source_name: string; count: number }>;
+};
+
+export async function getSourceAnalytics(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<SourceAnalyticsResponse> {
+  const params = new URLSearchParams();
+  if (companyId) params.set("company_id", String(companyId));
+  params.set("start", start);
+  params.set("end", end);
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/sources?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Source analytics API failed with status ${response.status}`);
   }
 
   return response.json();
@@ -302,6 +359,55 @@ export type DashboardCompaniesResponse = {
   items: DashboardCompanyItem[];
 };
 
+export type CompanyOverview = {
+  company: {
+    id: number;
+    name: string;
+    industry: string | null;
+    website: string | null;
+    is_active: boolean;
+    aliases: string[];
+    geographies: string[];
+  };
+  health: {
+    total_articles: number;
+    processed_articles: number;
+    sentiment: {
+      positive: number;
+      neutral: number;
+      negative: number;
+    };
+    high_risk_count: number;
+    critical_risk_count: number;
+    active_alerts: number;
+  };
+  official_locations: {
+    country: string;
+    locations: {
+      id: number;
+      label: string;
+      location_type: string;
+      city: string;
+      region: string | null;
+      country: string;
+      latitude: number;
+      longitude: number;
+    }[];
+  }[];
+  headquarters: {
+    id: number;
+    label: string;
+    location_type: string;
+    city: string;
+    region: string | null;
+    country: string;
+    latitude: number;
+    longitude: number;
+  }[];
+  official_location_count: number;
+  location_country_count: number;
+};
+
 export type ArticleCategory = {
   id: number;
   company_id: number;
@@ -458,6 +564,19 @@ export async function getDashboardCompanies(): Promise<DashboardCompaniesRespons
     throw new Error(
       `Companies API failed with status ${response.status}`,
     );
+  }
+
+  return response.json();
+}
+
+export async function getCompanyOverview(companyId: number): Promise<CompanyOverview> {
+  const response = await fetch(
+    `${API_BASE_URL}/companies/${companyId}/overview`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Company overview API failed with status ${response.status}`);
   }
 
   return response.json();
@@ -621,10 +740,13 @@ export type GenerateReportResponse = {
 
 export async function generateReport(args: {
   company_id: number;
-  report_type: "daily" | "weekly" | "monthly" | "custom" | "all_history";
+  report_type: "daily" | "weekly" | "monthly" | "custom" | "all_history" | string;
   time_mode?: "media" | "ingestion";
   start_date?: string;
   end_date?: string;
+  article_ids?: number[];
+  report_scope?: "standard" | "search" | "analytics";
+  report_title?: string;
 }): Promise<GenerateReportResponse> {
   const response = await fetch(`${API_BASE_URL}/reports/generate`, {
     method: "POST",

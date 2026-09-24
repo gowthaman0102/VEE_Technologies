@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 
 import httpx
 
@@ -11,10 +11,12 @@ class OllamaLLMProvider(LLMProvider):
         model: str = "qwen2.5:7b",
         base_url: str = "http://127.0.0.1:11434",
         timeout: float = 120.0,
+        temperature: float = 0.0,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.temperature = temperature
 
     async def generate(
         self,
@@ -31,6 +33,9 @@ class OllamaLLMProvider(LLMProvider):
             "model": self.model,
             "prompt": normalized_prompt,
             "stream": False,
+            "options": {
+                "temperature": self.temperature,
+            },
         }
 
         if response_format is not None:

@@ -1,8 +1,8 @@
 # Railway Deployment
 
-This repository contains two deployable services. Deploy them as two Railway services from the same GitHub repository.
+This repository contains separate web, worker, beat, and frontend processes. Deploy them as Railway services from the same GitHub repository.
 
-## Backend service
+## Backend web service
 
 1. Create a Railway service from this repository.
 2. Set **Root Directory** to `/backend`.
@@ -16,6 +16,27 @@ This repository contains two deployable services. Deploy them as two Railway ser
    `https://your-frontend-service.up.railway.app`
 
 6. Generate a public domain for the backend and verify `/api/v1/health`.
+
+Create two additional Railway services from the same repository with
+**Root Directory** set to `/backend`, the same database/Redis variables, and
+the following start commands:
+
+- Worker: `celery -A app.core.celery_app:celery_app worker --loglevel=info --pool=threads --concurrency=4 -Q media-intelligence`
+- Beat: `celery -A app.core.celery_app:celery_app beat --loglevel=info`
+
+## Intelligence model service
+
+The worker runs sentiment, triage, business-impact, competitor, and risk analysis
+through the configured LLM provider. With the default Ollama provider, the worker
+must reach `OLLAMA_BASE_URL` and the configured `LLM_MODEL` (local defaults:
+`http://127.0.0.1:11434` and `qwen2.5:7b`). If Ollama is unavailable, intelligence
+tasks retry and processed, high-risk, critical-risk, and analytics metrics remain
+unchanged until the model service is restored; ingestion itself continues.
+
+Run exactly one Beat service. Beat dispatches `ingestion.live_poll` every five
+minutes, and the worker consumes that task plus the article-processing tasks it
+queues. Without both services, the API remains healthy but dashboard values stop
+changing because no new feed data is ingested or processed.
 
 ## Frontend service
 

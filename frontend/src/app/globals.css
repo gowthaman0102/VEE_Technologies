@@ -21,15 +21,26 @@
   --critical: #9b1c3d;
   --critical-bg: #f6dce3;
   --critical-border: #e9b9c7;
-  --high: #b4442a;
-  --high-bg: #f7e0d7;
-  --high-border: #eabfab;
-  --medium: #96700c;
-  --medium-bg: #f6ecd0;
-  --medium-border: #e4d29c;
-  --low: #3e2f82;
-  --low-bg: #e7e2f5;
-  --low-border: #cfc5e8;
+  --high: #705db5;
+  --high-bg: #f0ecff;
+  --high-border: #d4c9f2;
+  --medium: #705db5;
+  --medium-bg: #f0ecff;
+  --medium-border: #d4c9f2;
+  --low: #705db5;
+  --low-bg: #f0ecff;
+  --low-border: #d4c9f2;
+  --hero-bg-1: #080725;
+  --hero-bg-2: #0f0b35;
+  --hero-bg-3: #1b1455;
+  --hero-purple: #7b5cff;
+  --hero-purple-bright: #9b7bff;
+  --hero-violet: #a66cff;
+  --hero-lavender: #c7b8ff;
+  --hero-text: #f7f5ff;
+  --hero-text-secondary: #d1c8ee;
+  --hero-text-muted: #9d94c2;
+  --hero-border: rgba(151, 123, 255, 0.25);
 }
 
 @theme inline {
@@ -115,6 +126,156 @@ body {
 .page-ambient-reports { color: var(--primary); opacity: 0.1; }
 .page-ambient-settings { color: var(--medium); opacity: 0.1; }
 .page-ambient-search { color: var(--low); opacity: 0.1; }
+
+.cosmic-page-hero {
+  position: relative;
+  min-height: 225px;
+  margin-inline: -1rem;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hero-border);
+  background: linear-gradient(110deg, var(--hero-bg-1) 0%, var(--hero-bg-2) 48%, var(--hero-bg-3) 100%);
+  color: var(--hero-text);
+  isolation: isolate;
+}
+
+.cosmic-page-hero::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 58px;
+  background: linear-gradient(180deg, transparent, rgba(123, 92, 255, 0.12));
+  border-bottom: 1px solid rgba(199, 184, 255, 0.14);
+  content: "";
+  pointer-events: none;
+}
+
+.cosmic-page-hero-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 225px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 1.5rem clamp(1.5rem, 4vw, 3.5rem) 1.65rem;
+}
+
+.cosmic-page-hero-copy { display: flex; min-width: 0; align-items: flex-start; gap: 1rem; max-width: 700px; }
+.cosmic-page-hero-accent { display: block; width: 3px; min-width: 3px; height: 76px; margin-top: 0.35rem; border-radius: 99px; background: linear-gradient(var(--hero-purple-bright), var(--hero-violet)); box-shadow: 0 0 18px rgba(155, 123, 255, 0.8); }
+.cosmic-page-hero-context, .cosmic-page-hero-eyebrow { color: var(--hero-lavender); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
+.cosmic-page-hero-command { margin-top: 0.5rem; color: var(--hero-text-secondary); font-size: 0.9rem; }
+.cosmic-page-hero-eyebrow { margin-top: 1.15rem; color: var(--hero-purple-bright); }
+.cosmic-page-hero h1 { margin-top: 0.35rem; color: var(--hero-text); font-size: clamp(2.05rem, 4vw, 3rem); font-weight: 700; letter-spacing: -0.04em; line-height: 1.04; }
+.cosmic-page-hero-description { max-width: 650px; margin-top: 0.75rem; color: var(--hero-text-secondary); font-size: 0.95rem; line-height: 1.6; }
+.cosmic-page-hero-controls { position: relative; z-index: 3; display: flex; flex-shrink: 0; flex-direction: column; align-items: flex-end; gap: 0.75rem; }
+.cosmic-page-hero-status, .cosmic-page-hero-range { color: var(--hero-text-secondary); }
+.cosmic-page-hero-status > div { border-color: var(--hero-border) !important; background: rgba(123, 92, 255, 0.14) !important; color: var(--hero-text) !important; box-shadow: 0 0 24px rgba(123, 92, 255, 0.12); }
+.cosmic-page-hero-action button { border-color: rgba(199, 184, 255, 0.42) !important; background: rgba(93, 67, 190, 0.72) !important; color: var(--hero-text) !important; box-shadow: 0 0 22px rgba(123, 92, 255, 0.2); }
+.cosmic-page-hero-range > div { border-color: var(--hero-border) !important; background: rgba(20, 16, 68, 0.72) !important; }
+.cosmic-page-hero-range button { color: var(--hero-text-secondary) !important; }
+.cosmic-page-hero-range button[aria-selected="true"] { background: var(--hero-purple) !important; color: white !important; }
+
+.page-live-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.48rem 0.8rem 0.48rem 1.8rem;
+  border: 1px solid rgba(255, 116, 116, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2937;
+  box-shadow: 0 0 0 1px rgba(255, 116, 116, 0.08), 0 10px 22px rgba(196, 57, 57, 0.12);
+  animation: live-badge-pulse 1.2s ease-in-out infinite;
+}
+.page-live-chip--risk {
+  background: rgba(255, 255, 255, 0.96);
+}
+.page-live-chip::before {
+  position: absolute;
+  left: 0.7rem;
+  top: 50%;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.45), 0 0 12px rgba(255, 77, 77, 0.7);
+  transform: translate(-50%, -50%);
+  animation: live-dot-pulse 1.1s ease-out infinite;
+  content: "";
+}
+.page-live-label {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #111827;
+}
+
+@keyframes live-badge-pulse {
+  0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 1px rgba(255, 116, 116, 0.08), 0 8px 18px rgba(196, 57, 57, 0.12); }
+  50% { transform: translateY(-1px) scale(1.02); box-shadow: 0 0 0 1px rgba(255, 116, 116, 0.14), 0 12px 24px rgba(255, 80, 80, 0.22); }
+}
+@keyframes live-dot-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.42), 0 0 12px rgba(255, 77, 77, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 77, 77, 0), 0 0 18px rgba(255, 77, 77, 0.6); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0), 0 0 0 rgba(255, 77, 77, 0); }
+}
+
+.cosmic-hero-visual { position: absolute; inset: 0 0 0 35%; z-index: 0; overflow: hidden; background: radial-gradient(circle at 68% 58%, rgba(123, 92, 255, 0.28), transparent 28%), linear-gradient(90deg, var(--hero-bg-1), transparent 40%); }
+.cosmic-hero-visual-intelligence::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 60% 35%, rgba(181, 139, 255, 0.4), transparent 22%), radial-gradient(circle at 25% 30%, rgba(116, 90, 255, 0.26), transparent 24%), linear-gradient(180deg, rgba(18, 13, 43, 0.08), rgba(18, 13, 43, 0.36)); animation: cosmic-intelligence-glow 7s ease-in-out infinite alternate; }
+.cosmic-hero-visual-intelligence::after { content: ""; position: absolute; right: 12%; top: 16%; width: 210px; height: 210px; border: 1px solid rgba(180, 160, 255, 0.4); border-radius: 50%; box-shadow: 0 0 26px rgba(123, 92, 255, 0.22), inset 0 0 24px rgba(123, 92, 255, 0.12); animation: cosmic-intelligence-ring 12s linear infinite; }
+.cosmic-hero-stars { position: absolute; inset: 0; opacity: 0.65; background-image: radial-gradient(circle at 19% 27%, #d7cdff 0 1px, transparent 1.5px), radial-gradient(circle at 38% 68%, #9b7bff 0 1px, transparent 1.5px), radial-gradient(circle at 61% 18%, #d7cdff 0 1px, transparent 1.5px), radial-gradient(circle at 78% 33%, #9b7bff 0 1px, transparent 1.5px), radial-gradient(circle at 91% 72%, #d7cdff 0 1px, transparent 1.5px), radial-gradient(circle at 48% 42%, #9b7bff 0 1px, transparent 1.5px); background-size: 180px 130px, 220px 170px, 240px 190px, 190px 150px, 270px 210px, 160px 140px; animation: cosmic-star-drift 10s ease-in-out infinite alternate; }
+.cosmic-hero-grid { position: absolute; inset: 0; opacity: 0.15; background-image: linear-gradient(rgba(155, 123, 255, 0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(155, 123, 255, 0.12) 1px, transparent 1px); background-size: 54px 54px; mask-image: linear-gradient(90deg, transparent, black 40%, transparent); }
+.cosmic-hero-planet { position: absolute; right: 8%; bottom: -190px; width: min(42vw, 520px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 35% 25%, rgba(166, 108, 255, 0.32), transparent 35%), radial-gradient(circle at 50% 50%, #17114b 0 54%, #0b092c 69%, transparent 70%); box-shadow: 0 -8px 48px rgba(123, 92, 255, 0.4), 0 -1px 0 1px rgba(199, 184, 255, 0.45); animation: cosmic-planet-breathe 8s ease-in-out infinite alternate; }
+.cosmic-hero-orbits, .cosmic-hero-trend { position: absolute; right: 0; bottom: 0; width: 64%; height: 100%; overflow: visible; stroke: rgba(176, 151, 255, 0.5); stroke-width: 1; }
+.cosmic-hero-node { fill: var(--hero-lavender); stroke: var(--hero-purple); stroke-width: 8; stroke-opacity: 0.2; animation: cosmic-node-pulse 4s ease-in-out infinite; }
+.cosmic-hero-node-two { animation-delay: -1.2s; }.cosmic-hero-node-three { animation-delay: -2.3s; }
+.cosmic-hero-labels { position: absolute; right: 8%; top: 18%; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; max-width: 290px; }
+.cosmic-hero-labels span { border: 1px solid var(--hero-border); border-radius: 99px; background: rgba(20, 16, 68, 0.58); padding: 0.35rem 0.65rem; color: var(--hero-text-secondary); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.13em; }
+.cosmic-hero-radar { position: absolute; right: 30%; top: 30%; width: 112px; height: 112px; border: 1px solid rgba(199, 184, 255, 0.65); border-radius: 50%; box-shadow: 0 0 0 18px rgba(123, 92, 255, 0.08), 0 0 0 38px rgba(123, 92, 255, 0.05); animation: cosmic-radar-pulse 5s ease-out infinite; }.cosmic-hero-radar span { position: absolute; inset: 25%; border: 1px solid rgba(166, 108, 255, 0.45); border-radius: 50%; }.cosmic-hero-radar span:nth-child(2) { inset: 45%; }.cosmic-hero-radar span:nth-child(3) { inset: 12%; }.cosmic-hero-radar b { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #f2c66b; font-size: 1rem; }
+.cosmic-hero-trend { right: 10%; bottom: 5%; width: 48%; height: 65%; stroke: var(--hero-lavender); }.cosmic-hero-trend-glow { stroke: var(--hero-violet); stroke-width: 10; stroke-opacity: 0.18; }.cosmic-hero-trend circle { fill: var(--hero-lavender); stroke: var(--hero-purple); stroke-width: 8; stroke-opacity: 0.25; }
+.cosmic-hero-magnifier { position: absolute; right: 25%; top: 26%; width: 100px; height: 100px; border: 2px solid rgba(199, 184, 255, 0.8); border-radius: 50%; box-shadow: 0 0 0 16px rgba(123, 92, 255, 0.09), 0 0 36px rgba(123, 92, 255, 0.35); animation: cosmic-magnifier-pulse 5s ease-in-out infinite; }.cosmic-hero-magnifier::after { position: absolute; right: -32px; bottom: -22px; width: 50px; height: 2px; transform: rotate(48deg); background: var(--hero-lavender); box-shadow: 0 0 10px var(--hero-purple); content: ""; }.cosmic-hero-magnifier span { position: absolute; inset: 27%; border: 1px solid rgba(166, 108, 255, 0.7); border-radius: 50%; }
+
+@keyframes cosmic-star-drift { from { opacity: 0.42; transform: translate3d(0, 0, 0); } to { opacity: 0.72; transform: translate3d(-8px, 5px, 0); } }
+@keyframes cosmic-intelligence-glow { 0% { opacity: 0.55; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1.04); } }
+@keyframes cosmic-intelligence-ring { 0% { transform: rotate(0deg) scale(0.95); opacity: 0.4; } 50% { transform: rotate(180deg) scale(1.08); opacity: 0.9; } 100% { transform: rotate(360deg) scale(0.95); opacity: 0.4; } }
+@keyframes cosmic-planet-breathe { from { transform: translateY(5px) scale(1); } to { transform: translateY(-3px) scale(1.015); } }
+@keyframes cosmic-node-pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes cosmic-radar-pulse { 0%, 100% { transform: scale(0.96); opacity: 0.65; } 50% { transform: scale(1.04); opacity: 1; } }
+@keyframes cosmic-magnifier-pulse { 0%, 100% { box-shadow: 0 0 0 16px rgba(123, 92, 255, 0.09), 0 0 30px rgba(123, 92, 255, 0.28); } 50% { box-shadow: 0 0 0 24px rgba(123, 92, 255, 0.05), 0 0 44px rgba(123, 92, 255, 0.4); } }
+
+@media (min-width: 640px) { .cosmic-page-hero { margin-inline: -1.5rem; } }
+@media (min-width: 1024px) { .cosmic-page-hero { margin-inline: -2rem; } }
+@media (max-width: 767px) { .cosmic-page-hero, .cosmic-page-hero-content { min-height: 225px; }.cosmic-page-hero-content { align-items: flex-start; flex-direction: column; gap: 0.75rem; padding: 1.25rem 1.25rem 1.35rem; }.cosmic-page-hero-controls { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }.cosmic-hero-visual { inset: 0; opacity: 0.72; }.cosmic-hero-planet { right: -18%; bottom: -190px; width: 390px; }.cosmic-hero-orbits { width: 100%; }.cosmic-hero-labels { right: 5%; top: 10%; }.cosmic-page-hero h1 { font-size: 2.1rem; } }
+@media (prefers-reduced-motion: reduce) { .cosmic-hero-stars, .cosmic-hero-planet, .cosmic-hero-node, .cosmic-hero-radar, .cosmic-hero-magnifier { animation: none; } }
+
+/* Keep every page hero on the same globe-and-curve treatment as Overview. */
+.cosmic-page-hero { margin-inline: 0; border-radius: 0.75rem; }
+.cosmic-page-hero { height: 225px; }
+.cosmic-hero-visual { inset: 0; background: var(--sidebar); }
+.cosmic-hero-image { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; object-position: center right; filter: saturate(1.2) brightness(1.08); }
+.cosmic-hero-bg { position: absolute; inset: 0; z-index: 0; background-image: linear-gradient(90deg, rgba(42, 32, 89, 0.86), rgba(42, 32, 89, 0.7) 40%, rgba(42, 32, 89, 0.18) 100%); background-size: cover; background-position: center right; background-repeat: no-repeat; }
+.cosmic-hero-bg[style*="background-image"] { background-size: cover; background-position: center right; }
+.cosmic-hero-bg-anim { animation: cosmic-hero-pan 14s ease-in-out infinite alternate; }
+.cosmic-hero-lines-anim { opacity: 0.22; mix-blend-mode: screen; animation: cosmic-hero-lines-drift 9s ease-in-out infinite alternate-reverse; }
+.cosmic-hero-network { position: absolute; inset: 0 0 0 auto; z-index: 1; width: 68%; height: 100%; pointer-events: none; }
+.cosmic-hero-network-paths { animation: cosmic-hero-network-drift 8s ease-in-out infinite alternate; transform-origin: center; }
+.cosmic-hero-network-nodes { animation: cosmic-hero-network-pulse 3.5s ease-in-out infinite; transform-origin: center; }
+.cosmic-hero-network-particles { animation: cosmic-hero-network-particles 5s ease-in-out infinite alternate; }
+.cosmic-hero-network-orbits { animation: cosmic-hero-network-orbits 12s linear infinite; transform-origin: 522px 153px; }
+.cosmic-hero-shimmer { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.035) 50%, transparent 70%); animation: cosmic-hero-shimmer 4s ease-in-out infinite; }
+.cosmic-hero-overlay { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, rgba(42, 32, 89, 0.96), rgba(42, 32, 89, 0.72) 48%, transparent); }
+.cosmic-page-hero-content { z-index: 2; height: 225px; min-height: 0; }
+@keyframes cosmic-hero-pan { 0% { background-position: 78% center; transform: scale(1); } 50% { background-position: 91% center; transform: scale(1.05) translate3d(-1%, 1%, 0); } 100% { background-position: 100% center; transform: scale(1.09) translate3d(0, -1%, 0); } }
+@keyframes cosmic-hero-lines-drift { 0% { background-position: 100% 48%; transform: translate3d(1%, 0, 0) scale(1.02); opacity: 0.12; } 50% { background-position: 88% 53%; transform: translate3d(-1%, -1%, 0) scale(1.06); opacity: 0.28; } 100% { background-position: 76% 47%; transform: translate3d(-2%, 1%, 0) scale(1.1); opacity: 0.16; } }
+@keyframes cosmic-hero-network-drift { from { transform: translate3d(2%, 1%, 0); opacity: 0.35; } to { transform: translate3d(-3%, -1%, 0); opacity: 0.9; } }
+@keyframes cosmic-hero-network-pulse { 0%, 100% { opacity: 0.35; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.3); } }
+@keyframes cosmic-hero-network-particles { from { opacity: 0.2; transform: translate3d(8px, 4px, 0); } to { opacity: 1; transform: translate3d(-12px, -7px, 0); } }
+@keyframes cosmic-hero-network-orbits { from { transform: rotate(0deg); opacity: 0.2; } to { transform: rotate(360deg); opacity: 0.65; } }
+@keyframes cosmic-hero-shimmer { 0% { opacity: 0; transform: translateX(-100%); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateX(100%); } }
+@media (max-width: 767px) { .cosmic-page-hero, .cosmic-page-hero-content { height: 236px; }.cosmic-hero-network { width: 100%; opacity: 0.72; } }
+@media (prefers-reduced-motion: reduce) { .cosmic-hero-bg-anim, .cosmic-hero-lines-anim, .cosmic-hero-network-paths, .cosmic-hero-network-nodes, .cosmic-hero-network-particles, .cosmic-hero-network-orbits, .cosmic-hero-shimmer { animation: none; } }
 
 @keyframes ambient-drift {
   from { transform: translate3d(0, 0, 0) rotate(-2deg); }

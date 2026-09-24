@@ -95,7 +95,7 @@ function DetailModal({
             <h2 id="kpi-detail-title" className="mt-1 text-lg font-semibold text-text">{title}</h2>
             <p className="mt-1 text-sm text-muted">{loading ? "Loading current data..." : `${count} ${count === 1 ? "item" : "items"}`}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={17} aria-hidden="true" /></button>
+          <button type="button" onClick={onClose} aria-label="Close detail modal" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={17} aria-hidden="true" /></button>
         </header>
         <div className="overflow-y-auto px-5 py-5 sm:px-6">
           {error ? <EmptyState title="Unable to load details" description={error} /> : loading ? (
