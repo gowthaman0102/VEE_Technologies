@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useRef } from "react";
@@ -168,42 +168,26 @@ export function CoverageGlobe({
         const scene = globeRef.current.scene();
         if (scene) {
           // Add a new strong HemisphereLight to ensure the entire globe is evenly lit
-          const hemiLight = new THREE.HemisphereLight(0xbfd4ff, 0x1a1030, 0.9);
+          const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 4.0);
           scene.add(hemiLight);
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           scene.children.forEach((child: any) => {
             if (child.type === 'AmbientLight') {
-              child.intensity = 0.35; // Match reference
+              child.intensity = Math.PI * 2; // For newer THREE.js versions
             }
             if (child.type === 'DirectionalLight') {
-              child.intensity = 1.6; 
-              child.position.set(5, 3, 4); // Match reference sun position
+              child.intensity = Math.PI; 
+              child.position.set(100, 50, 100); 
             }
           });
-
-          // Add Custom Atmosphere Shader from Reference
-          const earthRadius = 100; // react-globe.gl default
-          const atmo = new THREE.Mesh(
-            new THREE.SphereGeometry(earthRadius * 1.06, 64, 64),
-            new THREE.ShaderMaterial({
-              vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-              fragmentShader: `varying vec3 vN; void main(){ float i=pow(0.62-dot(vN,vec3(0.,0.,1.)),2.5); gl_FragColor=vec4(0.55,0.68,1.0,1.0)*i; }`,
-              blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent: true
-            })
-          );
-          // Remove old custom atmo if any (for hot reloading)
-          scene.children = scene.children.filter((c: any) => !c.isCustomAtmo);
-          (atmo as any).isCustomAtmo = true;
-          scene.add(atmo);
         }
         
         const material = globeRef.current.globeMaterial();
         if (material) {
           if (material.color) material.color.set('#ffffff');
-          if (material.specular) material.specular.set('#555577'); // Match reference specular
-          if (material.shininess !== undefined) material.shininess = 12; // Match reference shininess
-          if (material.emissive) material.emissive.set('#000000'); // Remove the fake glow
+          if (material.emissive) material.emissive.set('#1a1a1a'); // Slight inner glow prevents pure black
+          if (material.shininess !== undefined) material.shininess = 35;
         }
 
       } catch (err) {
@@ -265,39 +249,59 @@ export function CoverageGlobe({
           onPointClick={(d: object) => {
             if (onMarkerClick) onMarkerClick(d as CoverageMarker);
           }}
-          showAtmosphere={false}
+          showAtmosphere
+          atmosphereColor="#00f3ff"
+          atmosphereAltitude={0.15}
         />
       </div>
-
       {/* Dynamic SVG Connector and Label Overlay */}
-      
-        <div className="absolute inset-0 pointer-events-none z-20">
-          <svg className="absolute inset-0 w-full h-full" style={{ opacity: (hqPos && hqPos.occluded) ? 0.2 : 1, transition: 'opacity 0.3s' }}>
-            <path 
-              d={`M ${labelX + 110} ${labelY + 56} C ${labelX + 110} ${labelY + 110}, ${hqPos ? hqPos.x : dimensions.width / 2} ${(hqPos ? hqPos.y : dimensions.height / 2) - 50}, ${hqPos ? hqPos.x : dimensions.width / 2} ${hqPos ? hqPos.y : dimensions.height / 2}`} 
-              fill="none" 
-              stroke="#00f3ff" 
-              strokeWidth="2" 
-              className="drop-shadow-[0_0_5px_rgba(0,243,255,0.8)]"
-            />
-            {hqPos && <circle cx={hqPos.x} cy={hqPos.y} r="4" fill="#00f3ff" className="drop-shadow-[0_0_8px_rgba(0,243,255,1)]" />}
-          </svg>
-          
-          <div 
-            className="absolute rounded-lg border border-[#00f3ff]/60 bg-[#0a0518]/95 backdrop-blur-md px-4 py-2.5 shadow-[0_0_20px_rgba(0,243,255,0.2)] pointer-events-auto cursor-pointer transition-transform hover:scale-105"
-            style={{ top: labelY, left: labelX }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (hqMarker && onMarkerClick) onMarkerClick(hqMarker);
-            }}
-          >
+      <div className="absolute inset-0 pointer-events-none z-20">
+        <svg className="absolute inset-0 w-full h-full">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          {hqPos && (
+            <>
+              <path
+                d={`M ${labelX + 190} ${labelY + 55} C ${labelX + 190} ${(labelY + 55 + hqPos.y) / 2 + 30} ${hqPos.x} ${(labelY + 55 + hqPos.y) / 2 - 30} ${hqPos.x} ${hqPos.y}`}
+                fill="none"
+                stroke="#00f3ff"
+                strokeWidth="2"
+                filter="url(#glow)"
+                opacity="0.9"
+              />
+              <circle cx={hqPos.x} cy={hqPos.y} r="7" fill="#00f3ff" opacity="0.25" />
+              <circle cx={hqPos.x} cy={hqPos.y} r="3.5" fill="#00f3ff" filter="url(#glow)" />
+            </>
+          )}
+        </svg>
+
+        {/* Label card - ALWAYS VISIBLE */}
+        <div
+          className="absolute rounded-xl border border-[#00f3ff]/70 bg-[#080420]/90 backdrop-blur-md px-4 py-3 shadow-[0_0_24px_rgba(0,243,255,0.25)] pointer-events-auto cursor-pointer transition-transform hover:scale-105"
+          style={{ top: labelY, left: labelX, minWidth: 200 }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (hqMarker && onMarkerClick) onMarkerClick(hqMarker);
+          }}
+        >
+          <div className="flex items-start gap-2">
+            <div className="mt-1 w-2 h-2 rounded-full bg-[#00f3ff] shadow-[0_0_6px_#00f3ff] flex-shrink-0" />
             <div className="flex flex-col">
-              <span className="text-[13px] font-bold text-white tracking-wide leading-tight">OpenAI Headquarters —</span>
-              <span className="text-[12px] font-semibold text-[#e2e8f0] leading-tight mt-0.5">San Francisco, United States</span>
+              <span className="text-[13px] font-bold text-white tracking-wide leading-tight">OpenAI Headquarters</span>
+              <span className="text-[11px] font-medium text-[#94a3b8] leading-tight mt-0.5">San Francisco, United States</span>
+              <span className="text-[10px] text-[#00f3ff]/70 mt-1">Click for details</span>
             </div>
           </div>
         </div>
+      </div>
     </div>
   );
 }
