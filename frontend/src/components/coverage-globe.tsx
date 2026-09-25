@@ -168,26 +168,42 @@ export function CoverageGlobe({
         const scene = globeRef.current.scene();
         if (scene) {
           // Add a new strong HemisphereLight to ensure the entire globe is evenly lit
-          const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 4.0);
+          const hemiLight = new THREE.HemisphereLight(0xbfd4ff, 0x1a1030, 0.9);
           scene.add(hemiLight);
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           scene.children.forEach((child: any) => {
             if (child.type === 'AmbientLight') {
-              child.intensity = Math.PI * 2; // For newer THREE.js versions
+              child.intensity = 0.35; // Match reference
             }
             if (child.type === 'DirectionalLight') {
-              child.intensity = Math.PI; 
-              child.position.set(100, 50, 100); 
+              child.intensity = 1.6; 
+              child.position.set(5, 3, 4); // Match reference sun position
             }
           });
+
+          // Add Custom Atmosphere Shader from Reference
+          const earthRadius = 100; // react-globe.gl default
+          const atmo = new THREE.Mesh(
+            new THREE.SphereGeometry(earthRadius * 1.06, 64, 64),
+            new THREE.ShaderMaterial({
+              vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+              fragmentShader: `varying vec3 vN; void main(){ float i=pow(0.62-dot(vN,vec3(0.,0.,1.)),2.5); gl_FragColor=vec4(0.55,0.68,1.0,1.0)*i; }`,
+              blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent: true
+            })
+          );
+          // Remove old custom atmo if any (for hot reloading)
+          scene.children = scene.children.filter((c: any) => !c.isCustomAtmo);
+          (atmo as any).isCustomAtmo = true;
+          scene.add(atmo);
         }
         
         const material = globeRef.current.globeMaterial();
         if (material) {
           if (material.color) material.color.set('#ffffff');
-          if (material.emissive) material.emissive.set('#1a1a1a'); // Slight inner glow prevents pure black
-          if (material.shininess !== undefined) material.shininess = 35;
+          if (material.specular) material.specular.set('#555577'); // Match reference specular
+          if (material.shininess !== undefined) material.shininess = 12; // Match reference shininess
+          if (material.emissive) material.emissive.set('#000000'); // Remove the fake glow
         }
 
       } catch (err) {
@@ -249,9 +265,7 @@ export function CoverageGlobe({
           onPointClick={(d: object) => {
             if (onMarkerClick) onMarkerClick(d as CoverageMarker);
           }}
-          showAtmosphere
-          atmosphereColor="#00f3ff"
-          atmosphereAltitude={0.15}
+          showAtmosphere={false}
         />
       </div>
 
@@ -260,7 +274,7 @@ export function CoverageGlobe({
         <div className="absolute inset-0 pointer-events-none z-20">
           <svg className="absolute inset-0 w-full h-full" style={{ opacity: (hqPos && hqPos.occluded) ? 0.2 : 1, transition: 'opacity 0.3s' }}>
             <path 
-              d={`M ${labelX + 100} ${labelY + 40} Q ${hqPos ? hqPos.x : dimensions.width / 2} ${labelY + 40} ${hqPos ? hqPos.x : dimensions.width / 2} ${hqPos ? hqPos.y : dimensions.height / 2}`} 
+              d={`M ${labelX + 110} ${labelY + 56} C ${labelX + 110} ${labelY + 110}, ${hqPos ? hqPos.x : dimensions.width / 2} ${(hqPos ? hqPos.y : dimensions.height / 2) - 50}, ${hqPos ? hqPos.x : dimensions.width / 2} ${hqPos ? hqPos.y : dimensions.height / 2}`} 
               fill="none" 
               stroke="#00f3ff" 
               strokeWidth="2" 
