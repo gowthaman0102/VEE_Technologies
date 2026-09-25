@@ -33,8 +33,12 @@ export function PublisherLogo({ publisherName, size = 32, className = "" }: Publ
     if (lower.includes("pypi")) return "pypi.org";
     if (lower.includes("business insider")) return "businessinsider.com";
     if (lower.includes("al jazeera")) return "aljazeera.com";
-    // Fallback: try to just remove spaces and add .com
-    const stripped = lower.replace(/[^a-z0-9]/g, "");
+    if (lower.includes("dw english")) return "dw.com";
+    // Fallback: remove spaces but keep dots and hyphens
+    const stripped = lower.replace(/[^a-z0-9.-]/g, "");
+    if (stripped.includes(".")) {
+      return stripped;
+    }
     return `${stripped}.com`;
   };
 

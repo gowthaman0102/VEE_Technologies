@@ -1,10 +1,12 @@
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlsplit
 
 from app.ingestion.types import CollectedArticle
 from app.models.article import Article
 from app.schemas.article import ArticleCreate
+from app.utils.publisher_country_resolver import resolve_publisher_country
 
 
 async def create_article(
@@ -41,6 +43,8 @@ async def find_existing_article(
 async def save_collected_article(
     db: AsyncSession,
     data: CollectedArticle,
+    *,
+    company_id: int | None = None,
 ) -> tuple[Article, bool]:
     existing = await find_existing_article(
         db,
@@ -50,8 +54,24 @@ async def save_collected_article(
 
     if existing is not None:
         return existing, False
+        
+    try:
+        domain = urlsplit(data.url).hostname or ""
+    except ValueError:
+        domain = ""
+        
+    country_res = resolve_publisher_country(
+        publisher_name=data.source_name,
+        publisher_domain=domain,
+        canonical_url=data.canonical_url,
+    )
+    
+    data.publisher_country_code = country_res.country_code
+    data.publisher_country_name = country_res.country_name
+    data.publisher_country_method = country_res.method
 
     article_data = ArticleCreate(
+        company_id=company_id,
         **data.model_dump()
     )
 

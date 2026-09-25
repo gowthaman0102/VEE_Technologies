@@ -6,6 +6,7 @@ from app.models.article_triage import ArticleTriage
 from app.models.article_sentiment import ArticleSentiment
 from app.models.client import Client
 from app.models.company import Company
+from app.models.company_configuration import CompanyConfiguration
 from app.models.company_alias import CompanyAlias
 from app.models.company_geography import CompanyGeography
 from app.models.company_regulator import CompanyRegulator
@@ -30,6 +31,7 @@ __all__ = [
     "ArticleSentiment",
     "Client",
     "Company",
+    "CompanyConfiguration",
     "CompanyAlias",
     "CompanyGeography",
     "CompanyRegulator",

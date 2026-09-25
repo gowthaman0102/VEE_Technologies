@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -146,6 +146,12 @@ async def semantic_search(
             func.lower(Article.source_name)
             == filters.source_name.lower()
         )
+        
+    if filters.publisher_country_code is not None:
+        if filters.publisher_country_code.lower() == "unknown":
+            statement = statement.where(Article.publisher_country_method == "unknown")
+        else:
+            statement = statement.where(Article.publisher_country_code == filters.publisher_country_code.upper())
 
     if filters.event_type is not None:
         statement = statement.where(

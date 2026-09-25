@@ -90,6 +90,7 @@ async def run_collector(
             await save_collected_article(
                 db,
                 article,
+                company_id=profile.company_id,
             )
         )
 

@@ -12,6 +12,10 @@ from app.schemas.company_context import (
     CompanyContextCreate,
     CompanyContextResponse,
 )
+from app.schemas.client_configuration import (
+    ClientConfiguration,
+    ClientConfigurationUpdate,
+)
 from app.schemas.company_relevance import (
     ArticleRelevanceResponse,
     CompanySemanticRelevanceRequest,
@@ -32,6 +36,10 @@ from app.services.company_service import (
 )
 from app.services.company_relevance_service import (
     score_company_article_relevance,
+)
+from app.services.client_configuration_service import (
+    get_client_config,
+    update_client_config,
 )
 
 
@@ -162,6 +170,41 @@ async def get_company_context_endpoint(
         db,
         company_id,
     )
+
+
+@router.get(
+    "/{company_id}/configuration",
+    response_model=ClientConfiguration,
+)
+async def get_company_configuration_endpoint(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> ClientConfiguration:
+    try:
+        return await get_client_config(db, company_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.put(
+    "/{company_id}/configuration",
+    response_model=ClientConfiguration,
+)
+async def update_company_configuration_endpoint(
+    company_id: int,
+    data: ClientConfigurationUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> ClientConfiguration:
+    try:
+        return await update_client_config(db, company_id, data)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 @router.post(
     "/{company_id}/semantic-relevance",

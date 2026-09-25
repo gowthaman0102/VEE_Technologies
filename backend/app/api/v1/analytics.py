@@ -92,6 +92,14 @@ async def read_analytics_overview(
         start=start,
         end=end,
     )
+    
+    from app.services.analytics_service import get_publisher_country_distribution
+    country_distribution = await get_publisher_country_distribution(
+        db,
+        company_id=company_id,
+        start=start,
+        end=end,
+    )
 
     return AnalyticsOverviewResponse(
         company_id=company_id,
@@ -116,6 +124,7 @@ async def read_analytics_overview(
         business_impact=businesses.get("items", businesses),
         competitors=competitors.get("competitors", []),
         comparison=comparison,
+        publisher_country_distribution=country_distribution["distribution"],
     )
 
 

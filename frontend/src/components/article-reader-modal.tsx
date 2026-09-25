@@ -95,7 +95,7 @@ export function ArticleReaderModal({
                   {article.title}
                 </h1>
                 <div className="flex items-center gap-2 text-sm text-muted">
-                  <span className="font-semibold uppercase tracking-wider">{article.publisher_name}</span>
+                  <span className="font-semibold uppercase tracking-wider">{article.publisher_name}{article.publisher_country_name && ` · ${article.publisher_country_name}`}</span>
                   <span>·</span>
                   <span suppressHydrationWarning>{article.published_at ? new Intl.DateTimeFormat(undefined, { dateStyle: "long", timeStyle: "short" }).format(new Date(article.published_at)) : "Unknown date"}</span>
                 </div>

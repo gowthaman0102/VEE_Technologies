@@ -6,7 +6,7 @@ import { IntelligencePageClient } from "@/components/intelligence-page-client";
 
 export default async function IntelligencePage() {
   const [data, overview] = await Promise.all([
-    getDashboardIntelligence(200),
+    getDashboardIntelligence(10000),
     getDashboardOverview()
   ]);
 

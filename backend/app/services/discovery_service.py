@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
@@ -81,6 +81,12 @@ async def keyword_search(
             func.lower(Article.source_name)
             == filters.source_name.lower()
         )
+        
+    if filters.publisher_country_code is not None:
+        if filters.publisher_country_code.lower() == "unknown":
+            stmt = stmt.where(Article.publisher_country_method == "unknown")
+        else:
+            stmt = stmt.where(Article.publisher_country_code == filters.publisher_country_code.upper())
 
     if filters.event_type is not None:
         stmt = stmt.where(

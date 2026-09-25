@@ -17,3 +17,7 @@ class CollectedArticle(BaseModel):
     language: str | None = Field(default=None, max_length=20)
 
     published_at: datetime | None = None
+    
+    publisher_country_code: str | None = Field(default=None, max_length=2)
+    publisher_country_name: str | None = Field(default=None, max_length=100)
+    publisher_country_method: str | None = Field(default=None, max_length=50)

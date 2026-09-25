@@ -25,11 +25,14 @@
         return False
 
     for alias in normalized_aliases:
-        if alias == "chatgpt":
-            if alias in haystack and "openai" in haystack:
-                return True
-            continue
-
+        if alias in {"ai", "gpt", "chatgpt"}:
+            if len(normalized_aliases) == 1:
+                continue
+            if not any(
+                candidate != alias and candidate in haystack
+                for candidate in normalized_aliases
+            ):
+                continue
         if alias in haystack:
             return True
 

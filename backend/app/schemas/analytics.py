@@ -68,6 +68,14 @@ class CompetitorAnalyticsResponse(BaseModel):
     company_id: int
     competitors: list[dict] = Field(default_factory=list)
 
+class PublisherCountryItem(BaseModel):
+    country_code: str | None
+    country_name: str | None
+    article_count: int
+
+class PublisherCountryDistributionResponse(BaseModel):
+    company_id: int
+    distribution: list[PublisherCountryItem] = Field(default_factory=list)
 
 class AnalyticsOverviewResponse(BaseModel):
     company_id: int
@@ -80,3 +88,4 @@ class AnalyticsOverviewResponse(BaseModel):
     business_impact: dict[str, int] = Field(default_factory=dict)
     competitors: list[dict] = Field(default_factory=list)
     comparison: dict[str, float | int] = Field(default_factory=dict)
+    publisher_country_distribution: list[PublisherCountryItem] = Field(default_factory=list)

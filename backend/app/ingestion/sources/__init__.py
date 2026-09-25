@@ -4,6 +4,7 @@ from app.ingestion.sources.registry import (
     NewsSource,
     get_enabled_sources,
     get_source,
+    get_sources_for_config,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "build_collector",
     "get_enabled_sources",
     "get_source",
+    "get_sources_for_config",
 ]

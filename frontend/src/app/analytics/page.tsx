@@ -32,6 +32,7 @@ import {
   getActiveCompany,
   getDashboardArticles,
   getAnalyticsOverview,
+  generateReport,
 } from "@/lib/api";
 import {
   TimeRangeSelector,
@@ -152,12 +153,21 @@ function ImpactArticlesModal({
   articles,
   loading,
   onClose,
+  companyId,
+  startDate,
+  endDate,
 }: {
   category: string;
   articles: DashboardArticleItem[];
   loading: boolean;
   onClose: () => void;
+  companyId: number | null;
+  startDate: string;
+  endDate: string;
 }) {
+  const [reportStatus, setReportStatus] = useState<"idle" | "generating" | "done" | "error">("idle");
+  const [reportError, setReportError] = useState("");
+
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -165,6 +175,26 @@ function ImpactArticlesModal({
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
+
+  const handleGenerateReport = async () => {
+    if (!companyId) return;
+    setReportStatus("generating");
+    setReportError("");
+    try {
+      await generateReport({
+        company_id: companyId,
+        report_type: "custom",
+        report_scope: "business_impact",
+        business_impact_category: category,
+        start_date: startDate,
+        end_date: endDate,
+      });
+      setReportStatus("done");
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : "Failed to generate report.");
+      setReportStatus("error");
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-text/40 p-4 sm:p-6" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -180,6 +210,34 @@ function ImpactArticlesModal({
         <div className="flex-1 overflow-y-auto bg-surface-raised px-5 py-5 sm:px-6">
           {loading ? <div className="flex h-full items-center justify-center text-sm text-muted">Loading matching articles...</div> : articles.length === 0 ? <EmptyState title="No matching articles found." /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={article.article_id} article={article} />)}</div>}
         </div>
+        <footer className="shrink-0 flex items-center justify-between gap-3 border-t border-border bg-surface-raised px-5 py-3 sm:px-6">
+          <div className="text-sm">
+            {reportStatus === "done" && (
+              <span className="font-semibold text-green-600">✓ Report generated! Check the Reports page.</span>
+            )}
+            {reportStatus === "error" && (
+              <span className="text-critical">{reportError}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center justify-center rounded-[8px] border border-border bg-white px-3.5 py-1.5 text-[13px] font-bold text-text transition-colors hover:bg-surface-raised"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleGenerateReport()}
+              disabled={reportStatus === "generating" || !companyId || articles.length === 0}
+              style={{ color: "#ffffff" }}
+              className="inline-flex items-center justify-center rounded-[8px] bg-primary px-4 py-1.5 text-[13px] font-bold transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reportStatus === "generating" ? "Generating…" : "Generate Report"}
+            </button>
+          </div>
+        </footer>
       </section>
     </div>
   );
@@ -417,7 +475,17 @@ export default function AnalyticsPage() {
           </>
         )}
       </div>
-      {impactCategory && <ImpactArticlesModal category={impactCategory} articles={impactArticles} loading={impactLoading} onClose={() => setImpactCategory(null)} />}
+      {impactCategory && (
+        <ImpactArticlesModal
+          category={impactCategory}
+          articles={impactArticles}
+          loading={impactLoading}
+          onClose={() => setImpactCategory(null)}
+          companyId={companyId}
+          startDate={data?.start ?? ""}
+          endDate={data?.end ?? ""}
+        />
+      )}
     </main>
   );
 }

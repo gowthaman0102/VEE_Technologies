@@ -4,6 +4,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -54,6 +55,17 @@ class GeneratedReport(Base):
 
     included_article_ids: Mapped[list[int] | None] = mapped_column(
         ARRAY(Integer),
+        nullable=True,
+    )
+
+    report_scope: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        server_default="standard",
+    )
+
+    scope_metadata: Mapped[dict | None] = mapped_column(
+        JSON,
         nullable=True,
     )
 

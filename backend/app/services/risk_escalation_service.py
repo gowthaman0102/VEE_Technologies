@@ -1,5 +1,6 @@
 ﻿from dataclasses import dataclass
 
+from app.schemas.client_configuration import AlertConfiguration
 
 ESCALATION_ACTIONS: dict[str, str] = {
     "low": "ignore",
@@ -20,6 +21,7 @@ class EscalationDecision:
 def decide_escalation(
     *,
     risk_level: str,
+    configuration: AlertConfiguration | None = None,
 ) -> EscalationDecision:
     normalized_level = risk_level.strip().lower()
 
@@ -31,17 +33,25 @@ def decide_escalation(
     action = ESCALATION_ACTIONS[
         normalized_level
     ]
+    alert_config = configuration or AlertConfiguration()
+    severity = {
+        "low": 0,
+        "medium": 1,
+        "high": 2,
+        "critical": 3,
+    }
 
     return EscalationDecision(
         risk_level=normalized_level,
         action=action,
         requires_human_review=(
-            normalized_level in {
-                "high",
-                "critical",
-            }
+            alert_config.enabled
+            and severity[normalized_level]
+            >= severity[alert_config.minimum_risk_level]
         ),
         requires_immediate_alert=(
-            normalized_level == "critical"
+            alert_config.enabled
+            and severity[normalized_level]
+            >= severity[alert_config.immediate_alert_level]
         ),
     )

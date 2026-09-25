@@ -115,7 +115,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const fetchItems = async () => {
     try {
       setLiveStatus("updating");
-      const data = await getDashboardIntelligence(200);
+      const data = await getDashboardIntelligence(10000);
       setItems(data.items);
       setLastUpdatedAt(new Date());
       setLiveStatus("live");
@@ -131,7 +131,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     const interval = window.setInterval(() => {
       void fetchItems();
       void fetchOverview();
-    }, 30000);
+    }, 5000);
 
     return () => window.clearInterval(interval);
   }, []);
@@ -254,7 +254,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     },
   ];
 
-  const riskFilters = ["All", "High Risk", "Medium Risk", "Low Risk"];
+  const riskFilters = ["All", "High Risk", "Medium Risk", "Low Risk", "Critical Risk"];
   const topicFilters = ["All", "Regulatory Action", "Fraud Security", "OpenAI", "Other"];
   const sentimentFilters = ["All", "Positive", "Neutral", "Negative"];
 
@@ -463,15 +463,8 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
           </section>
 
           <section className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_4px_18px_rgba(28,23,52,0.06)]">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="border-b border-border px-4 py-3">
               <h2 className="text-[15px] font-semibold text-text">Live Intelligence Queue</h2>
-              <button
-                type="button"
-                onClick={() => setViewAllOpen(true)}
-                className="text-[12px] font-medium text-primary hover:underline"
-              >
-                View full queue
-              </button>
             </div>
 
             {error ? (
@@ -571,6 +564,17 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                       ))}
                     </select>
                   </div>
+                </div>
+                
+                <div className="flex justify-center border-t border-border bg-surface-raised p-4">
+                  <button
+                    type="button"
+                    onClick={() => setViewAllOpen(true)}
+                    style={{ color: "#ffffff" }}
+                    className={`inline-flex items-center justify-center rounded-[8px] bg-primary px-6 py-2 text-[13px] font-bold transition-colors hover:bg-primary-hover ${focusRing}`}
+                  >
+                    View Full Queue
+                  </button>
                 </div>
               </div>
             )}

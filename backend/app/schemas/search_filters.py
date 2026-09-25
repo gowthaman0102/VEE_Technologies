@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -10,6 +10,11 @@ class SearchFilters(BaseModel):
     source_name: str | None = Field(
         default=None,
         max_length=200,
+    )
+
+    publisher_country_code: str | None = Field(
+        default=None,
+        max_length=2,
     )
 
     sentiment: str | None = Field(

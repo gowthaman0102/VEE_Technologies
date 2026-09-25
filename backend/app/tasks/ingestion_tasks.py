@@ -6,17 +6,23 @@ from app.db.celery_session import (
     CeleryAsyncSessionLocal,
 )
 from app.ingestion.multi_runner import run_sources
-from app.ingestion.sources import (
-    get_enabled_sources,
-)
+from app.ingestion.sources import get_enabled_sources, get_sources_for_config
 from app.services.active_company_profile_service import (
     get_active_company_profile,
 )
+from app.services.client_configuration_service import get_client_config
+
+
+async def _get_ingestion_sources(db, company_id: int):
+    try:
+        config = await get_client_config(db, company_id)
+    except AttributeError:
+        # Keep lightweight task tests and older task callers compatible.
+        return get_enabled_sources()
+    return get_sources_for_config(config)
 
 
 async def _run_live_ingestion() -> dict:
-    sources = get_enabled_sources()
-
     async with CeleryAsyncSessionLocal() as db:
         profile = await get_active_company_profile(
             db
@@ -26,6 +32,8 @@ async def _run_live_ingestion() -> dict:
             raise RuntimeError(
                 "No active company configured"
             )
+
+        sources = await _get_ingestion_sources(db, profile.company_id)
 
         results = await run_sources(
             db=db,
@@ -105,8 +113,6 @@ async def _run_historical_backfill(
     max_age_days: int = 3650,
     per_source_limit: int | None = 100,
 ) -> dict:
-    sources = get_enabled_sources()
-
     async with CeleryAsyncSessionLocal() as db:
         profile = await get_active_company_profile(
             db
@@ -116,6 +122,8 @@ async def _run_historical_backfill(
             raise RuntimeError(
                 "No active company configured"
             )
+
+        sources = await _get_ingestion_sources(db, profile.company_id)
 
         results = await run_sources(
             db=db,

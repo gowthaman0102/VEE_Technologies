@@ -4,6 +4,7 @@ from app.schemas.article_triage import (
     EventType,
     Urgency,
 )
+from app.schemas.client_configuration import RiskConfiguration
 
 
 EVENT_TOPIC_MAP: dict[str, str] = {
@@ -55,14 +56,17 @@ def event_type_to_monitoring_topic(
 
 def risk_level_from_score(
     score: float,
+    configuration: RiskConfiguration | None = None,
 ) -> str:
-    if score >= 80.0:
+    thresholds = configuration or RiskConfiguration()
+
+    if score >= thresholds.critical_threshold:
         return "critical"
 
-    if score >= 60.0:
+    if score >= thresholds.high_threshold:
         return "high"
 
-    if score >= 40.0:
+    if score >= thresholds.medium_threshold:
         return "medium"
 
     return "low"
@@ -74,6 +78,7 @@ def calculate_risk(
     topic_priority: str,
     urgency: Urgency,
     confidence: float,
+    risk_configuration: RiskConfiguration | None = None,
 ) -> RiskCalculation:
     normalized_priority = (
         topic_priority.strip().lower()
@@ -131,6 +136,7 @@ def calculate_risk(
         confidence_score=confidence_score,
         risk_score=risk_score,
         risk_level=risk_level_from_score(
-            risk_score
+            risk_score,
+            risk_configuration,
         ),
     )

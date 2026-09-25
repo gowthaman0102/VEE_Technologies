@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
 from app.models.alert import Alert
 from app.models.article import Article
@@ -15,7 +15,7 @@ from app.models.company_relationship import CompanyRelationship
 from app.models.monitoring_topic import MonitoringTopic
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
-from app.ingestion.sources import get_enabled_sources
+from app.ingestion.sources import get_enabled_sources, get_sources_for_config
 from app.schemas.dashboard import (
     DashboardArticleItem,
     DashboardArticleResponse,
@@ -31,6 +31,22 @@ from app.schemas.dashboard import (
     DashboardRiskBucket,
 )
 from app.utils.article_metadata import publisher_name
+from app.services.client_configuration_service import get_client_config
+
+
+async def _active_company_source_names(db) -> tuple[int | None, list[str]]:
+    company_id = await db.scalar(
+        select(Company.id)
+        .where(Company.is_active.is_(True))
+        .order_by(Company.id.asc())
+        .limit(1)
+    )
+    if company_id is None:
+        return None, []
+    config = await get_client_config(db, company_id)
+    return company_id, [
+        source.name for source in get_sources_for_config(config)
+    ]
 
 
 async def get_dashboard_overview(
@@ -40,11 +56,25 @@ async def get_dashboard_overview(
         timezone.utc
     )
 
+    active_company_id, active_source_names = await _active_company_source_names(db)
+
     total_articles = await db.scalar(
-        select(
-            func.count(Article.id)
+        select(func.count(func.distinct(Article.id)))
+        .outerjoin(
+            ArticleTriage,
+            and_(
+                ArticleTriage.article_id == Article.id,
+                ArticleTriage.company_id == active_company_id,
+            ),
         )
-    )
+        .where(
+            or_(
+                Article.company_id == active_company_id,
+                ArticleTriage.id.is_not(None),
+                Article.source_name.in_(active_source_names),
+            )
+        )
+    ) if active_company_id is not None else 0
 
     processed_articles = await db.scalar(
         select(
@@ -59,9 +89,7 @@ async def get_dashboard_overview(
             Company.id
             == ArticleTriage.company_id,
         )
-        .where(
-            Company.is_active.is_(True)
-        )
+        .where(ArticleTriage.company_id == active_company_id)
     )
 
     total_companies = await db.scalar(
@@ -105,10 +133,23 @@ async def get_dashboard_overview(
     one_hour_ago = now - timedelta(hours=1)
 
     last_hour_articles = await db.scalar(
-        select(func.count(Article.id)).where(
+        select(func.count(func.distinct(Article.id)))
+        .outerjoin(
+            ArticleTriage,
+            and_(
+                ArticleTriage.article_id == Article.id,
+                ArticleTriage.company_id == active_company_id,
+            ),
+        )
+        .where(
+            or_(
+                Article.company_id == active_company_id,
+                ArticleTriage.id.is_not(None),
+                Article.source_name.in_(active_source_names),
+            ),
             Article.collected_at >= one_hour_ago,
         )
-    )
+    ) if active_company_id is not None else 0
 
     last_hour_processed = await db.scalar(
         select(
@@ -151,9 +192,28 @@ async def get_dashboard_articles(
     )
 
     if metric == "total":
-        statement = select(*columns).order_by(
-            Article.published_at.desc().nullslast(),
-            Article.id.desc(),
+        active_company_id, active_source_names = await _active_company_source_names(db)
+        statement = (
+            select(*columns)
+            .outerjoin(
+                ArticleTriage,
+                and_(
+                    ArticleTriage.article_id == Article.id,
+                    ArticleTriage.company_id == active_company_id,
+                ),
+            )
+            .where(
+                or_(
+                    Article.company_id == active_company_id,
+                    ArticleTriage.id.is_not(None),
+                    Article.source_name.in_(active_source_names),
+                )
+            )
+            .distinct()
+            .order_by(
+                Article.published_at.desc().nullslast(),
+                Article.id.desc(),
+            )
         )
         rows = (await db.execute(statement)).all()
         items = [

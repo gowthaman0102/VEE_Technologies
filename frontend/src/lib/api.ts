@@ -18,6 +18,8 @@ export type DashboardArticleItem = {
   article_id: number;
   title: string;
   publisher_name: string;
+  publisher_country_code?: string | null;
+  publisher_country_name?: string | null;
   source_name: string;
   url: string;
   published_at: string | null;
@@ -41,6 +43,8 @@ export type DashboardIntelligenceItem = {
 
   title: string;
   publisher_name: string;
+  publisher_country_code?: string | null;
+  publisher_country_name?: string | null;
   source_name: string;
   url: string;
   published_at: string | null;
@@ -92,6 +96,67 @@ export async function getActiveCompany(): Promise<ActiveCompany> {
   return response.json();
 }
 
+export type ClientConfiguration = {
+  company_id: number;
+  company_name: string;
+  aliases: string[];
+  monitoring_topics: string[];
+  competitors: string[];
+  geographies: string[];
+  regulators: string[];
+  sources: {
+    google_news_enabled: boolean;
+    newsapi_enabled: boolean;
+    official_sources: string[];
+    preferred_sources: string[];
+    excluded_sources: string[];
+  };
+  risk: {
+    medium_threshold: number;
+    high_threshold: number;
+    critical_threshold: number;
+  };
+  alerts: {
+    enabled: boolean;
+    minimum_risk_level: "low" | "medium" | "high" | "critical";
+    immediate_alert_level: "low" | "medium" | "high" | "critical";
+    sla_minutes: number;
+    enabled_channels: string[];
+  };
+  reports: {
+    enabled_sections: string[];
+    top_article_limit: number;
+    highest_risk_limit: number;
+    report_title_template: string;
+  };
+  features: Record<string, boolean>;
+  branding: {
+    display_name: string | null;
+    logo_reference: string | null;
+    primary_accent: string | null;
+    report_header_name: string | null;
+  };
+};
+
+export async function getCompanyConfiguration(companyId: number): Promise<ClientConfiguration> {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/configuration`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Company configuration API failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function updateCompanyConfiguration(
+  companyId: number,
+  update: Partial<Pick<ClientConfiguration, "sources" | "risk" | "alerts" | "reports" | "features" | "branding">>,
+): Promise<ClientConfiguration> {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/configuration`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  if (!response.ok) throw new Error(`Company configuration save failed with status ${response.status}`);
+  return response.json();
+}
+
 export async function getDashboardOverview(): Promise<DashboardOverview> {
   const response = await fetch(
     `${API_BASE_URL}/dashboard/overview`,
@@ -120,6 +185,7 @@ export type AnalyticsOverview = {
   business_impact: Record<string, number>;
   competitors: Array<Record<string, unknown>>;
   comparison: Record<string, number>;
+  publisher_country_distribution?: Array<{ country_code: string | null, country_name: string | null, article_count: number }>;
 };
 
 export async function getAnalyticsOverview(
@@ -395,6 +461,8 @@ export type WatchlistMatch = {
   article_id: number;
   title: string;
   publisher_name: string;
+  publisher_country_code?: string | null;
+  publisher_country_name?: string | null;
   source_name: string;
   url: string;
   published_at: string | null;
@@ -437,6 +505,8 @@ export type ReportHistoryItem = {
   id: number;
   company_id: number;
   report_type: string;
+  report_scope?: string | null;
+  scope_metadata?: Record<string, unknown> | null;
   file_format: string;
   filename: string | null;
   content_type: string | null;
@@ -452,6 +522,8 @@ export type ReportBatchHistoryItem = {
   batch_id: string;
   company_id: number;
   report_type: string;
+  report_scope?: string | null;
+  scope_metadata?: Record<string, unknown> | null;
   period_start: string;
   period_end: string;
   status: string;
@@ -464,6 +536,7 @@ export type SearchFilters = {
   start?: string;
   end?: string;
   source_name?: string;
+  publisher_country_code?: string;
   sentiment?: string;
   risk_level?: string;
   business_impact?: string;
@@ -475,6 +548,8 @@ export type SearchResult = {
   article_id: number;
   title: string;
   publisher_name: string;
+  publisher_country_code?: string | null;
+  publisher_country_name?: string | null;
   source_name: string;
   url: string;
   published_at: string | null;
@@ -682,6 +757,9 @@ export async function generateReport(args: {
   time_mode?: "media" | "ingestion";
   start_date?: string;
   end_date?: string;
+  report_scope?: "standard" | "search_results" | "business_impact";
+  article_ids?: number[];
+  business_impact_category?: string;
 }): Promise<GenerateReportResponse> {
   const response = await fetch(`${API_BASE_URL}/reports/generate`, {
     method: "POST",
@@ -736,6 +814,9 @@ function appendSearchFilters(
   if (filters.start) params.set("start", filters.start);
   if (filters.end) params.set("end", filters.end);
   if (filters.source_name) params.set("source_name", filters.source_name);
+  if (filters.publisher_country_code) {
+    params.set("publisher_country_code", filters.publisher_country_code);
+  }
   if (filters.sentiment) params.set("sentiment", filters.sentiment);
   if (filters.risk_level) params.set("risk_level", filters.risk_level);
   if (filters.business_impact) {
@@ -833,6 +914,8 @@ export type ArticleDetail = {
   id: number;
   title: string;
   publisher_name: string;
+  publisher_country_code?: string | null;
+  publisher_country_name?: string | null;
   source_name: string;
   url: string | null;
   canonical_url: string | null;

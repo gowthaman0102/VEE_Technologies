@@ -13,11 +13,32 @@ class ReportRequest(BaseModel):
         "custom",
         "all_history",
     ] = "custom"
+    
+    report_scope: Literal[
+        "standard", 
+        "search_results", 
+        "business_impact"
+    ] = "standard"
+    
+    article_ids: list[int] | None = None
+    
+    business_impact_category: Literal[
+        "financial",
+        "operational",
+        "legal",
+        "regulatory",
+        "cybersecurity",
+        "reputation",
+        "customer",
+        "product",
+        "market",
+        "competitive"
+    ] | None = None
+    
     start_date: datetime | None = None
     end_date: datetime | None = None
     time_mode: Literal["media", "ingestion"] = "media"
     include_details: bool = True
-
 
 class ReportMetric(BaseModel):
     label: str
@@ -46,6 +67,8 @@ class ReportHistoryItem(BaseModel):
     id: int
     company_id: int
     report_type: str
+    report_scope: str | None = None
+    scope_metadata: dict | None = None
     file_format: str
     filename: str | None
     content_type: str | None
@@ -61,6 +84,8 @@ class ReportBatchHistoryItem(BaseModel):
     batch_id: str
     company_id: int
     report_type: str
+    report_scope: str | None = None
+    scope_metadata: dict | None = None
     period_start: datetime
     period_end: datetime
     status: str

@@ -1,5 +1,7 @@
 import asyncio
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.celery_app import celery_app
 from app.db.celery_session import (
     CeleryAsyncSessionLocal,
@@ -25,6 +27,7 @@ from app.services.article_triage_service import (
 from app.services.risk_insight_service import (
     generate_risk_insight,
 )
+from app.services.client_configuration_service import get_client_config
 
 
 async def _process_article_intelligence(
@@ -33,37 +36,48 @@ async def _process_article_intelligence(
     company_id: int,
 ) -> dict:
     async with CeleryAsyncSessionLocal() as db:
-        cluster_result = (
-            await assign_article_to_event_cluster(
-                db,
-                article_id=article_id,
-                company_id=company_id,
-            )
-        )
+        features = {
+            "event_clustering_enabled": True,
+            "sentiment_enabled": True,
+            "business_impact_enabled": True,
+            "competitor_detection_enabled": True,
+            "alerts_enabled": True,
+        }
+        if isinstance(db, AsyncSession):
+            config = await get_client_config(db, company_id)
+            features.update(config.features.model_dump())
 
-        sentiment_result = (
-            await analyze_article_sentiment(
+        cluster_result = None
+        if features["event_clustering_enabled"]:
+            cluster_result = await assign_article_to_event_cluster(
                 db,
                 article_id=article_id,
                 company_id=company_id,
             )
-        )
 
-        business_impact_result = (
-            await analyze_article_business_impact(
+        sentiment_result = None
+        if features["sentiment_enabled"]:
+            sentiment_result = await analyze_article_sentiment(
                 db,
                 article_id=article_id,
                 company_id=company_id,
             )
-        )
 
-        competitor_result = (
-            await analyze_article_competitors(
+        business_impact_result = None
+        if features["business_impact_enabled"]:
+            business_impact_result = await analyze_article_business_impact(
                 db,
                 article_id=article_id,
                 company_id=company_id,
             )
-        )
+
+        competitor_result = None
+        if features["competitor_detection_enabled"]:
+            competitor_result = await analyze_article_competitors(
+                db,
+                article_id=article_id,
+                company_id=company_id,
+            )
 
         triage_result = await triage_article(
             db,
@@ -77,15 +91,14 @@ async def _process_article_intelligence(
             company_id=company_id,
         )
 
-        alert_result = (
-            await create_alert_for_intelligence(
+        alert_result = None
+        if features["alerts_enabled"]:
+            alert_result = await create_alert_for_intelligence(
                 db,
                 article_id=article_id,
                 company_id=company_id,
             )
-        )
-
-        alert = alert_result.alert
+        alert = alert_result.alert if alert_result is not None else None
 
         return {
             "article_id": result.article_id,
@@ -107,42 +120,58 @@ async def _process_article_intelligence(
             ),
             "sentiment_label": (
                 sentiment_result.sentiment.label
+                if sentiment_result is not None
+                else None
             ),
             "sentiment_score": (
                 sentiment_result.sentiment.score
+                if sentiment_result is not None
+                else None
             ),
             "sentiment_reason": (
                 sentiment_result.sentiment.reason
+                if sentiment_result is not None
+                else None
             ),
             "sentiment_model": (
                 sentiment_result.sentiment.model
+                if sentiment_result is not None
+                else None
             ),
             "business_impact_primary": (
                 business_impact_result
                 .impact
                 .primary_category
+                if business_impact_result is not None
+                else None
             ),
             "business_impact_categories": (
                 business_impact_result
                 .impact
                 .categories
+                if business_impact_result is not None
+                else []
             ),
             "business_impact_summary": (
                 business_impact_result
                 .impact
                 .impact_summary
+                if business_impact_result is not None
+                else None
             ),
             "business_impact_model": (
                 business_impact_result
                 .impact
                 .model
+                if business_impact_result is not None
+                else None
             ),
             "competitors": (
                 competitor_result.competitors
+                if competitor_result is not None
+                else []
             ),
-            "competitor_count": len(
-                competitor_result.competitors
-            ),
+            "competitor_count": len(competitor_result.competitors) if competitor_result is not None else 0,
             "triage_event_type": (
                 triage_result.triage.event_type
             ),
@@ -170,6 +199,8 @@ async def _process_article_intelligence(
             ),
             "alert_created": (
                 alert_result.should_create_alert
+                if alert_result is not None
+                else False
             ),
             "alert_id": (
                 alert.id

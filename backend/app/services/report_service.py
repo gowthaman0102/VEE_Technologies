@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from app.ingestion.sources import get_enabled_sources
+from app.ingestion.sources import get_enabled_sources, get_sources_for_config
 
 from openpyxl import Workbook
 from openpyxl.styles import (
@@ -75,6 +75,7 @@ from app.services.analytics_service import (
     get_sentiment_distribution,
     validate_time_window,
 )
+from app.services.client_configuration_service import get_client_config
 from app.utils.article_metadata import publisher_name
 
 
@@ -126,10 +127,13 @@ async def _get_report_articles(
     end_date: datetime,
     snapshot_at: datetime,
     time_mode: str = "media",
+    report_scope: str = "standard",
+    article_ids: list[int] | None = None,
+    business_impact_category: str | None = None,
+    enabled_source_names: list[str] | None = None,
 ) -> list[Article]:
-    enabled_source_names = [
-        source.name
-        for source in get_enabled_sources()
+    enabled_source_names = enabled_source_names or [
+        source.name for source in get_enabled_sources()
     ]
 
     if time_mode == "ingestion":
@@ -140,18 +144,33 @@ async def _get_report_articles(
             Article.collected_at,
         )
 
-    stmt = (
-        select(Article)
-        .where(
+    stmt = select(Article)
+
+    if report_scope == "search_results":
+        if not article_ids:
+            return []
+        
+        stmt = stmt.join(ArticleTriage, ArticleTriage.article_id == Article.id).where(
+            ArticleTriage.company_id == company_id,
+            Article.id.in_(article_ids)
+        )
+    else:
+        stmt = stmt.where(
             article_time >= start_date,
             article_time < end_date,
             Article.collected_at <= snapshot_at,
             Article.source_name.in_(enabled_source_names),
         )
-        .order_by(
-            article_time.desc(),
-            Article.id.desc(),
-        )
+        
+        if report_scope == "business_impact" and business_impact_category:
+            stmt = stmt.join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id).where(
+                ArticleBusinessImpact.company_id == company_id,
+                func.lower(ArticleBusinessImpact.primary_category) == business_impact_category.lower()
+            )
+
+    stmt = stmt.order_by(
+        article_time.desc(),
+        Article.id.desc(),
     )
 
     raw_articles = list(
@@ -668,6 +687,9 @@ async def build_company_report(
     end_date: datetime,
     snapshot_at: datetime,
     time_mode: str = "media",
+    report_scope: str = "standard",
+    article_ids: list[int] | None = None,
+    business_impact_category: str | None = None,
 ) -> dict:
     start_date, end_date = validate_time_window(
         start_date,
@@ -679,6 +701,16 @@ async def build_company_report(
         company_id,
     )
 
+    client_config = None
+    if isinstance(db, AsyncSession):
+        client_config = await get_client_config(db, company_id)
+    enabled_source_names = [
+        source.name
+        for source in get_sources_for_config(client_config)
+    ] if client_config is not None else [
+        source.name for source in get_enabled_sources()
+    ]
+
     articles = await _get_report_articles(
         db,
         company_id=company_id,
@@ -686,6 +718,10 @@ async def build_company_report(
         end_date=end_date,
         snapshot_at=snapshot_at,
         time_mode=time_mode,
+        report_scope=report_scope,
+        article_ids=article_ids,
+        business_impact_category=business_impact_category,
+        enabled_source_names=enabled_source_names,
     )
 
     article_ids = [
@@ -1108,8 +1144,25 @@ async def build_company_report(
         "alerts": alert_rows,
         "highest_risk_stories": (
             _highest_risk_stories(
-                article_rows
+                article_rows,
+                limit=(
+                    client_config.reports.highest_risk_limit
+                    if client_config is not None
+                    else 10
+                ),
             )
+        ),
+        "report_configuration": (
+            client_config.reports.model_dump(mode="json")
+            if client_config is not None
+            else None
+        ),
+        "report_title": (
+            client_config.reports.report_title_template.format(
+                company_name=company.name,
+            )
+            if client_config is not None
+            else f"{company.name} Media Intelligence Report"
         ),
     }
 
@@ -1515,9 +1568,9 @@ def export_report_xlsx(
     summary.merge_cells(
         "A1:D1"
     )
-    summary["A1"] = (
-        f"{company_name} "
-        "Media Intelligence Report"
+    summary["A1"] = report_data.get(
+        "report_title",
+        f"{company_name} Media Intelligence Report",
     )
     _xlsx_title_style(
         summary["A1"]
@@ -2630,8 +2683,9 @@ def export_report_pdf(
         leftMargin=0.65 * inch,
         topMargin=0.65 * inch,
         bottomMargin=0.65 * inch,
-        title=(
-            "Monitored Company Media Intelligence Report"
+        title=report_data.get(
+            "report_title",
+            "Monitored Company Media Intelligence Report",
         ),
         author="AI Media Intelligence",
     )
@@ -2663,9 +2717,9 @@ def export_report_pdf(
 
     story.append(
         Paragraph(
-            (
-                f"{company_name} "
-                "Media Intelligence Report"
+            report_data.get(
+                "report_title",
+                f"{company_name} Media Intelligence Report",
             ),
             styles["title"],
         )
@@ -4700,6 +4754,37 @@ def export_report_pdf(
 
     return output.getvalue()
 
+
+def _apply_report_configuration(report_data: dict) -> dict:
+    configuration = report_data.get("report_configuration")
+    if not configuration:
+        return report_data
+
+    configured = copy.deepcopy(report_data)
+    enabled = set(configuration.get("enabled_sections", []))
+    disabled_values = {
+        "executive_summary": "",
+        "kpis": [],
+        "articles": [],
+        "sentiment": {},
+        "risk": {},
+        "business_impact": {},
+        "events": {},
+        "sources": [],
+        "competitors": [],
+        "alerts": [],
+    }
+    for section, empty_value in disabled_values.items():
+        if section not in enabled:
+            configured[section] = empty_value
+
+    if "kpis" not in enabled:
+        configured["metrics"] = []
+    if "articles" not in enabled:
+        configured["highest_risk_stories"] = []
+
+    return configured
+
 def render_report(
     report_data: dict,
     file_format: str,
@@ -4720,9 +4805,7 @@ def render_report(
 
     return exporters[
         file_format
-    ](
-        report_data
-    )
+    ](_apply_report_configuration(report_data))
 
 
 async def find_existing_report(
@@ -4994,6 +5077,9 @@ async def generate_report_batch(
     period_start: datetime,
     period_end: datetime,
     time_mode: str = "media",
+    report_scope: str = "standard",
+    article_ids: list[int] | None = None,
+    business_impact_category: str | None = None,
 ) -> list[GeneratedReport]:
     """
     Generate all three report formats (PDF, XLSX, CSV) in a single batch
@@ -5002,6 +5088,12 @@ async def generate_report_batch(
     """
     snapshot_at = datetime.now(timezone.utc)
     batch_id = str(uuid.uuid4())
+    
+    scope_metadata = {}
+    if report_scope == "search_results" and article_ids:
+        scope_metadata["article_ids_count"] = len(article_ids)
+    elif report_scope == "business_impact" and business_impact_category:
+        scope_metadata["category"] = business_impact_category
 
     records = []
     for file_format in REPORT_FORMATS:
@@ -5014,6 +5106,8 @@ async def generate_report_batch(
             batch_id=batch_id,
             snapshot_at=snapshot_at,
             time_mode=time_mode,
+            report_scope=report_scope,
+            scope_metadata=scope_metadata or None,
             filename=None,
             content_type=None,
             content=None,
@@ -5036,14 +5130,24 @@ async def generate_report_batch(
             end_date=period_end,
             snapshot_at=snapshot_at,
             time_mode=time_mode,
+            report_scope=report_scope,
+            article_ids=article_ids,
+            business_impact_category=business_impact_category,
         )
 
         for record in records:
             content = render_report(report_data, record.file_format)
             extension = REPORT_EXTENSIONS[record.file_format]
+            
+            scope_slug = ""
+            if record.report_scope == "search_results":
+                scope_slug = "-search_results"
+            elif record.report_scope == "business_impact" and business_impact_category:
+                scope_slug = f"-impact_{business_impact_category}"
+                
             record.filename = (
                 f"company-{record.company_id}-"
-                f"{record.report_type}-"
+                f"{record.report_type}{scope_slug}-"
                 f"{record.period_start.date().isoformat()}-"
                 f"{record.period_end.date().isoformat()}."
                 f"{extension}"

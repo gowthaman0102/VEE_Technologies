@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   FormEvent,
@@ -13,6 +13,7 @@ import {
   FileText,
   FileUp,
   RefreshCcw,
+  Search,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -93,6 +94,8 @@ export function ReportsPageClient() {
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [reportType, setReportType] = useState<ReportType>("daily");
+  const [reportScope, setReportScope] = useState<"standard" | "business_impact">("standard");
+  const [businessImpactCategory, setBusinessImpactCategory] = useState<string>("cybersecurity");
   const [timeMode, setTimeMode] = useState<TimeMode>("media");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -156,12 +159,16 @@ export function ReportsPageClient() {
       company_id: number;
       report_type: ReportType;
       time_mode: TimeMode;
+      report_scope?: "standard" | "business_impact";
+      business_impact_category?: string;
       start_date?: string;
       end_date?: string;
     } = {
       company_id: companyId,
       report_type: reportType,
       time_mode: timeMode,
+      report_scope: reportScope,
+      ...(reportScope === "business_impact" ? { business_impact_category: businessImpactCategory } : {})
     };
 
     if (reportType === "custom") {
@@ -499,104 +506,172 @@ export function ReportsPageClient() {
               <p className="text-base font-medium text-text">No reports generated yet.</p>
               <p className="mt-2 text-sm text-muted">Generate your first report using the controls above.</p>
             </div>
-          ) : (
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {history.map((batch) => {
-                const anySuccess = Object.values(batch.formats).some((item) => item.status === "success");
-                
-                const titleText = `${formatReportType(batch.report_type)} · ${formatCompactDateTime(batch.period_start)} → ${formatCompactDateTime(batch.period_end)}`;
+          ) : (() => {
+            const standardReports = history.filter((b) => !b.report_scope || b.report_scope === "standard");
+            const searchReports = history.filter((b) => b.report_scope === "search_results");
+            const impactReports = history.filter((b) => b.report_scope === "business_impact");
 
-                return (
-                  <article
-                    key={batch.batch_id}
-                    className="rounded-lg border border-border bg-surface-raised p-4 transition-colors duration-150 hover:border-border-strong hover:shadow-[0_2px_8px_rgba(28,23,52,0.10)]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-primary">
-                            <FileText className="h-4 w-4" aria-hidden="true" />
-                          </div>
-                          <h4 className="truncate text-[15px] font-semibold text-text">{titleText}</h4>
+            const renderBatchCard = (batch: ReportBatchHistoryItem) => {
+              const anySuccess = Object.values(batch.formats).some((item) => item.status === "success");
+              const categoryLabel = batch.scope_metadata?.business_impact_category
+                ? ` · ${String(batch.scope_metadata.business_impact_category).replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}`
+                : "";
+              const searchLabel = batch.report_scope === "search_results"
+                ? ` · Search Results (${batch.scope_metadata?.article_ids_count ?? 0} articles)`
+                : "";
+              const titleText = `${formatReportType(batch.report_type)}${categoryLabel}${searchLabel} · ${formatCompactDateTime(batch.period_start)} → ${formatCompactDateTime(batch.period_end)}`;
+
+              return (
+                <article
+                  key={batch.batch_id}
+                  className="rounded-lg border border-border bg-surface-raised p-4 transition-colors duration-150 hover:border-border-strong hover:shadow-[0_2px_8px_rgba(28,23,52,0.10)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-primary">
+                          <FileText className="h-4 w-4" aria-hidden="true" />
                         </div>
+                        <h4 className="truncate text-[15px] font-semibold text-text">{titleText}</h4>
                       </div>
-
-                      <Badge tone={toneForStatus(batch.status)}>{formatStatusLabel(batch.status)}</Badge>
                     </div>
+                    <Badge tone={toneForStatus(batch.status)}>{formatStatusLabel(batch.status)}</Badge>
+                  </div>
 
-                    <div className="mt-4 space-y-2 text-sm text-muted">
-                      <p>Batch ID: {batch.batch_id.slice(0, 8)}...</p>
-                      {batch.generated_at && (
-                        <p>Generated {formatCompactDateTime(batch.generated_at)}</p>
-                      )}
-                    </div>
-
-                    {batch.error && (
-                      <div className="mt-4 rounded-lg border border-critical-border bg-critical-bg px-3 py-2 text-sm text-critical">
-                        {batch.error}
-                      </div>
+                  <div className="mt-4 space-y-2 text-sm text-muted">
+                    <p>Batch ID: {batch.batch_id.slice(0, 8)}...</p>
+                    {batch.generated_at && (
+                      <p>Generated {formatCompactDateTime(batch.generated_at)}</p>
                     )}
+                  </div>
 
-                    <div className="mt-4 border-t border-border pt-3" />
+                  {batch.error && (
+                    <div className="mt-4 rounded-lg border border-critical-border bg-critical-bg px-3 py-2 text-sm text-critical">
+                      {batch.error}
+                    </div>
+                  )}
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      {FORMAT_KEYS.map((formatKey) => {
-                        const item = batch.formats[formatKey];
-                        if (!item) return null;
+                  <div className="mt-4 border-t border-border pt-3" />
 
-                        const isDownloadable = item.status === "success" && item.filename && item.content_type;
-                        const formatLabel = FORMAT_LABELS[formatKey] ?? formatKey.toUpperCase();
+                  <div className="flex flex-wrap items-center gap-2">
+                    {FORMAT_KEYS.map((formatKey) => {
+                      const item = batch.formats[formatKey];
+                      if (!item) return null;
 
-                        if (isDownloadable) {
-                          return (
-                            <a
-                              key={formatKey}
-                              href={`${API_BASE_URL}/reports/${item.id}/download`}
-                              aria-label={`Download ${formatLabel}`}
-                              className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-body transition-colors hover:border-border-strong hover:text-text ${focusRing}`}
-                            >
-                              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                              {formatLabel}
-                            </a>
-                          );
-                        }
+                      const isDownloadable = item.status === "success" && item.filename && item.content_type;
+                      const formatLabel = FORMAT_LABELS[formatKey] ?? formatKey.toUpperCase();
 
+                      if (isDownloadable) {
                         return (
-                          <button
+                          <a
                             key={formatKey}
-                            type="button"
-                            disabled
-                            aria-label={`${formatLabel} unavailable`}
-                            className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs font-medium text-muted opacity-70"
+                            href={`${API_BASE_URL}/reports/${item.id}/download`}
+                            aria-label={`Download ${formatLabel}`}
+                            className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-body transition-colors hover:border-border-strong hover:text-text ${focusRing}`}
                           >
                             <Download className="h-3.5 w-3.5" aria-hidden="true" />
                             {formatLabel}
-                          </button>
+                          </a>
                         );
-                      })}
+                      }
 
-                      <div className="ml-auto">
+                      return (
                         <button
+                          key={formatKey}
                           type="button"
-                          onClick={() => {
-                            void removeBatch(batch);
-                          }}
-                          className="inline-flex items-center gap-2 rounded-lg border border-high-border bg-high-bg px-3 py-2 text-xs font-medium text-high transition-colors hover:bg-high hover:text-white"
+                          disabled
+                          aria-label={`${formatLabel} unavailable`}
+                          className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-xs font-medium text-muted opacity-70"
                         >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          Delete
+                          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                          {formatLabel}
                         </button>
-                      </div>
-                    </div>
+                      );
+                    })}
 
-                    {!anySuccess && !batch.error && (
-                      <p className="mt-3 text-xs text-muted">Waiting for report files to become available.</p>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
+                    <div className="ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => { void removeBatch(batch); }}
+                        className="inline-flex items-center gap-2 rounded-lg border border-high-border bg-high-bg px-3 py-2 text-xs font-medium text-high transition-colors hover:bg-high hover:text-white"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {!anySuccess && !batch.error && (
+                    <p className="mt-3 text-xs text-muted">Waiting for report files to become available.</p>
+                  )}
+                </article>
+              );
+            };
+
+            return (
+              <>
+                {/* Standard Reports */}
+                <div className="mt-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                      <FileText className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <h4 className="text-[15px] font-semibold text-text">Standard Reports</h4>
+                    <span className="rounded-full bg-surface-raised border border-border px-2 py-0.5 text-[11px] font-medium text-muted">{standardReports.length}</span>
+                  </div>
+                  {standardReports.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
+                      <p className="text-sm text-muted">No standard reports yet. Generate one using the form above.</p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {standardReports.map(renderBatchCard)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Search Result Reports */}
+                <div className="mt-8">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                      <Search className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <h4 className="text-[15px] font-semibold text-text">Search Result Reports</h4>
+                    <span className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[11px] font-medium text-muted">{searchReports.length}</span>
+                  </div>
+                  {searchReports.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
+                      <p className="text-sm text-muted">No search result reports yet. Generate one from Search.</p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {searchReports.map(renderBatchCard)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Business Impact Reports */}
+                <div className="mt-8">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#EEF7EE] text-[#2E7D32]">
+                      <Sparkles className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <h4 className="text-[15px] font-semibold text-text">Business Impact Reports</h4>
+                    <span className="rounded-full bg-surface-raised border border-border px-2 py-0.5 text-[11px] font-medium text-muted">{impactReports.length}</span>
+                  </div>
+                  {impactReports.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
+                      <p className="text-sm text-muted">No business impact reports yet. Generate one from the Analytics page.</p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {impactReports.map(renderBatchCard)}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </section>
       </div>
       <ConfirmDialog

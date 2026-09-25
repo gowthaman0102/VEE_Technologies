@@ -106,24 +106,9 @@ async def process_article(
             duplicate_of_id=duplicate.id,
         )
 
-    if (
-        article.source_name == "OpenAI Official News"
-        and article.description
-        and article.description.strip()
-    ):
-        extraction = ExtractionResult(
-            success=True,
-            content=(
-                f"{article.title}\n\n"
-                f"{article.description.strip()}"
-            ),
-            error="Used official OpenAI RSS description",
-            final_url=resolved_url,
-        )
-    else:
-        extraction = await extractor.extract_from_url(
-            resolved_url
-        )
+    extraction = await extractor.extract_from_url(
+        resolved_url
+    )
 
     if (
         not extraction.success

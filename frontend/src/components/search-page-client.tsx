@@ -29,6 +29,7 @@ import { ArticleViewButton } from "@/components/article-view-button";
 import { ArticleMetadata } from "@/components/article-metadata";
 import {
   getActiveCompany,
+  generateReport,
   SearchFilters,
   SearchResult,
   searchKeyword,
@@ -62,6 +63,7 @@ export function SearchPageClient() {
   const [sourceName, setSourceName] = useState("");
   const [sentiment, setSentiment] = useState("");
   const [riskLevel, setRiskLevel] = useState("");
+  const [publisherCountry, setPublisherCountry] = useState("");
   const [businessImpact, setBusinessImpact] = useState("");
   const [eventType, setEventType] = useState("");
   const [eventClusterId, setEventClusterId] = useState("");
@@ -127,6 +129,9 @@ export function SearchPageClient() {
 
     if (riskLevel.trim()) {
       filters.risk_level = riskLevel.trim();
+    }
+    if (publisherCountry.trim()) {
+      filters.publisher_country_code = publisherCountry.trim();
     }
 
     if (businessImpact.trim()) {
@@ -234,6 +239,7 @@ export function SearchPageClient() {
     setSourceName("");
     setSentiment("");
     setRiskLevel("");
+    setPublisherCountry("");
     setBusinessImpact("");
     setEventType("");
     setEventClusterId("");
@@ -244,6 +250,7 @@ export function SearchPageClient() {
     sourceName && { label: `Source: ${sourceName}`, clear: () => setSourceName("") },
     sentiment && { label: `Sentiment: ${sentiment}`, clear: () => setSentiment("") },
     riskLevel && { label: `Risk: ${riskLevel}`, clear: () => setRiskLevel("") },
+    publisherCountry && { label: `Country: ${publisherCountry}`, clear: () => setPublisherCountry("") },
     businessImpact && { label: `Impact: ${businessImpact}`, clear: () => setBusinessImpact("") },
     eventType && { label: `Event: ${eventType}`, clear: () => setEventType("") },
     eventClusterId && { label: `Cluster: ${eventClusterId}`, clear: () => setEventClusterId("") },
@@ -342,12 +349,15 @@ export function SearchPageClient() {
       {resultsOpen && (
         <SearchResultsModal
           results={results}
+          companyId={companyId}
           mode={mode}
           query={query}
           sentiment={sentiment}
           riskLevel={riskLevel}
+          publisherCountry={publisherCountry}
           onSentimentChange={setSentiment}
           onRiskLevelChange={setRiskLevel}
+          onPublisherCountryChange={setPublisherCountry}
           onClose={() => setResultsOpen(false)}
         />
       )}
@@ -357,24 +367,31 @@ export function SearchPageClient() {
 
 function SearchResultsModal({
   results,
+  companyId,
   mode,
   query,
   sentiment,
   riskLevel,
   onSentimentChange,
   onRiskLevelChange,
+  publisherCountry,
+  onPublisherCountryChange,
   onClose,
 }: {
   results: SearchResult[];
+  companyId: number | null;
   mode: SearchMode;
   query: string;
   sentiment: string;
   riskLevel: string;
+  publisherCountry: string;
   onSentimentChange: (v: string) => void;
   onRiskLevelChange: (v: string) => void;
+  onPublisherCountryChange: (v: string) => void;
   onClose: () => void;
 }) {
   const [showFilters, setShowFilters] = useState(false);
+  const [reportStatus, setReportStatus] = useState<"idle" | "generating" | "generated" | "error">("idle");
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -388,10 +405,27 @@ function SearchResultsModal({
   const filtered = results.filter((r) => {
     const sentimentMatch = !sentiment.trim() || (r.sentiment ?? "").toLowerCase().includes(sentiment.trim().toLowerCase());
     const riskMatch = !riskLevel.trim() || (r.risk_level ?? "").toLowerCase().includes(riskLevel.trim().toLowerCase());
-    return sentimentMatch && riskMatch;
+    const countryMatch = !publisherCountry.trim() || (r.publisher_country_code ?? "").toLowerCase() === publisherCountry.trim().toLowerCase();
+    return sentimentMatch && riskMatch && countryMatch;
   });
 
-  const hasActiveFilters = sentiment.trim() || riskLevel.trim();
+  const hasActiveFilters = sentiment.trim() || riskLevel.trim() || publisherCountry.trim();
+
+  async function generateSearchReport() {
+    if (companyId === null || filtered.length === 0) return;
+    setReportStatus("generating");
+    try {
+      await generateReport({
+        company_id: companyId,
+        report_type: "all_history",
+        report_scope: "search_results",
+        article_ids: filtered.map((result) => result.article_id),
+      });
+      setReportStatus("generated");
+    } catch {
+      setReportStatus("error");
+    }
+  }
 
   return (
     <div
@@ -421,6 +455,15 @@ function SearchResultsModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => void generateSearchReport()}
+              disabled={reportStatus === "generating" || filtered.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-border bg-primary-soft px-3 py-2 text-[12px] font-semibold text-primary transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FileText size={14} aria-hidden="true" />
+              {reportStatus === "generating" ? "Generating..." : "Generate report"}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowFilters((v) => !v)}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${showFilters ? "border-primary bg-primary-soft text-primary" : "border-border bg-surface-raised text-text hover:border-primary-border hover:text-primary"}`}
             >
@@ -438,6 +481,16 @@ function SearchResultsModal({
             </button>
           </div>
         </header>
+        {reportStatus === "generated" && (
+          <p className="border-b border-low-border bg-low-bg px-5 py-2 text-xs font-medium text-low sm:px-6">
+            Search report generated. It is available in Reports.
+          </p>
+        )}
+        {reportStatus === "error" && (
+          <p className="border-b border-critical-border bg-critical-bg px-5 py-2 text-xs font-medium text-critical sm:px-6">
+            Unable to generate the search report.
+          </p>
+        )}
 
         {/* Advanced Filters Panel */}
         {showFilters && (
@@ -447,7 +500,7 @@ function SearchResultsModal({
               {hasActiveFilters && (
                 <button
                   type="button"
-                  onClick={() => { onSentimentChange(""); onRiskLevelChange(""); }}
+                  onClick={() => { onSentimentChange(""); onRiskLevelChange(""); onPublisherCountryChange(""); }}
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
                 >
                   <RotateCcw size={11} aria-hidden="true" /> Clear filters
@@ -473,12 +526,18 @@ function SearchResultsModal({
                 </select>
               </div>
               <FilterInput label="Risk Level" value={riskLevel} placeholder="e.g. high" onChange={onRiskLevelChange} icon={Shield} />
+              <FilterInput label="Publisher Country" value={publisherCountry} placeholder="e.g. US, IN, unknown" onChange={onPublisherCountryChange} icon={Shield} />
             </div>
             {hasActiveFilters && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {sentiment.trim() && (
                   <button type="button" onClick={() => onSentimentChange("")} className="inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-xs text-primary hover:bg-primary hover:text-white transition-colors">
                     Sentiment: {sentiment} <X size={11} aria-hidden="true" />
+                  </button>
+                )}
+                {publisherCountry.trim() && (
+                  <button type="button" onClick={() => onPublisherCountryChange("")} className="inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary-soft px-2.5 py-1 text-xs text-primary hover:bg-primary hover:text-white transition-colors">
+                    Country: {publisherCountry} <X size={11} aria-hidden="true" />
                   </button>
                 )}
                 {riskLevel.trim() && (

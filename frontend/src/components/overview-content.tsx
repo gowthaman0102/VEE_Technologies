@@ -33,14 +33,7 @@ import { OverviewHero } from "./overview-hero";
 import { OverviewMetricCard } from "./overview-metric-card";
 import { PublisherLogo } from "./publisher-logo";
 import { KpiArticleIcon, KpiIntelligenceIcon, KpiCompanyIcon, KpiHighRiskIcon, KpiCriticalRiskIcon } from "./kpi-icons";
-import { 
-  RiskSnapshot, 
-  SentimentSnapshot, 
-  BusinessImpactSnapshot, 
-  SourceCoverageSnapshot, 
-  EmergingTopicsSnapshot 
-} from "./overview-snapshots";
-import { OverviewIntelligenceBrief } from "./overview-intelligence-brief";
+
 
 type SelectedMetric = DashboardArticleMetric | "companies";
 
@@ -341,7 +334,7 @@ export function OverviewContent({
         setLiveStatus("delayed");
       }
     },
-    { intervalMs: 60_000 }
+    { intervalMs: 5_000 }
   );
 
   const openMetric = async (metric: SelectedMetric) => {
@@ -421,28 +414,9 @@ export function OverviewContent({
         </div>
       </section>
 
-      {/* SECTION 2: TODAY'S INTELLIGENCE BRIEF */}
-      <section className="mt-8">
-        <OverviewIntelligenceBrief analytics={analyticsOverview} events={eventAnalytics} />
-      </section>
 
-      {/* SECTION 3: INTELLIGENCE SNAPSHOT */}
-      <section className="mt-8">
-        <h2 className="mb-4 text-base font-semibold text-text">Intelligence Snapshot</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <RiskSnapshot risk={analyticsOverview.risk ?? {}} />
-          <SentimentSnapshot sentiment={analyticsOverview.sentiment ?? {}} />
-          <BusinessImpactSnapshot impact={analyticsOverview.business_impact ?? {}} />
-        </div>
-      </section>
 
-      {/* SECTION 4 & 5: GLOBAL MEDIA COVERAGE & EMERGING TOPICS */}
-      <section className="mt-8">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SourceCoverageSnapshot sources={sourceAnalytics.sources ?? []} />
-          <EmergingTopicsSnapshot events={eventAnalytics.largest_events ?? []} />
-        </div>
-      </section>
+
 
       {/* SECTION 6: CRITICAL SIGNALS */}
       <section className="mt-8">

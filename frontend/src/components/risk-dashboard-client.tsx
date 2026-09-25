@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
@@ -528,10 +528,6 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
         </div>
 
         <CosmicPageHero variant="risk" imageSrc="/risk-analytics-hero.png" eyebrow="RISK ANALYTICS" title="Risk Intelligence Overview" description="Deterministic risk scoring across monitored intelligence, including review and alert signals." />
-        {/* â”€â”€ KPI Row â”€â”€â”€ */}
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" aria-label="Key performance indicators">
-          {kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
-        </section>
 
         {/* â”€â”€ Analytics Grid â”€â”€â”€ */}
         <section className="grid gap-5 xl:grid-cols-[34fr_38fr_28fr]" aria-label="Risk analytics charts">

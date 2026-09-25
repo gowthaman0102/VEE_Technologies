@@ -1,8 +1,9 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -47,6 +48,12 @@ class Article(Base):
         autoincrement=True,
     )
 
+    company_id: Mapped[int | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     source_name: Mapped[str] = mapped_column(
         String(200),
         nullable=False,
@@ -57,6 +64,22 @@ class Article(Base):
         String(50),
         nullable=False,
         index=True,
+    )
+
+    publisher_country_code: Mapped[str | None] = mapped_column(
+        String(2),
+        nullable=True,
+        index=True,
+    )
+
+    publisher_country_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    publisher_country_method: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
     )
 
     external_id: Mapped[str | None] = mapped_column(

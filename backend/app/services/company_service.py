@@ -55,3 +55,5 @@ async def list_companies_by_client(
     )
 
     return list(result.scalars().all())
+
+

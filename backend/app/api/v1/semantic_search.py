@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.exceptions import RequestValidationError
@@ -39,6 +39,10 @@ async def search_articles(
         default=None,
         max_length=200,
     ),
+    publisher_country_code: str | None = Query(
+        default=None,
+        max_length=2,
+    ),
     sentiment: str | None = Query(
         default=None,
         max_length=20,
@@ -77,6 +81,7 @@ async def search_articles(
             start=start,
             end=end,
             source_name=source_name,
+            publisher_country_code=publisher_country_code,
             sentiment=sentiment,
             risk_level=risk_level,
             business_impact=business_impact,

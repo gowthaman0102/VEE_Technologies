@@ -20,7 +20,7 @@ export function OverviewIntelligenceBrief({
 
   return (
     <div className="rounded-xl border border-border bg-surface-raised p-6">
-      <h3 className="text-sm font-bold uppercase tracking-wider text-primary mb-3">Today's Intelligence Brief</h3>
+      <h3 className="text-sm font-bold uppercase tracking-wider text-primary mb-3">Today&apos;s Intelligence Brief</h3>
       <div className="prose prose-sm text-text-body max-w-none space-y-2">
         <p>
           In the current active period, the system processed <span className="font-semibold text-text">{totalArticles}</span> articles.

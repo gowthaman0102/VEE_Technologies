@@ -1,8 +1,11 @@
 ﻿from dataclasses import dataclass
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.article_triage_read_service import (
     get_article_triage,
 )
+from app.services.client_configuration_service import get_client_config
 from app.services.monitoring_priority_service import (
     MonitoringPriorityResult,
     resolve_monitoring_priority,
@@ -62,15 +65,29 @@ async def assess_article_risk(
         event_type=triage.event_type,
     )
 
+    client_config = None
+    if isinstance(db, AsyncSession):
+        client_config = await get_client_config(db, company_id)
+
     risk = calculate_risk(
         event_type=triage.event_type,
         topic_priority=priority.priority,
         urgency=triage.urgency,
         confidence=triage.confidence,
+        risk_configuration=(
+            client_config.risk
+            if client_config is not None
+            else None
+        ),
     )
 
     escalation = decide_escalation(
         risk_level=risk.risk_level,
+        configuration=(
+            client_config.alerts
+            if client_config is not None
+            else None
+        ),
     )
 
     assessment = RiskAssessmentResult(
