@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   FormEvent,
@@ -112,7 +112,7 @@ export function ReportsPageClient() {
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("section");
-    if (requested === "search" || requested === "analytics") setHistorySection(requested);
+    if (requested === "search" || requested === "analytics") setTimeout(() => setHistorySection(requested), 0);
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
