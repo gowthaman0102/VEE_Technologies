@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "SilentlyContinue"
 
 Write-Host ""
 Write-Host "AI Media Intelligence - Readiness Check" -ForegroundColor Cyan
@@ -40,14 +40,16 @@ Show-Result `
 
 
 # Redis
-$redis = Test-NetConnection `
-    -ComputerName 127.0.0.1 `
-    -Port 6379 `
-    -WarningAction SilentlyContinue
+$redisListening = [bool](
+    Get-NetTCPConnection `
+        -LocalPort 6379 `
+        -State Listen `
+        -ErrorAction SilentlyContinue
+)
 
 Show-Result `
     "Redis" `
-    $redis.TcpTestSucceeded `
+    $redisListening `
     "127.0.0.1:6379"
 
 

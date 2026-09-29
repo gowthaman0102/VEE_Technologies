@@ -33,6 +33,41 @@ export function AlertThresholdConfigCard({ config, onSaved }: Props) {
     }
   };
 
+  const handleCriticalChange = (v: number) => {
+    const newCritical = Math.min(100, Math.max(2, v));
+    setCritical(newCritical);
+    if (newCritical <= high) {
+      const newHigh = newCritical - 1;
+      setHigh(newHigh);
+      if (newHigh <= medium) {
+        setMedium(newHigh - 1);
+      }
+    }
+  };
+
+  const handleHighChange = (v: number) => {
+    const newHigh = Math.min(99, Math.max(1, v));
+    setHigh(newHigh);
+    if (newHigh >= critical) {
+      setCritical(newHigh + 1);
+    }
+    if (newHigh <= medium) {
+      setMedium(newHigh - 1);
+    }
+  };
+
+  const handleMediumChange = (v: number) => {
+    const newMedium = Math.min(98, Math.max(0, v));
+    setMedium(newMedium);
+    if (newMedium >= high) {
+      const newHigh = newMedium + 1;
+      setHigh(newHigh);
+      if (newHigh >= critical) {
+        setCritical(newHigh + 1);
+      }
+    }
+  };
+
   return (
     <section className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_4px_18px_rgba(28,23,52,0.06)] flex flex-col h-full">
       <div className="flex flex-wrap items-center justify-between border-b border-border px-6 py-4">
@@ -43,9 +78,9 @@ export function AlertThresholdConfigCard({ config, onSaved }: Props) {
 
       <div className="p-6 flex-1 flex flex-col justify-between space-y-6">
         <div className="space-y-6">
-          <ThresholdSlider label="Critical alert at" value={critical} color="var(--color-critical)" onChange={(v) => setCritical(Math.min(100, Math.max(high + 1, v)))} />
-          <ThresholdSlider label="High alert at" value={high} color="#ea580c" onChange={(v) => setHigh(Math.min(100, Math.max(medium + 1, Math.min(critical - 1, v))))} />
-          <ThresholdSlider label="Medium alert at" value={medium} color="#eab308" onChange={(v) => setMedium(Math.max(0, Math.min(high - 1, v)))} />
+          <ThresholdSlider label="Critical alert at" value={critical} color="var(--color-critical)" onChange={handleCriticalChange} />
+          <ThresholdSlider label="High alert at" value={high} color="#ea580c" onChange={handleHighChange} />
+          <ThresholdSlider label="Medium alert at" value={medium} color="#eab308" onChange={handleMediumChange} />
         </div>
         
         <button

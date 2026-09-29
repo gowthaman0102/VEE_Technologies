@@ -56,6 +56,22 @@ function Stop-ProjectProcesses {
     }
 }
 
+# Redis
+if (-not (Test-Port 6379)) {
+    Write-Host "Starting Redis..." -ForegroundColor Yellow
+
+    Start-Process powershell -ArgumentList @(
+        "-NoExit",
+        "-Command",
+        "cd '$root\redis'; .\redis-server.exe --port 6379"
+    )
+
+    Start-Sleep -Seconds 3
+}
+else {
+    Write-Host "Redis already running." -ForegroundColor Green
+}
+
 # Ollama
 if (-not (Test-Port 11434)) {
     Write-Host "Starting Ollama..." -ForegroundColor Yellow
