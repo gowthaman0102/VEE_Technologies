@@ -48,20 +48,22 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useCountUp } from "@/hooks/use-count-up";
 import { ArticleRow } from "@/components/article-row";
 import { PageAmbient } from "@/components/page-ambient";
+import { SentimentAndRiskCards } from "@/components/sentiment-risk-cards";
+import { PublisherReliabilityTable } from "@/components/publisher-reliability-table";
 import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
-const IMPACT_ICONS: LucideIcon[] = [
-  BriefcaseBusiness,
-  BarChart3,
-  Scale,
-  Landmark,
-  LockKeyhole,
-  Heart,
-  UserRound,
-  Package,
-  BarChart3,
-  Trophy,
-];
+const IMPACT_ICONS: Record<string, LucideIcon> = {
+  financial: BriefcaseBusiness,
+  operational: BarChart3,
+  legal: Scale,
+  regulatory: Landmark,
+  cybersecurity: LockKeyhole,
+  reputation: Heart,
+  customer: UserRound,
+  product: Package,
+  market: BarChart3,
+  competitive: Trophy,
+};
 
 function formatLabel(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -134,19 +136,88 @@ function SectionHeading({ title, description }: { title: string; description: st
   );
 }
 
-function EmptyCompetitors() {
+function ImpactCategoryRow({
+  label,
+  value,
+  totalImpact,
+  index,
+  onViewArticles,
+}: {
+  label: string;
+  value: number;
+  totalImpact: number;
+  index: number;
+  onViewArticles: () => void;
+}) {
+  const Icon = IMPACT_ICONS[label] ?? BarChart3;
+  const percentage = totalImpact > 0 ? (value / totalImpact) * 100 : 0;
+
   return (
-    <div className="mt-5 flex min-h-[250px] flex-col items-center justify-center rounded-2xl bg-[#FAF9FF] px-6 text-center">
-      <div className="relative flex h-20 w-24 items-center justify-center text-primary-soft">
-        <FileText size={56} strokeWidth={1.4} />
-        <Search className="absolute right-0 bottom-0 text-primary" size={31} strokeWidth={2.2} />
-        <Sparkles className="absolute left-1 top-1 text-primary" size={14} />
+    <div style={{ animationDelay: `${index * 55}ms` }} className="analytics-row-enter rounded-xl border border-transparent bg-[#FBFAFF] px-3 py-2.5 transition-colors hover:border-[#E9E5F4] hover:bg-white">
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EEE9FF] text-primary"><Icon size={16} strokeWidth={2} aria-hidden="true" /></span>
+        <span className="flex-1 text-[13px] font-semibold text-text-body">{formatLabel(label)}</span>
+        <span className="text-[13px] font-bold tabular-nums text-text">{value.toLocaleString()}</span>
+        <button type="button" onClick={onViewArticles} disabled={value === 0} aria-label={`View ${value} ${formatLabel(label)} articles`} className="rounded-full p-1 text-muted transition-colors hover:bg-primary-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-35"><ChevronRight size={15} aria-hidden="true" /></button>
       </div>
-      <p className="mt-4 max-w-[260px] text-[14px] font-bold leading-5 text-text">No competitor mention data available for the selected period.</p>
-      <p className="mt-2 max-w-[280px] text-[12px] leading-5 text-muted">Try selecting a different time range or check back later for new data.</p>
+      <div className="ml-11 mt-2 flex items-center gap-3"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#ECEAF5]"><div className="analytics-impact-bar h-full rounded-full bg-gradient-to-r from-[#9A7AE8] to-[#6B4DE6]" style={{ width: `${percentage}%` }} /></div><span className="w-10 text-right text-[11px] font-semibold text-muted">{percentage.toFixed(1)}%</span></div>
     </div>
   );
 }
+
+function ImpactCategoriesModal({
+  entries,
+  onClose,
+  onSelect,
+}: {
+  entries: Array<readonly [string, number]>;
+  onClose: () => void;
+  onSelect: (category: string) => void;
+}) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const totalImpact = entries.reduce((total, [, value]) => total + value, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-text/40 p-4 sm:p-6" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section role="dialog" aria-modal="true" aria-labelledby="impact-categories-title" className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_20px_60px_rgba(65,50,120,0.2)]">
+        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Business Impact</p>
+            <h2 id="impact-categories-title" className="mt-1 text-xl font-bold text-text">All impact categories</h2>
+            <p className="mt-1 text-sm text-muted">{entries.length} categories · {totalImpact.toLocaleString()} article mentions</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close impact categories" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={18} aria-hidden="true" /></button>
+        </header>
+        <div className="flex-1 overflow-y-auto bg-surface-raised px-5 py-5 sm:px-6">
+          <div className="space-y-1.5">
+            {entries.map(([label, value], index) => (
+              <ImpactCategoryRow
+                key={label}
+                label={label}
+                value={value}
+                totalImpact={totalImpact}
+                index={index}
+                onViewArticles={() => onSelect(label)}
+              />
+            ))}
+          </div>
+        </div>
+        <footer className="flex shrink-0 justify-end border-t border-border bg-surface-raised px-5 py-3 sm:px-6">
+          <button type="button" onClick={onClose} className="inline-flex items-center justify-center rounded-[8px] border border-border bg-white px-3.5 py-1.5 text-[13px] font-bold text-text transition-colors hover:bg-surface">Close</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+
 
 function ImpactArticlesModal({
   category,
@@ -260,11 +331,19 @@ export default function AnalyticsPage() {
   const [data, setData] =
     useState<AnalyticsOverview | null>(null);
 
+
+  const [sources, setSources] = useState<any[] | null>(null);
+  const [config, setConfig] = useState<any | null>(null);
+
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+
   const [loading, setLoading] =
     useState(true);
   const [error, setError] =
     useState("");
   const [impactCategory, setImpactCategory] = useState<string | null>(null);
+  const [showAllImpacts, setShowAllImpacts] = useState(false);
   const [impactArticles, setImpactArticles] = useState<DashboardArticleItem[]>([]);
   const [impactLoading, setImpactLoading] = useState(false);
 
@@ -274,6 +353,11 @@ export default function AnalyticsPage() {
         const company = await withRetries(getActiveCompany);
         setCompanyId(company.id);
         setCompanyName(company.name);
+        
+        // Also fetch company config for reliability scoring
+        const { getCompanyConfiguration } = await import("@/lib/api");
+        const cfg = await getCompanyConfiguration(company.id);
+        setConfig(cfg);
       } catch (cause) {
         setError(
           cause instanceof Error
@@ -317,9 +401,15 @@ export default function AnalyticsPage() {
             : {},
         );
 
-        const overview = await withRetries(() => getAnalyticsOverview(companyId, range.start, range.end));
+        const { getSourceAnalytics } = await import("@/lib/api");
+
+        const [overview, srcRes] = await Promise.all([
+          withRetries(() => getAnalyticsOverview(companyId, range.start, range.end)),
+          withRetries(() => getSourceAnalytics(range.start, range.end, companyId))
+        ]);
 
         setData(overview);
+        setSources(srcRes.sources);
       } catch (cause) {
         setError(
           cause instanceof Error
@@ -388,13 +478,52 @@ export default function AnalyticsPage() {
     }
   };
 
+  const handleDownload = async () => {
+    if (companyId === null) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const range = resolveTimeRange(preset, preset === "custom" ? { customStart, customEnd } : {});
+      const { downloadReport } = await import("@/lib/api");
+      await downloadReport({
+        company_id: companyId,
+        report_type: preset === "7d" ? "weekly" : preset === "30d" ? "monthly" : preset === "90d" ? "custom" : preset === "1y" ? "all_history" : "custom",
+        report_scope: "standard",
+        start_date: range.start,
+        end_date: range.end,
+      });
+    } catch (cause) {
+      setExportError(cause instanceof Error ? cause.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const impactEntries = data
+    ? [
+        ...Object.keys(IMPACT_ICONS),
+        ...Object.keys(data.business_impact).filter((label) => !(label in IMPACT_ICONS)),
+      ]
+        .map((label) => [label, data.business_impact[label] ?? 0] as const)
+        .sort(([, a], [, b]) => b - a)
+    : [];
+
   return (
     <main className="analytics-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-[radial-gradient(circle_at_70%_8%,rgba(130,100,255,0.09),transparent_34%),linear-gradient(180deg,#FBFBFF_0%,#F6F7FC_100%)] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <PageAmbient kind="analytics" />
       <div className="relative z-10 mx-auto w-full max-w-[1440px]">
         <CosmicPageHero variant="analytics" imageSrc="/analytics-hero.png" eyebrow="ANALYTICS" title={companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"} description="Explore stored media intelligence across configurable reporting periods." />
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end gap-3 items-center">
+          {exportError && <span className="text-sm text-critical">{exportError}</span>}
+          <button 
+            type="button" 
+            onClick={() => void handleDownload()} 
+            disabled={exporting}
+            className="rounded-[10px] border border-primary px-4 py-2 text-[13px] font-bold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
+          >
+            {exporting ? "Preparing..." : "Download snapshot"}
+          </button>
           <div className="rounded-2xl border border-border bg-surface px-3 py-2 shadow-[0_6px_18px_rgba(27,22,62,0.06)]">
             <TimeRangeSelector value={preset} onChange={setPreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} includeCustom={false} />
           </div>
@@ -429,52 +558,58 @@ export default function AnalyticsPage() {
               <AnalyticsMetricCard label="Positive sentiment" value={data.sentiment.positive ?? 0} icon={Smile} iconClass="bg-[#E8F8F0] text-[#16A46A]" tintClass="from-white to-[#F7FFFB]" />
             </section>
 
-            <section className="mt-5 grid items-start gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-              <article className="analytics-panel-enter rounded-2xl border border-[rgba(90,72,160,0.12)] bg-white p-5 shadow-[0_8px_20px_rgba(65,50,120,0.06)] sm:p-6">
-                <SectionHeading title="Business impact" description="Distribution of media intelligence by business impact category." />
-                <div className="mt-5 space-y-1.5">
-                  {Object.entries(data.business_impact).filter(([, value]) => value > 0).length === 0 ? (
-                    <p className="rounded-xl bg-[#FAF9FF] px-4 py-8 text-center text-sm text-muted">No business-impact data for this period.</p>
-                  ) : Object.entries(data.business_impact).filter(([, value]) => value > 0).map(([label, value], index) => {
-                    const Icon = IMPACT_ICONS[index % IMPACT_ICONS.length];
+            <section className="mt-5 grid min-w-0 items-stretch gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <article className="analytics-panel-enter h-full min-w-0 rounded-2xl border border-[rgba(90,72,160,0.12)] bg-white p-5 shadow-[0_8px_20px_rgba(65,50,120,0.06)] sm:p-6 flex flex-col">
+                <SectionHeading title="Business impact" description="Article counts across supported business-impact categories." />
+                <div className="mt-5 space-y-1.5 flex-1">
+                  {impactEntries
+                    .slice(0, 7)
+                    .map(([label, value], index) => {
                     const totalImpact = Object.values(data.business_impact).reduce((sum, count) => sum + count, 0);
-                    const percentage = totalImpact > 0 ? (value / totalImpact) * 100 : 0;
                     return (
-                      <div key={label} style={{ animationDelay: `${index * 55}ms` }} className="analytics-row-enter rounded-xl border border-transparent bg-[#FBFAFF] px-3 py-2.5 transition-colors hover:border-[#E9E5F4] hover:bg-white">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EEE9FF] text-primary"><Icon size={16} strokeWidth={2} aria-hidden="true" /></span>
-                          <span className="flex-1 text-[13px] font-semibold text-text-body">{formatLabel(label)}</span>
-                          <span className="text-[13px] font-bold tabular-nums text-text">{value.toLocaleString()}</span>
-                          <button type="button" onClick={() => void openImpactArticles(label)} aria-label={`View ${value} ${formatLabel(label)} articles`} className="rounded-full p-1 text-muted transition-colors hover:bg-primary-soft hover:text-primary"><ChevronRight size={15} aria-hidden="true" /></button>
-                        </div>
-                        <div className="ml-11 mt-2 flex items-center gap-3"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#ECEAF5]"><div className="analytics-impact-bar h-full rounded-full bg-gradient-to-r from-[#9A7AE8] to-[#6B4DE6]" style={{ width: `${percentage}%` }} /></div><span className="w-10 text-right text-[11px] font-semibold text-muted">{percentage.toFixed(1)}%</span></div>
-                      </div>
+                      <ImpactCategoryRow
+                        key={label}
+                        label={label}
+                        value={value}
+                        totalImpact={totalImpact}
+                        index={index}
+                        onViewArticles={() => void openImpactArticles(label)}
+                      />
                     );
                   })}
                 </div>
-              </article>
-
-              <div>
-              <article className="analytics-panel-enter rounded-2xl border border-[rgba(90,72,160,0.12)] bg-white p-5 shadow-[0_8px_20px_rgba(65,50,120,0.06)] sm:p-6" style={{ animationDelay: "120ms" }}>
-                <SectionHeading title="Competitor mentions" description={`Top organizations mentioned alongside ${companyName || "this company"}.`} />
-                {data.competitors.length === 0 ? (
-                  <EmptyCompetitors />
-                ) : (
-                  <div className="mt-5 overflow-hidden rounded-xl border border-border">
-                    <div className="grid grid-cols-[1fr_auto] bg-[#FAF9FF] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted"><span>Company</span><span>Mentions</span></div>
-                    {data.competitors.map((competitor, index) => {
-                      const name = typeof competitor.name === "string" ? competitor.name : "Unknown competitor";
-                      const mentions = typeof competitor.mention_count === "number" ? competitor.mention_count : 0;
-                      return <div key={`${name}-${index}`} className="grid grid-cols-[1fr_auto] items-center border-t border-border px-3 py-3 text-[12px]"><span className="flex items-center gap-2 font-semibold text-body"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">{name.slice(0, 2).toUpperCase()}</span>{name}</span><span className="font-semibold tabular-nums text-text">{mentions.toLocaleString()}</span></div>;
-                    })}
-                  </div>
+                {impactEntries.length > 7 && (
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => setShowAllImpacts(true)}
+                    className="mt-3 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
+                  >
+                    Show all {impactEntries.length} categories
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </button>
                 )}
               </article>
+
+              <div className="flex h-full min-w-0 flex-col">
+                <SentimentAndRiskCards data={data} />
               </div>
             </section>
+            
+            <PublisherReliabilityTable sources={sources} config={config} />
           </>
         )}
       </div>
+      {showAllImpacts && (
+        <ImpactCategoriesModal
+          entries={impactEntries}
+          onClose={() => setShowAllImpacts(false)}
+          onSelect={(category) => {
+            setShowAllImpacts(false);
+            void openImpactArticles(category);
+          }}
+        />
+      )}
       {impactCategory && (
         <ImpactArticlesModal
           category={impactCategory}

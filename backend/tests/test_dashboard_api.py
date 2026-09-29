@@ -85,6 +85,8 @@ def test_get_dashboard_intelligence(monkeypatch):
         "/api/v1/dashboard/intelligence",
         params={
             "limit": 20,
+            "company_id": 1,
+            "risk_levels": ["critical", "high"],
         },
     )
 
@@ -97,6 +99,8 @@ def test_get_dashboard_intelligence(monkeypatch):
     assert data["items"][0]["company_name"] == "PayU"
     assert data["items"][0]["risk_score"] == 80.0
     assert data["items"][0]["risk_level"] == "high"
+    assert service.await_args.kwargs["company_id"] == 1
+    assert service.await_args.kwargs["risk_levels"] == ["critical", "high"]
 
 
 def test_get_dashboard_articles(monkeypatch):

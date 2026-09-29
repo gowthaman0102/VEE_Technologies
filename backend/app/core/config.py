@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     alert_delivery_max_retries: int = 3
     slack_webhook_url: str | None = None
 
+    report_email_smtp_host: str | None = None
+    report_email_smtp_port: int = 587
+    report_email_smtp_username: str | None = None
+    report_email_smtp_password: str | None = None
+    report_email_from: str | None = None
+    report_email_starttls: bool = True
+    report_email_timeout_seconds: float = 15.0
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",

@@ -6,7 +6,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { DashboardRiskAnalytics, getDashboardRiskAnalytics } from "@/lib/api";
+import { DashboardRiskAnalytics, getDashboardRiskAnalytics, getRiskTrend, getDashboardIntelligence, getDashboardCompanies, getCompanyConfiguration, getActiveCompany, getAnalyticsOverview } from "@/lib/api";
+import type { RiskTrendResponse, DashboardIntelligenceResponse, ClientConfiguration } from "@/lib/api";
+import { RiskScoreTrendCard } from "./risk-score-trend-card";
+import { EscalationHistoryCard } from "./escalation-history-card";
+import { AlertThresholdConfigCard } from "./alert-threshold-config-card";
 import { formatLabel } from "@/lib/format";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import { RiskDrilldownModal } from "@/components/risk-drilldown-modal";
@@ -447,6 +451,88 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [modal, setModal] = useState<ModalState>({ isOpen: false, metric: "", title: "", total: 0 });
 
+  // ── Add-on state ──────────────────────────────────────────────────────────
+  const [trendRange, setTrendRange] = useState<"7D" | "30D" | "90D">("30D");
+  const [riskTrend, setRiskTrend] = useState<RiskTrendResponse | null>(null);
+  const [trendError, setTrendError] = useState(false);
+  const [trendUpdating, setTrendUpdating] = useState(false);
+
+  const [intelItems, setIntelItems] = useState<DashboardIntelligenceResponse | null>(null);
+  const [intelError, setIntelError] = useState(false);
+  const [intelUpdating, setIntelUpdating] = useState(false);
+
+  const [config, setConfig] = useState<ClientConfiguration | null>(null);
+
+  // ── Date helpers ──────────────────────────────────────────────────────────
+  function getRangeDates(range: "7D" | "30D" | "90D"): { start: string; end: string } {
+    const now = new Date();
+    const end = now.toISOString();
+    const days = range === "7D" ? 7 : range === "30D" ? 30 : 90;
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - days);
+    return { start: startDate.toISOString(), end };
+  }
+
+  // ── Fetch risk trend (called when range changes or on auto-refresh) ────────
+  const fetchRiskTrend = useCallback(async (range: "7D" | "30D" | "90D") => {
+    setTrendUpdating(true);
+    try {
+      const { start, end } = getRangeDates(range);
+      const result = await getRiskTrend(start, end);
+      setRiskTrend(result);
+      setTrendError(false);
+    } catch {
+      setTrendError(true);
+    } finally {
+      setTrendUpdating(false);
+    }
+  }, []);
+
+  // ── Fetch intelligence items for escalation timeline ──────────────────────
+  const fetchIntel = useCallback(async () => {
+    setIntelUpdating(true);
+    try {
+      const result = await getDashboardIntelligence(50);
+      setIntelItems(result);
+      setIntelError(false);
+    } catch {
+      setIntelError(true);
+    } finally {
+      setIntelUpdating(false);
+    }
+  }, []);
+
+  // ── Fetch config on mount ─────────────────────────────────────────────────
+  const fetchConfig = useCallback(async () => {
+    try {
+      const activeCompany = await getActiveCompany();
+      const cfg = await getCompanyConfiguration(activeCompany.id);
+      setConfig(cfg);
+    } catch { /* leave null */ }
+  }, []);
+
+  // ── Initial loads ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    void fetchRiskTrend(trendRange);
+    void fetchIntel();
+    void fetchConfig();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Re-fetch trend when range changes ────────────────────────────────────
+  const handleRangeChange = useCallback((range: "7D" | "30D" | "90D") => {
+    setTrendRange(range);
+    void fetchRiskTrend(range);
+  }, [fetchRiskTrend]);
+
+  // ── Shared 60-second auto-refresh for addon sections ─────────────────────
+  useAutoRefresh(async () => {
+    await Promise.allSettled([
+      fetchRiskTrend(trendRange),
+      fetchIntel(),
+    ]);
+  }, { intervalMs: 60_000 });
+
   useAutoRefresh(async () => {
     try {
       const fresh = await getDashboardRiskAnalytics();
@@ -606,6 +692,35 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
             )}
           </div>
         </section>
+
+        {/* ── Section 1: Risk Score Trend ──────────────────────────────── */}
+        <RiskScoreTrendCard
+          data={riskTrend}
+          range={trendRange}
+          onRangeChange={handleRangeChange}
+          highThreshold={config?.risk.high_threshold ?? 65}
+          error={trendError}
+          isUpdating={trendUpdating}
+        />
+
+        {/* ── Sections 2 & 3: Escalation History + Alert Threshold Config side-by-side */}
+        <div className="grid gap-5 xl:grid-cols-2">
+          <EscalationHistoryCard
+            items={intelItems?.items ?? []}
+            error={intelError}
+            isUpdating={intelUpdating}
+          />
+          {config ? (
+            <AlertThresholdConfigCard
+              config={config}
+              onSaved={(newConfig) => setConfig(newConfig)}
+            />
+          ) : (
+            <section className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_4px_18px_rgba(28,23,52,0.06)] flex items-center justify-center py-16">
+              <p className="text-[14px] text-muted">Loading threshold configuration…</p>
+            </section>
+          )}
+        </div>
       </div>
 
       <RiskDrilldownModal

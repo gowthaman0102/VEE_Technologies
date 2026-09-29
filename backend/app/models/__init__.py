@@ -16,6 +16,8 @@ from app.models.event_cluster import (
     EventClusterMembership,
 )
 from app.models.generated_report import GeneratedReport
+from app.models.report_schedule import ReportSchedule
+from app.models.report_recipient import ReportRecipient
 from app.models.monitoring_topic import MonitoringTopic
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
@@ -39,6 +41,8 @@ __all__ = [
     "EventCluster",
     "EventClusterMembership",
     "GeneratedReport",
+    "ReportSchedule",
+    "ReportRecipient",
     "MonitoringTopic",
     "RiskAssessment",
     "RiskInsight",

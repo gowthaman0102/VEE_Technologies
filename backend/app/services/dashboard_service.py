@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from app.models.alert import Alert
 from app.models.article import Article
 from app.models.article_business_impact import ArticleBusinessImpact
+from app.models.article_competitor_mention import ArticleCompetitorMention
 from app.models.article_sentiment import ArticleSentiment
 from app.models.article_triage import ArticleTriage
 from app.models.company import Company
@@ -361,6 +362,8 @@ async def get_dashboard_intelligence(
     db,
     *,
     limit: int = 20,
+    company_id: int | None = None,
+    risk_levels: list[str] | None = None,
 ) -> DashboardIntelligenceResponse:
     query = (
         select(
@@ -427,6 +430,9 @@ async def get_dashboard_intelligence(
             ArticleSentiment.label.label(
                 "sentiment"
             ),
+            ArticleBusinessImpact.primary_category.label(
+                "business_impact"
+            ),
         )
         .join(
             ArticleTriage,
@@ -459,21 +465,52 @@ async def get_dashboard_intelligence(
                 == ArticleTriage.company_id
             ),
         )
-        .where(
-            Company.is_active.is_(True)
+        .outerjoin(
+            ArticleBusinessImpact,
+            (
+                ArticleBusinessImpact.article_id
+                == Article.id
+            )
+            & (
+                ArticleBusinessImpact.company_id
+                == ArticleTriage.company_id
+            ),
         )
-        .order_by(
-            RiskInsight.updated_at.desc()
-        )
-        .limit(limit)
+        .where(Company.is_active.is_(True))
     )
+    if company_id is not None:
+        query = query.where(ArticleTriage.company_id == company_id)
+    if risk_levels:
+        query = query.where(func.lower(RiskAssessment.risk_level).in_(risk_levels))
+        query = query.order_by(
+            case(
+                (func.lower(RiskAssessment.risk_level) == "critical", 0),
+                else_=1,
+            ),
+            RiskAssessment.risk_score.desc(),
+            RiskInsight.updated_at.desc(),
+        )
+    else:
+        query = query.order_by(RiskInsight.updated_at.desc())
+    query = query.limit(limit)
 
     result = await db.execute(query)
     rows = result.mappings().all()
 
+    article_ids = [row["article_id"] for row in rows]
+    competitors_by_article = {}
+    if article_ids:
+        comp_query = select(ArticleCompetitorMention.article_id, ArticleCompetitorMention.competitors).where(
+            ArticleCompetitorMention.article_id.in_(article_ids)
+        )
+        comp_result = await db.execute(comp_query)
+        for article_id, competitors in comp_result.all():
+            competitors_by_article[article_id] = competitors
+
     items = [
         DashboardIntelligenceItem(
-            **row,
+            **dict(row),
+            competitor_mentions=competitors_by_article.get(row["article_id"], []),
             publisher_name=publisher_name(
                 row["source_name"],
                 row["title"],
@@ -936,4 +973,157 @@ async def get_dashboard_risk_analytics_drilldown(
         page=page,
         page_size=page_size,
         items=items,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Known HQ coordinates – used when no lat/lng table exists in the DB.
+# Key: lowercase company name  →  (city, country, lat, lng)
+# ---------------------------------------------------------------------------
+_KNOWN_HQ: dict[str, tuple[str, str, float, float]] = {
+    "openai": ("San Francisco", "United States", 37.7749, -122.4194),
+}
+
+# Additional offices per company (name → list of (label, city, country, lat, lng, type))
+_KNOWN_OFFICES: dict[str, list[tuple[str, str, str, float, float, str]]] = {
+    "openai": [
+        ("New York Office",    "New York",     "United States",  40.7128, -74.0060,  "office"),
+        ("London Office",      "London",       "United Kingdom", 51.5074,  -0.1278,  "office"),
+        ("Tokyo Office",       "Tokyo",        "Japan",          35.6762, 139.6503,  "office"),
+        ("Seattle Office",     "Seattle",      "United States",  47.6062, -122.3321, "office"),
+    ],
+}
+
+
+async def get_company_overview(
+    db,
+    company_id: int,
+) -> "CompanyOverviewResponse":
+    from app.schemas.dashboard import (
+        CompanyOverviewResponse,
+        CompanyOverviewCompany,
+        CompanyOverviewHealth,
+        CompanyOverviewLocation,
+        CompanyOverviewCountry,
+    )
+    from app.models.alert import Alert
+    from app.models.article_sentiment import ArticleSentiment
+
+    # ── Company row ────────────────────────────────────────────────────────────
+    company = await db.get(Company, company_id)
+    if company is None:
+        raise ValueError(f"Company {company_id} not found")
+
+    alias_result = await db.execute(
+        select(CompanyAlias.alias).where(CompanyAlias.company_id == company_id)
+    )
+    aliases = list(alias_result.scalars().all())
+
+    # ── Health stats ───────────────────────────────────────────────────────────
+    active_company_id, active_source_names = await _active_company_source_names(db)
+
+    total_articles = await db.scalar(
+        select(func.count(func.distinct(Article.id)))
+        .outerjoin(
+            ArticleTriage,
+            and_(
+                ArticleTriage.article_id == Article.id,
+                ArticleTriage.company_id == company_id,
+            ),
+        )
+        .where(
+            or_(
+                Article.company_id == company_id,
+                ArticleTriage.id.is_not(None),
+                Article.source_name.in_(active_source_names) if active_company_id == company_id else False,
+            )
+        )
+    ) or 0
+
+    active_alerts = await db.scalar(
+        select(func.count(Alert.id)).where(Alert.company_id == company_id)
+    ) or 0
+
+    high_risk_count = await db.scalar(
+        select(func.count(RiskAssessment.id)).where(
+            RiskAssessment.company_id == company_id,
+            RiskAssessment.risk_level == "high",
+        )
+    ) or 0
+
+    critical_risk_count = await db.scalar(
+        select(func.count(RiskAssessment.id)).where(
+            RiskAssessment.company_id == company_id,
+            RiskAssessment.risk_level == "critical",
+        )
+    ) or 0
+
+    sentiment_result = await db.execute(
+        select(
+            ArticleSentiment.label,
+            func.count(ArticleSentiment.id).label("cnt"),
+        )
+        .where(ArticleSentiment.company_id == company_id)
+        .group_by(ArticleSentiment.label)
+    )
+    sentiment_counts = {"positive": 0, "neutral": 0, "negative": 0}
+    for row in sentiment_result.all():
+        label = (row.label or "").lower()
+        if label in sentiment_counts:
+            sentiment_counts[label] = row.cnt
+
+    health = CompanyOverviewHealth(
+        total_articles=total_articles,
+        active_alerts=active_alerts,
+        high_risk_count=high_risk_count,
+        critical_risk_count=critical_risk_count,
+        sentiment=sentiment_counts,
+    )
+
+    # ── Locations ──────────────────────────────────────────────────────────────
+    name_key = company.name.lower()
+    hq_list: list[CompanyOverviewLocation] = []
+    office_countries: dict[str, list[CompanyOverviewLocation]] = {}
+
+    if name_key in _KNOWN_HQ:
+        city, country, lat, lng = _KNOWN_HQ[name_key]
+        hq_list.append(
+            CompanyOverviewLocation(
+                label=f"{company.name} Headquarters",
+                city=city,
+                country=country,
+                latitude=lat,
+                longitude=lng,
+                location_type="headquarters",
+            )
+        )
+
+    for label, city, country, lat, lng, loc_type in _KNOWN_OFFICES.get(name_key, []):
+        loc = CompanyOverviewLocation(
+            label=label,
+            city=city,
+            country=country,
+            latitude=lat,
+            longitude=lng,
+            location_type=loc_type,
+        )
+        office_countries.setdefault(country, []).append(loc)
+
+    official_locations = [
+        CompanyOverviewCountry(country=country, locations=locs)
+        for country, locs in office_countries.items()
+    ]
+
+    return CompanyOverviewResponse(
+        company=CompanyOverviewCompany(
+            id=company.id,
+            name=company.name,
+            website=company.website,
+            industry=company.industry,
+            is_active=company.is_active,
+            aliases=aliases,
+        ),
+        health=health,
+        headquarters=hq_list,
+        official_locations=official_locations,
     )

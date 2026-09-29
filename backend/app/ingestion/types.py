@@ -10,6 +10,7 @@ class CollectedArticle(BaseModel):
 
     title: str = Field(min_length=1)
     url: str = Field(min_length=1)
+    canonical_url: str | None = None
 
     author: str | None = Field(default=None, max_length=300)
     description: str | None = None

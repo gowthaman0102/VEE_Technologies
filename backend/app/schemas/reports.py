@@ -13,11 +13,13 @@ class ReportRequest(BaseModel):
         "custom",
         "all_history",
     ] = "custom"
+    report_template: Literal["executive", "detailed", "board_ready"] = "detailed"
     
     report_scope: Literal[
         "standard", 
         "search_results", 
-        "business_impact"
+        "business_impact",
+        "analytics_snapshot",
     ] = "standard"
     
     article_ids: list[int] | None = None
@@ -67,6 +69,7 @@ class ReportHistoryItem(BaseModel):
     id: int
     company_id: int
     report_type: str
+    report_template: str = "detailed"
     report_scope: str | None = None
     scope_metadata: dict | None = None
     file_format: str
@@ -84,6 +87,7 @@ class ReportBatchHistoryItem(BaseModel):
     batch_id: str
     company_id: int
     report_type: str
+    report_template: str = "detailed"
     report_scope: str | None = None
     scope_metadata: dict | None = None
     period_start: datetime

@@ -6,8 +6,11 @@ import {
   getDashboardIntelligence, 
   getDashboardOverview,
   getAnalyticsOverview,
+  getArticleTrend,
+  getBusinessImpact,
+  getSentimentTrend,
   getEventAnalytics,
-  getSourceAnalytics
+  getSourceAnalytics,
 } from "@/lib/api";
 
 export default async function Home() {
@@ -18,13 +21,26 @@ export default async function Home() {
   const endStr = end.toISOString();
   const startStr = start.toISOString();
 
-  const [overview, intelligence, company, analyticsOverview, eventAnalytics, sourceAnalytics] = await Promise.all([
+  const [
+    overview,
+    intelligence,
+    company,
+    analyticsOverview,
+    eventAnalytics,
+    sourceAnalytics,
+    trendPoints,
+    sentimentTrend,
+    businessImpact,
+  ] = await Promise.all([
     getDashboardOverview(), 
     getDashboardIntelligence(6), 
     getActiveCompany(),
     getAnalyticsOverview(undefined, startStr, endStr),
     getEventAnalytics(startStr, endStr),
-    getSourceAnalytics(startStr, endStr)
+    getSourceAnalytics(startStr, endStr),
+    getArticleTrend(startStr, endStr, "day"),
+    getSentimentTrend(startStr, endStr),
+    getBusinessImpact(startStr, endStr),
   ]);
 
   return (
@@ -38,6 +54,13 @@ export default async function Home() {
           initialAnalyticsOverview={analyticsOverview}
           initialEventAnalytics={eventAnalytics}
           initialSourceAnalytics={sourceAnalytics}
+          initialTrendPoints={trendPoints}
+          initialSentiment={{
+            positive: sentimentTrend.positive,
+            neutral: sentimentTrend.neutral,
+            negative: sentimentTrend.negative,
+          }}
+          initialCategoryDistribution={businessImpact.category_distribution}
           timeWindow={{ start: startStr, end: endStr }}
         />
       </div>

@@ -2,46 +2,37 @@
 
 import {
   FormEvent,
+  startTransition,
   useEffect,
   useState,
 } from "react";
 
-import { TimeRangeSelector } from "@/components/time-range-selector";
 import {
-  BriefcaseBusiness,
-  CalendarDays,
-  ChevronDown,
-  ChevronUp,
-  Clock3,
   FileText,
   Filter,
-  Hash,
   Info,
   RotateCcw,
   Search as SearchIcon,
   Shield,
   Smile,
-  Tag,
   Waypoints,
   X,
 } from "lucide-react";
-import { ArticleViewButton } from "@/components/article-view-button";
-import { ArticleMetadata } from "@/components/article-metadata";
+import { SearchAdvancedFilters } from "@/components/search-advanced-filters";
+import { SearchHistoryEntry, SearchHistoryPanel } from "@/components/search-history-panel";
+import { SearchComparison, SearchModeComparison } from "@/components/search-mode-comparison";
+import { SearchResultsList } from "@/components/search-results-list";
 import {
   getActiveCompany,
   generateReport,
+  getSourceAnalytics,
   SearchFilters,
   SearchResult,
   searchKeyword,
   searchSemantic,
 } from "@/lib/api";
-import {
-  resolveTimeRange,
-  TimeRangePreset,
-} from "@/lib/time-range";
-import { Badge, toneForSentiment } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { focusRing, inputClasses, primaryButton, secondaryButton } from "@/components/ui/button-styles";
+import { resolveTimeRange } from "@/lib/time-range";
+import { focusRing, inputClasses, primaryButton } from "@/components/ui/button-styles";
 import { PageAmbient } from "@/components/page-ambient";
 import { CosmicPageHero } from "@/components/cosmic-page-hero";
 
@@ -50,15 +41,17 @@ type SearchMode = "keyword" | "semantic";
 export function SearchPageClient() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [resultQuery, setResultQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("keyword");
+  const [resultMode, setResultMode] = useState<SearchMode>("keyword");
+  const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>({});
+  const [publishers, setPublishers] = useState<string[]>([]);
+  const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
+  const [comparison, setComparison] = useState<SearchComparison | null>(null);
+  const [comparing, setComparing] = useState(false);
 
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [companyName, setCompanyName] = useState("");
-
-  const [timePreset, setTimePreset] =
-    useState<TimeRangePreset>("7d");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
 
   const [sourceName, setSourceName] = useState("");
   const [sentiment, setSentiment] = useState("");
@@ -67,12 +60,11 @@ export function SearchPageClient() {
   const [businessImpact, setBusinessImpact] = useState("");
   const [eventType, setEventType] = useState("");
   const [eventClusterId, setEventClusterId] = useState("");
-  const [minimumSimilarity, setMinimumSimilarity] = useState("");
+  const [minimumSimilarity] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultsOpen, setResultsOpen] = useState(false);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +76,18 @@ export function SearchPageClient() {
         if (!cancelled) {
           setCompanyId(company.id);
           setCompanyName(company.name);
+          const end = new Date();
+          const start = new Date(end);
+          start.setUTCFullYear(start.getUTCFullYear() - 1);
+          void getSourceAnalytics(start.toISOString(), end.toISOString(), company.id)
+            .then((analytics) => {
+              if (!cancelled) {
+                setPublishers([...new Set(analytics.sources.map((source) => source.source_name))].sort());
+              }
+            })
+            .catch(() => {
+              if (!cancelled) setPublishers([]);
+            });
         }
       } catch (cause) {
         if (!cancelled) {
@@ -103,32 +107,46 @@ export function SearchPageClient() {
     };
   }, []);
 
+  useEffect(() => {
+    if (companyId === null) return;
+    try {
+      const stored = window.localStorage.getItem(`search-history:${companyId}`);
+      const parsed: unknown = stored ? JSON.parse(stored) : [];
+      const entries = Array.isArray(parsed)
+        ? parsed.filter((entry): entry is SearchHistoryEntry => (
+            typeof entry?.id === "string"
+            && typeof entry.query === "string"
+            && (entry.mode === "keyword" || entry.mode === "semantic")
+            && typeof entry.createdAt === "number"
+            && typeof entry.saved === "boolean"
+            && typeof entry.filters === "object"
+            && entry.filters !== null
+          )).slice(0, 20)
+        : [];
+      startTransition(() => setHistory(entries));
+    } catch {
+      startTransition(() => setHistory([]));
+    }
+  }, [companyId]);
+
   function buildFilters(): SearchFilters {
-    const timeRange = resolveTimeRange(
-      timePreset,
-      timePreset === "custom"
-        ? {
-            customStart,
-            customEnd,
-          }
-        : {},
-    );
+    const timeRange = resolveTimeRange("7d");
 
     const filters: SearchFilters = {
-      start: timeRange.start,
-      end: timeRange.end,
+      start: advancedFilters.start ?? timeRange.start,
+      end: advancedFilters.end ?? timeRange.end,
     };
 
-    if (sourceName.trim()) {
-      filters.source_name = sourceName.trim();
+    if ((advancedFilters.source_name ?? sourceName).trim()) {
+      filters.source_name = (advancedFilters.source_name ?? sourceName).trim();
     }
 
-    if (sentiment.trim()) {
-      filters.sentiment = sentiment.trim();
+    if ((advancedFilters.sentiment ?? sentiment).trim()) {
+      filters.sentiment = (advancedFilters.sentiment ?? sentiment).trim();
     }
 
-    if (riskLevel.trim()) {
-      filters.risk_level = riskLevel.trim();
+    if ((advancedFilters.risk_level ?? riskLevel).trim()) {
+      filters.risk_level = (advancedFilters.risk_level ?? riskLevel).trim();
     }
     if (publisherCountry.trim()) {
       filters.publisher_country_code = publisherCountry.trim();
@@ -160,12 +178,16 @@ export function SearchPageClient() {
     return filters;
   }
 
-  async function submit(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
+  function saveHistoryEntries(entries: SearchHistoryEntry[]) {
+    const next = [...entries, ...history].slice(0, 20);
+    setHistory(next);
+    if (companyId !== null) {
+      window.localStorage.setItem(`search-history:${companyId}`, JSON.stringify(next));
+    }
+  }
 
-    if (!query.trim()) {
+  async function runSearch(searchQuery: string, searchMode: SearchMode, filters: SearchFilters) {
+    if (!searchQuery.trim()) {
       setError("Enter a search query.");
       return;
     }
@@ -179,12 +201,10 @@ export function SearchPageClient() {
     setError("");
 
     try {
-      const filters = buildFilters();
-
       let resolvedMinimumSimilarity: number | undefined;
 
       if (
-        mode === "semantic"
+        searchMode === "semantic"
         && minimumSimilarity.trim()
       ) {
         resolvedMinimumSimilarity = Number(
@@ -202,23 +222,33 @@ export function SearchPageClient() {
         }
       }
 
-      const data = mode === "keyword"
+      const data = searchMode === "keyword"
         ? await searchKeyword(
             companyId,
-            query.trim(),
+        searchQuery.trim(),
             filters,
             50,
           )
         : await searchSemantic(
             companyId,
-            query.trim(),
+            searchQuery.trim(),
             filters,
             50,
             resolvedMinimumSimilarity,
           );
 
       setResults(data.results);
+      setResultMode(searchMode);
+      setResultQuery(searchQuery.trim());
       setResultsOpen(true);
+      saveHistoryEntries([{
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        query: searchQuery.trim(),
+        mode: searchMode,
+        filters: { ...filters },
+        createdAt: Date.now(),
+        saved: false,
+      }]);
     } catch (cause) {
       setResults([]);
       setResultsOpen(false);
@@ -232,31 +262,63 @@ export function SearchPageClient() {
     }
   }
 
-  function clearFilters() {
-    setTimePreset("7d");
-    setCustomStart("");
-    setCustomEnd("");
-    setSourceName("");
-    setSentiment("");
-    setRiskLevel("");
-    setPublisherCountry("");
-    setBusinessImpact("");
-    setEventType("");
-    setEventClusterId("");
-    setMinimumSimilarity("");
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runSearch(query, mode, buildFilters());
   }
 
-  const activeFilters = [
-    sourceName && { label: `Source: ${sourceName}`, clear: () => setSourceName("") },
-    sentiment && { label: `Sentiment: ${sentiment}`, clear: () => setSentiment("") },
-    riskLevel && { label: `Risk: ${riskLevel}`, clear: () => setRiskLevel("") },
-    publisherCountry && { label: `Country: ${publisherCountry}`, clear: () => setPublisherCountry("") },
-    businessImpact && { label: `Impact: ${businessImpact}`, clear: () => setBusinessImpact("") },
-    eventType && { label: `Event: ${eventType}`, clear: () => setEventType("") },
-    eventClusterId && { label: `Cluster: ${eventClusterId}`, clear: () => setEventClusterId("") },
-    mode === "semantic" && minimumSimilarity && { label: `Similarity: ${minimumSimilarity}`, clear: () => setMinimumSimilarity("") },
-    timePreset !== "7d" && { label: `Range: ${timePreset}`, clear: () => { setTimePreset("7d"); setCustomStart(""); setCustomEnd(""); } },
-  ].filter(Boolean) as Array<{ label: string; clear: () => void }>;
+  function saveCurrentSearch() {
+    if (!query.trim()) return;
+    const filters = buildFilters();
+    saveHistoryEntries([{
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      query: query.trim(),
+      mode,
+      filters,
+      createdAt: Date.now(),
+      saved: true,
+    }]);
+  }
+
+  function rerunSearch(entry: SearchHistoryEntry) {
+    setQuery(entry.query);
+    setMode(entry.mode);
+    setAdvancedFilters(entry.filters);
+    setSourceName(entry.filters.source_name ?? "");
+    setSentiment(entry.filters.sentiment ?? "");
+    setRiskLevel(entry.filters.risk_level ?? "");
+    setPublisherCountry(entry.filters.publisher_country_code ?? "");
+    setBusinessImpact(entry.filters.business_impact ?? "");
+    setEventType(entry.filters.event_type ?? "");
+    setEventClusterId(entry.filters.event_cluster_id === undefined ? "" : String(entry.filters.event_cluster_id));
+    void runSearch(entry.query, entry.mode, entry.filters);
+  }
+
+  async function compareSearchModes() {
+    if (!query.trim() || companyId === null) return;
+    const filters = buildFilters();
+    setComparing(true);
+    setError("");
+    try {
+      const [keyword, semantic] = await Promise.all([
+        searchKeyword(companyId, query.trim(), filters, 50),
+        searchSemantic(companyId, query.trim(), filters, 50),
+      ]);
+      setComparison({ keyword: keyword.results, semantic: semantic.results });
+      saveHistoryEntries((["keyword", "semantic"] as SearchMode[]).map((searchMode) => ({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          query: query.trim(),
+          mode: searchMode,
+          filters: { ...filters },
+          createdAt: Date.now(),
+          saved: false,
+        })));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Search comparison failed.");
+    } finally {
+      setComparing(false);
+    }
+  }
 
   const popularSearches = [
     companyName || "OpenAI",
@@ -267,23 +329,6 @@ export function SearchPageClient() {
     "antitrust",
     "leadership",
   ];
-
-  function dateRangeLabel() {
-    if (timePreset === "custom") {
-      if (!customStart || !customEnd) return "Choose a custom date range";
-      return `${formatSearchDate(customStart)} - ${formatSearchDate(customEnd)}`;
-    }
-
-    const range = resolveTimeRange(timePreset);
-    return `${formatSearchDate(range.start)} - ${formatSearchDate(range.end)}`;
-  }
-
-  function formatSearchDate(value: string) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? value
-      : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
-  }
 
   return (
     <main className="search-page relative min-h-[calc(100vh-74px)] overflow-hidden bg-canvas px-5 py-6 sm:px-6 lg:px-8 lg:py-7">
@@ -339,6 +384,33 @@ export function SearchPageClient() {
           </section>
         </form>
 
+        <div className="mt-4 space-y-4">
+          <SearchAdvancedFilters
+            filters={buildFilters()}
+            publishers={publishers}
+            onChange={(next) => {
+              setAdvancedFilters(next);
+              setSourceName(next.source_name ?? "");
+              setSentiment(next.sentiment ?? "");
+              setRiskLevel(next.risk_level ?? "");
+            }}
+          />
+          <div className="grid gap-4 xl:grid-cols-2">
+            <SearchHistoryPanel
+              entries={history}
+              canSave={Boolean(query.trim()) && companyId !== null}
+              onSave={saveCurrentSearch}
+              onRerun={rerunSearch}
+            />
+            <SearchModeComparison
+              comparison={comparison}
+              loading={comparing}
+              disabled={!query.trim() || companyId === null}
+              onCompare={() => void compareSearchModes()}
+            />
+          </div>
+        </div>
+
         {error && (
           <div className="mt-5 rounded-lg border border-critical-border bg-critical-bg px-4 py-3 text-sm text-critical">
             {error}
@@ -350,8 +422,8 @@ export function SearchPageClient() {
         <SearchResultsModal
           results={results}
           companyId={companyId}
-          mode={mode}
-          query={query}
+          mode={resultMode}
+          query={resultQuery}
           sentiment={sentiment}
           riskLevel={riskLevel}
           publisherCountry={publisherCountry}
@@ -552,11 +624,13 @@ function SearchResultsModal({
 
         {/* Results */}
         <div className="min-h-0 space-y-4 overflow-y-auto bg-surface-raised p-4 sm:p-6">
-          {filtered.length > 0 ? filtered.map((result) => (
-            <SearchResultCard key={result.article_id} result={result} mode={mode} />
-          )) : (
-            <EmptyState title="No articles matched the current search and filters." />
-          )}
+          <SearchResultsList
+            results={filtered}
+            companyId={companyId}
+            mode={mode}
+            query={query.trim()}
+            embedded
+          />
         </div>
       </section>
     </div>
@@ -592,89 +666,6 @@ function FilterInput({
         />
       </span>
     </label>
-  );
-}
-
-function SearchResultCard({
-  result,
-  mode,
-}: {
-  result: SearchResult;
-  mode: SearchMode;
-}) {
-  return (
-    <article className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <ArticleMetadata publisherName={result.publisher_name} publishedAt={result.published_at} collectedAt={result.collected_at} compact />
-          <p className="mt-3 text-lg font-semibold text-text">{result.title}</p>
-        </div>
-
-        <ArticleViewButton
-          articleId={result.article_id}
-          sourceUrl={result.url}
-          sourceName={result.source_name}
-        />
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {mode === "semantic"
-          && result.similarity !== undefined && (
-            <Badge>
-              Similarity {result.similarity.toFixed(3)}
-            </Badge>
-          )}
-        <ResultTag
-          label="Event"
-          value={result.event_type}
-        />
-        {result.sentiment && (
-          <Badge tone={toneForSentiment(result.sentiment)}>
-            Sentiment: {result.sentiment}
-          </Badge>
-        )}
-        <ResultTag
-          label="Risk"
-          value={
-            result.risk_level
-              ? result.risk_score !== null
-                ? `${result.risk_level} (${result.risk_score})`
-                : result.risk_level
-              : null
-          }
-        />
-        <ResultTag
-          label="Impact"
-          value={result.business_impact}
-        />
-        <ResultTag
-          label="Cluster"
-          value={
-            result.event_cluster_id !== null
-              ? String(result.event_cluster_id)
-              : null
-          }
-        />
-      </div>
-    </article>
-  );
-}
-
-function ResultTag({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null;
-}) {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <span className="rounded-full border border-border bg-surface-raised px-3 py-1 text-xs text-body">
-      {label}: {value}
-    </span>
   );
 }
 

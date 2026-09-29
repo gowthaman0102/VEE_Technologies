@@ -11,6 +11,7 @@ from app.schemas.dashboard import (
     DashboardOverviewResponse,
     DashboardRiskAnalyticsResponse,
     RiskDrilldownResponse,
+    CompanyOverviewResponse,
 )
 from app.services.dashboard_service import (
     get_dashboard_companies,
@@ -19,6 +20,7 @@ from app.services.dashboard_service import (
     get_dashboard_overview,
     get_dashboard_risk_analytics,
     get_dashboard_risk_analytics_drilldown,
+    get_company_overview,
 )
 
 
@@ -46,11 +48,15 @@ async def read_dashboard_overview(
 )
 async def read_dashboard_intelligence(
     limit: int = 20,
+    company_id: int | None = Query(default=None, ge=1),
+    risk_levels: list[Literal["critical", "high"]] | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     return await get_dashboard_intelligence(
         db,
         limit=limit,
+        company_id=company_id,
+        risk_levels=risk_levels,
     )
 
 
@@ -87,6 +93,17 @@ async def read_dashboard_companies(
     return await get_dashboard_companies(
         db,
     )
+
+
+@router.get(
+    "/companies/{company_id}/overview",
+    response_model=CompanyOverviewResponse,
+)
+async def read_company_overview(
+    company_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_company_overview(db, company_id)
 
 
 @router.get(

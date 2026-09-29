@@ -68,6 +68,8 @@ export type DashboardIntelligenceItem = {
   attention_level: string;
 
   sentiment: string | null;
+  business_impact: string | null;
+  competitor_mentions: string[];
 
   updated_at: string;
 };
@@ -240,7 +242,18 @@ export async function getEventAnalytics(
 
 export type SourceAnalyticsResponse = {
   company_id: number;
-  sources: Array<{ source_name: string; count: number }>;
+  sources: Array<{
+    source_name: string;
+    publisher_domain?: string | null;
+    article_count: number;
+    average_risk_score: number | null;
+    risk_assessed_count: number;
+    critical_risk_count: number;
+    high_risk_count: number;
+    medium_risk_count: number;
+    low_risk_count: number;
+    event_count: number;
+  }>;
 };
 
 export async function getSourceAnalytics(
@@ -265,10 +278,84 @@ export async function getSourceAnalytics(
   return response.json();
 }
 
+export type CompetitorAnalyticsResponse = {
+  company_id: number;
+  competitors: Array<{
+    name: string;
+    mention_count: number;
+    mentions_by_period: Record<string, number>;
+    sentiment: Record<string, number>;
+    risk: Record<string, number>;
+    business_impact: Record<string, number>;
+    sources: Record<string, number>;
+  }>;
+};
+
+export async function getCompetitorAnalytics(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<CompetitorAnalyticsResponse> {
+  const params = new URLSearchParams();
+  if (companyId) params.set("company_id", String(companyId));
+  params.set("start", start);
+  params.set("end", end);
+
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/competitors?${params}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Competitor analytics API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export type ArticleTrendPoint = {
   bucket: string | null;
   article_count: number;
 };
+
+export type RiskTrendResponse = {
+  company_id: number;
+  summary: Record<string, number>;
+  average_risk_score: number;
+  highest_risk_score: number;
+  high_risk_count: number;
+  medium_risk_count: number;
+  low_risk_count: number;
+  series: Array<{
+    period?: string | null;
+    bucket?: string | null;
+    average_risk_score: number;
+    maximum_risk_score?: number;
+    highest_risk_score?: number;
+    high_count?: number;
+    medium_count?: number;
+    low_count?: number;
+  }>;
+};
+
+export async function getRiskTrend(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<RiskTrendResponse> {
+  const params = new URLSearchParams({ start, end });
+  if (companyId !== undefined) params.append("company_id", companyId.toString());
+
+  const response = await fetch(`${API_BASE_URL}/analytics/risk/trend?${params.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Risk trend API failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export async function getArticleTrend(
   start: string,
@@ -296,11 +383,64 @@ export async function getArticleTrend(
   return data.points ?? [];
 }
 
+export type SentimentTrendResponse = {
+  company_id: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+  summary: { positive: number; neutral: number; negative: number };
+};
+
+export async function getSentimentTrend(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<SentimentTrendResponse> {
+  const params = new URLSearchParams({ start, end });
+  if (companyId) params.set("company_id", String(companyId));
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/sentiment/trend?${params}`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new Error(`Sentiment trend API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+export type BusinessImpactResponse = {
+  company_id: number;
+  category_distribution: Record<string, number>;
+};
+
+export async function getBusinessImpact(
+  start: string,
+  end: string,
+  companyId?: number,
+): Promise<BusinessImpactResponse> {
+  const params = new URLSearchParams({ start, end });
+  if (companyId) params.set("company_id", String(companyId));
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/business-impact?${params}`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new Error(`Business impact API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function getDashboardIntelligence(
   limit = 20,
+  companyId?: number,
+  riskLevels?: Array<"critical" | "high">,
 ): Promise<DashboardIntelligenceResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (companyId !== undefined) params.set("company_id", String(companyId));
+  riskLevels?.forEach((riskLevel) => params.append("risk_levels", riskLevel));
+
   const response = await fetch(
-    `${API_BASE_URL}/dashboard/intelligence?limit=${limit}`,
+    `${API_BASE_URL}/dashboard/intelligence?${params}`,
     {
       cache: "no-store",
     },
@@ -505,6 +645,7 @@ export type ReportHistoryItem = {
   id: number;
   company_id: number;
   report_type: string;
+  report_template?: string;
   report_scope?: string | null;
   scope_metadata?: Record<string, unknown> | null;
   file_format: string;
@@ -522,6 +663,7 @@ export type ReportBatchHistoryItem = {
   batch_id: string;
   company_id: number;
   report_type: string;
+  report_template: "executive" | "detailed" | "board_ready";
   report_scope?: string | null;
   scope_metadata?: Record<string, unknown> | null;
   period_start: string;
@@ -594,6 +736,58 @@ export async function getDashboardCompanies(): Promise<DashboardCompaniesRespons
 
   return response.json();
 }
+
+// ── Company Overview (globe + health + profile) ────────────────────────────
+
+export type CompanyOverviewLocation = {
+  label: string;
+  city: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  location_type: string;
+};
+
+export type CompanyOverviewCountry = {
+  country: string;
+  locations: CompanyOverviewLocation[];
+};
+
+export type CompanyOverviewHealth = {
+  total_articles: number;
+  active_alerts: number;
+  high_risk_count: number;
+  critical_risk_count: number;
+  sentiment: { positive: number; neutral: number; negative: number };
+};
+
+export type CompanyOverviewCompany = {
+  id: number;
+  name: string;
+  website: string | null;
+  industry: string | null;
+  is_active: boolean;
+  aliases: string[];
+};
+
+export type CompanyOverview = {
+  company: CompanyOverviewCompany;
+  health: CompanyOverviewHealth;
+  headquarters: CompanyOverviewLocation[];
+  official_locations: CompanyOverviewCountry[];
+};
+
+export async function getCompanyOverview(companyId: number): Promise<CompanyOverview> {
+  const response = await fetch(
+    `${API_BASE_URL}/dashboard/companies/${companyId}/overview`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new Error(`Company overview API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
 
 export async function getArticleCategories(
   companyId: number,
@@ -738,6 +932,86 @@ export async function getReportHistory(companyId: number): Promise<{ count: numb
   return response.json();
 }
 
+export type ReportTemplate = "executive" | "detailed" | "board_ready";
+export type ReportScheduleType = "daily" | "weekly" | "monthly" | "custom";
+export type ReportFormat = "pdf" | "xlsx" | "csv";
+
+export type ReportSchedule = {
+  id: number;
+  company_id: number;
+  name: string;
+  report_type: ReportScheduleType;
+  time_mode: "media" | "ingestion";
+  report_scope: "standard" | "business_impact";
+  business_impact_category: string | null;
+  report_template: ReportTemplate;
+  formats: ReportFormat[];
+  run_time_utc: string;
+  day_of_week: number;
+  day_of_month: number;
+  custom_period_days: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_run_at: string | null;
+  next_run_at: string;
+};
+
+export type ReportSchedulePayload = Omit<ReportSchedule, "id" | "company_id" | "created_at" | "updated_at" | "last_run_at" | "next_run_at">;
+
+export type ReportRecipientState = {
+  count: number;
+  emails: string[];
+  delivery_configured: boolean;
+};
+
+export async function getReportSchedules(companyId: number): Promise<{ count: number; items: ReportSchedule[] }> {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/report-schedules`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Report schedules API failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function createReportSchedule(companyId: number, payload: ReportSchedulePayload): Promise<ReportSchedule> {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/report-schedules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`Create report schedule failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function updateReportSchedule(scheduleId: number, payload: ReportSchedulePayload): Promise<ReportSchedule> {
+  const response = await fetch(`${API_BASE_URL}/report-schedules/${scheduleId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`Update report schedule failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function deleteReportSchedule(scheduleId: number): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/report-schedules/${scheduleId}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(`Delete report schedule failed with status ${response.status}`);
+}
+
+export async function getReportRecipients(companyId: number): Promise<ReportRecipientState> {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/report-recipients`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Report recipients API failed with status ${response.status}`);
+  return response.json();
+}
+
+export async function saveReportRecipients(companyId: number, emails: string[]): Promise<ReportRecipientState> {
+  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/report-recipients`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ emails }),
+  });
+  if (!response.ok) throw new Error(`Save report recipients failed with status ${response.status}`);
+  return response.json();
+}
+
 export type GenerateReportResponse = {
   batch_id: string;
   period_start: string;
@@ -758,6 +1032,8 @@ export async function generateReport(args: {
   start_date?: string;
   end_date?: string;
   report_scope?: "standard" | "search_results" | "business_impact";
+  report_template?: ReportTemplate;
+  include_details?: boolean;
   article_ids?: number[];
   business_impact_category?: string;
 }): Promise<GenerateReportResponse> {
@@ -768,6 +1044,38 @@ export async function generateReport(args: {
   });
   if (!response.ok) throw new Error(`Report generation failed with status ${response.status}`);
   return response.json();
+}
+
+export async function downloadReport(args: {
+  company_id: number;
+  report_type: "daily" | "weekly" | "monthly" | "custom" | "all_history";
+  time_mode?: "media" | "ingestion";
+  report_scope?: "standard" | "search_results" | "business_impact" | "analytics_snapshot";
+  article_ids?: number[];
+  start_date?: string;
+  end_date?: string;
+}, format: "pdf" | "xlsx" | "csv" = "pdf"): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/reports/export?file_format=${format}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Report export failed with status ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = args.report_scope === "search_results"
+    ? `Search_Results.${format}`
+    : `Analytics_Snapshot_${args.start_date?.split("T")[0]}_to_${args.end_date?.split("T")[0]}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 }
 
 export async function deleteReport(id: number): Promise<void> {

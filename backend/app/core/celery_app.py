@@ -42,6 +42,10 @@ celery_app.conf.beat_schedule = {
         "task": "ingestion.live_poll",
         "schedule": 300.0,
     },
+    "run-user-report-schedules-every-5-minutes": {
+        "task": "reports.run_due_schedules",
+        "schedule": 300.0,
+    },
     "generate-daily-intelligence-reports": {
         "task": "reports.generate_daily",
         "schedule": crontab(

@@ -64,6 +64,8 @@ class DashboardIntelligenceItem(BaseModel):
     attention_level: str
 
     sentiment: str | None = None
+    business_impact: str | None = None
+    competitor_mentions: list[str] = []
 
     updated_at: datetime
     collected_at: datetime
@@ -132,3 +134,43 @@ class DashboardCompanyItem(BaseModel):
 class DashboardCompaniesResponse(BaseModel):
     count: int
     items: list[DashboardCompanyItem]
+
+
+# ── Company Overview ──────────────────────────────────────────────────────────
+
+class CompanyOverviewLocation(BaseModel):
+    label: str
+    city: str
+    country: str
+    latitude: float
+    longitude: float
+    location_type: str  # "headquarters" | "office" | "research" | etc.
+
+
+class CompanyOverviewCountry(BaseModel):
+    country: str
+    locations: list[CompanyOverviewLocation]
+
+
+class CompanyOverviewHealth(BaseModel):
+    total_articles: int
+    active_alerts: int
+    high_risk_count: int
+    critical_risk_count: int
+    sentiment: dict  # {"positive": int, "neutral": int, "negative": int}
+
+
+class CompanyOverviewCompany(BaseModel):
+    id: int
+    name: str
+    website: str | None
+    industry: str | None
+    is_active: bool
+    aliases: list[str]
+
+
+class CompanyOverviewResponse(BaseModel):
+    company: CompanyOverviewCompany
+    health: CompanyOverviewHealth
+    headquarters: list[CompanyOverviewLocation]
+    official_locations: list[CompanyOverviewCountry]

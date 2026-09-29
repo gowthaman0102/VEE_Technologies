@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from app.models.company import Company
 from app.models.company_relationship import CompanyRelationship
 from app.models.event_cluster import EventCluster, EventClusterMembership
 from app.models.risk_assessment import RiskAssessment
+from app.utils.article_metadata import resolve_publisher_url
 
 
 SUPPORTED_IMPACT_CATEGORIES = [
@@ -556,7 +558,10 @@ async def get_source_summary(
 
     stmt = (
         select(
+            Article.id,
             Article.source_name,
+            Article.url,
+            Article.canonical_url,
             ArticleSentiment.label,
             RiskAssessment.risk_score,
             RiskAssessment.risk_level,
@@ -587,31 +592,54 @@ async def get_source_summary(
     )
     rows = (await db.execute(stmt)).all()
     aggregates: dict[str, dict] = {}
-    for source, sentiment, risk_score, risk_level, cluster_id in rows:
+    for article_id, source, article_url, canonical_url, sentiment, risk_score, risk_level, cluster_id in rows:
         item = aggregates.setdefault(
             source,
             {
                 "source_name": source,
+                "article_ids": set(),
                 "article_count": 0,
+                "publisher_domains": defaultdict(int),
                 "sentiment": defaultdict(int),
                 "average_risk_score": [],
+                "risk_assessed_count": 0,
+                "critical_risk_count": 0,
                 "high_risk_count": 0,
+                "medium_risk_count": 0,
+                "low_risk_count": 0,
                 "event_count": set(),
             },
         )
-        item["article_count"] += 1
-        if sentiment:
-            item["sentiment"][sentiment] += 1
-        if risk_score is not None:
-            item["average_risk_score"].append(float(risk_score))
-        if risk_level == "high":
-            item["high_risk_count"] += 1
+        if article_id not in item["article_ids"]:
+            item["article_ids"].add(article_id)
+            item["article_count"] += 1
+            domain = _publisher_domain_from_urls(article_url, canonical_url)
+            if domain:
+                item["publisher_domains"][domain] += 1
+            if sentiment:
+                item["sentiment"][sentiment] += 1
+            if risk_score is not None:
+                item["average_risk_score"].append(float(risk_score))
+                item["risk_assessed_count"] += 1
+            risk_count_key = {
+                "critical": "critical_risk_count",
+                "high": "high_risk_count",
+                "medium": "medium_risk_count",
+                "low": "low_risk_count",
+            }.get((risk_level or "").lower())
+            if risk_count_key:
+                item[risk_count_key] += 1
         if cluster_id is not None:
             item["event_count"].add(cluster_id)
     return {
         "sources": [
             {
                 "source_name": item["source_name"],
+                "publisher_domain": max(
+                    item["publisher_domains"],
+                    key=item["publisher_domains"].get,
+                    default=None,
+                ),
                 "article_count": item["article_count"],
                 "sentiment": dict(item["sentiment"]),
                 "average_risk_score": round(
@@ -620,8 +648,12 @@ async def get_source_summary(
                     2,
                 )
                 if item["average_risk_score"]
-                else 0.0,
+                else None,
+                "risk_assessed_count": item["risk_assessed_count"],
+                "critical_risk_count": item["critical_risk_count"],
                 "high_risk_count": item["high_risk_count"],
+                "medium_risk_count": item["medium_risk_count"],
+                "low_risk_count": item["low_risk_count"],
                 "event_count": len(item["event_count"]),
             }
             for item in sorted(
@@ -631,6 +663,24 @@ async def get_source_summary(
             )
         ]
     }
+
+
+def _publisher_domain_from_urls(
+    article_url: str | None,
+    canonical_url: str | None,
+) -> str | None:
+    publisher_url = resolve_publisher_url(article_url, canonical_url)
+    if not publisher_url:
+        return None
+
+    try:
+        hostname = (urlsplit(publisher_url).hostname or "").lower().removeprefix("www.")
+    except ValueError:
+        return None
+
+    if hostname == "google.com" or hostname.endswith(".google.com") or hostname == "msn.com":
+        return None
+    return hostname or None
 
 
 async def get_competitor_summary(

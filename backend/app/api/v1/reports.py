@@ -66,6 +66,8 @@ async def export_report(
             report_scope=payload.report_scope,
             article_ids=payload.article_ids,
             business_impact_category=payload.business_impact_category,
+            include_details=payload.include_details,
+            report_template=payload.report_template,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -216,6 +218,8 @@ async def generate_report(
             report_scope=payload.report_scope,
             article_ids=payload.article_ids,
             business_impact_category=payload.business_impact_category,
+            include_details=payload.include_details,
+            report_template=payload.report_template,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -294,6 +298,7 @@ async def report_history(
                 batch_id=key,
                 company_id=primary.company_id,
                 report_type=primary.report_type,
+                report_template=primary.report_template,
                 report_scope=primary.report_scope,
                 scope_metadata=primary.scope_metadata,
                 period_start=primary.period_start,

@@ -13,6 +13,7 @@ from app.api.v1.ingestion import router as ingestion_router
 from app.api.v1.processing import router as processing_router
 from app.api.v1.risk import router as risk_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.report_schedules import router as report_schedules_router
 from app.api.v1.semantic_search import router as semantic_search_router
 from app.api.v1.triage import router as triage_router
 from app.api.v1.watchlist import router as watchlist_router
@@ -76,6 +77,10 @@ api_router.include_router(
 
 api_router.include_router(
     reports_router
+)
+
+api_router.include_router(
+    report_schedules_router
 )
 
 api_router.include_router(

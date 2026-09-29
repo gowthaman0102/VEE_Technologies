@@ -16,6 +16,7 @@ import {
 import {
   getDashboardIntelligence,
   getDashboardOverview,
+  generateReport,
 } from "@/lib/api";
 import type { DashboardOverview, DashboardIntelligenceItem } from "@/lib/api";
 import { formatArticleTimestamp, formatLabel, formatRelativeTime } from "@/lib/format";
@@ -25,6 +26,7 @@ import { PageAmbient } from "@/components/page-ambient";
 import { CosmicPageHero } from "@/components/cosmic-page-hero";
 import { focusRing } from "@/components/ui/button-styles";
 import { ArticleReaderModal } from "@/components/article-reader-modal";
+import { useRouter } from "next/navigation";
 
 type Props = {
   initialItems: DashboardIntelligenceItem[];
@@ -90,6 +92,7 @@ function getPageNumbers(totalPages: number, current: number) {
 }
 
 export function IntelligencePageClient({ initialItems, initialOverview }: Props) {
+  const router = useRouter();
   const [items, setItems] = useState<DashboardIntelligenceItem[]>(initialItems);
   const [overview, setOverview] = useState<DashboardOverview>(initialOverview);
   const [pageSize, setPageSize] = useState<number>(5);
@@ -175,6 +178,10 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
       nextItems = nextItems.filter((item) => matchesTopic(item, topicFilter));
     }
 
+    if (impactFilter !== "All") {
+      nextItems = nextItems.filter((item) => item.business_impact === impactFilter);
+    }
+
     nextItems.sort((a, b) => {
       const aTime = a.published_at ? new Date(a.published_at).getTime() : 0;
       const bTime = b.published_at ? new Date(b.published_at).getTime() : 0;
@@ -189,7 +196,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     });
 
     return nextItems;
-  }, [items, search, riskFilter, topicFilter, sentimentFilter, sortOrder]);
+  }, [items, search, riskFilter, topicFilter, sentimentFilter, impactFilter, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -206,6 +213,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     nextRiskFilter?: string, 
     nextTopicFilter?: string, 
     nextSentimentFilter?: string, 
+    nextImpactFilter?: string,
     nextSort?: string, 
     nextPageSize?: number
   ) => {
@@ -213,6 +221,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
     if (nextRiskFilter !== undefined) setRiskFilter(nextRiskFilter);
     if (nextTopicFilter !== undefined) setTopicFilter(nextTopicFilter);
     if (nextSentimentFilter !== undefined) setSentimentFilter(nextSentimentFilter);
+    if (nextImpactFilter !== undefined) setImpactFilter(nextImpactFilter);
     if (nextSort !== undefined) setSortOrder(nextSort);
     if (nextPageSize !== undefined) setPageSize(nextPageSize);
     setPage(1);
@@ -221,6 +230,33 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
 
   const openArticleReader = (articleId: number) => {
     setReaderArticleId(articleId);
+  };
+
+  const businessImpactFilters = useMemo(() => {
+    const impacts = new Set(items.map((i) => i.business_impact).filter(Boolean) as string[]);
+    return ["All", ...Array.from(impacts).sort()];
+  }, [items]);
+
+  const [exportState, setExportState] = useState<"idle" | "generating" | "generated" | "error">("idle");
+
+  const handleExportFeed = async () => {
+    const companyId = items[0]?.company_id;
+    if (!companyId || filteredItems.length === 0) return;
+    
+    setExportState("generating");
+    try {
+      await generateReport({
+        company_id: companyId,
+        report_type: "all_history",
+        report_scope: "search_results",
+        article_ids: filteredItems.map((result) => result.article_id),
+      });
+      setExportState("generated");
+      router.push("/reports");
+    } catch {
+      setExportState("error");
+      setTimeout(() => setExportState("idle"), 3000);
+    }
   };
 
   const metricCards = [
@@ -288,7 +324,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   value={search}
                   placeholder="Search articles, publishers, topics..."
                   className={`w-full rounded-[10px] border border-border bg-surface-raised py-2.5 pl-9 pr-3 text-[14px] text-text placeholder:text-muted focus:border-primary-border focus:outline-none ${focusRing}`}
-                  onChange={(event) => handleFilterChange(event.target.value, riskFilter, topicFilter, sentimentFilter, sortOrder, pageSize)}
+                  onChange={(event) => handleFilterChange(event.target.value, riskFilter, topicFilter, sentimentFilter, impactFilter, sortOrder, pageSize)}
                   aria-label="Search intelligence articles"
                 />
               </label>
@@ -298,7 +334,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   <select
                     aria-label="Sort intelligence articles"
                     value={sortOrder}
-                    onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, event.target.value, pageSize)}
+                    onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, impactFilter, event.target.value, pageSize)}
                     className="appearance-none rounded-[10px] border border-border bg-surface-raised px-3 py-2 pr-8 text-[12px] font-medium text-text-body focus:border-primary-border focus:outline-none"
                   >
                     <option>Latest first</option>
@@ -317,7 +353,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   <button
                     key={filter}
                     type="button"
-                    onClick={() => handleFilterChange(search, filter, topicFilter, sentimentFilter, sortOrder, pageSize)}
+                    onClick={() => handleFilterChange(search, filter, topicFilter, sentimentFilter, impactFilter, sortOrder, pageSize)}
                     className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
                       riskFilter === filter
                         ? "border-primary bg-primary text-white"
@@ -337,7 +373,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   <button
                     key={filter}
                     type="button"
-                    onClick={() => handleFilterChange(search, riskFilter, topicFilter, filter, sortOrder, pageSize)}
+                    onClick={() => handleFilterChange(search, riskFilter, topicFilter, filter, impactFilter, sortOrder, pageSize)}
                     className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
                       sentimentFilter === filter
                         ? "border-primary bg-primary text-white"
@@ -357,7 +393,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   <button
                     key={filter}
                     type="button"
-                    onClick={() => handleFilterChange(search, riskFilter, filter, sentimentFilter, sortOrder, pageSize)}
+                    onClick={() => handleFilterChange(search, riskFilter, filter, sentimentFilter, impactFilter, sortOrder, pageSize)}
                     className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
                       topicFilter === filter
                         ? "border-primary bg-primary text-white"
@@ -369,7 +405,42 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                 ))}
               </div>
             </div>
+
+            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+              <span className="text-[12px] font-medium text-muted mt-2 mr-1">Business Impact:</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {businessImpactFilters.map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, filter, sortOrder, pageSize)}
+                    className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+                      impactFilter === filter
+                        ? "border-primary bg-primary text-white"
+                        : "border-border bg-surface-raised text-text-body"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between rounded-[12px] border border-border bg-surface px-4 py-3 shadow-[0_2px_10px_rgba(28,23,52,0.04)]">
+          <div>
+            <div className="text-[14px] font-semibold text-text">{filteredItems.length} articles match current filters</div>
+            <div className="text-[12px] text-muted">Refine filters above or export this exact view</div>
+          </div>
+          <button
+            type="button"
+            onClick={handleExportFeed}
+            disabled={exportState === "generating"}
+            className={`inline-flex items-center justify-center rounded-[8px] border border-primary px-4 py-2 text-[13px] font-semibold text-primary transition-colors hover:bg-primary hover:text-white disabled:opacity-50 ${focusRing}`}
+          >
+            {exportState === "generating" ? "Exporting..." : exportState === "generated" ? "Exported!" : exportState === "error" ? "Export failed" : "Export filtered feed"}
+          </button>
         </div>
 
         <div className="mt-6 grid gap-5 xl:grid-cols-[1.1fr_1.6fr]">
@@ -442,11 +513,50 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end pt-2">
+                <div className="border-t border-border pt-4">
+                  <div className="flex items-center gap-2 mb-3 text-[12px] text-muted">
+                    <span className="inline-flex items-center rounded bg-primary-soft px-1.5 py-0.5 text-[10px] font-bold text-primary">ADD-ON</span>
+                    <span className="font-bold text-text">Confidence & competitor context</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-[11px] font-medium text-muted">Confidence score</div>
+                    <div className="flex-1 h-2 rounded-full bg-border overflow-hidden">
+                      <div className="h-full bg-primary" style={{ width: `${Math.round(featuredItem.confidence * 100)}%` }} />
+                    </div>
+                    <div className="text-[12px] font-bold text-text tabular-nums">{Math.round(featuredItem.confidence * 100)}%</div>
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-[11px] font-medium text-muted mb-1.5">Competitor mentions</div>
+                    {featuredItem.competitor_mentions && featuredItem.competitor_mentions.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {featuredItem.competitor_mentions.map((comp) => (
+                          <span key={comp} className="inline-flex items-center rounded-full bg-surface-raised px-2.5 py-0.5 text-[11px] font-medium text-text-body border border-border">
+                            {comp}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-muted italic">No competitor mentions detected</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-4 space-y-4">
+                  <div>
+                    <h4 className="text-[12px] font-bold text-text">Why it matters</h4>
+                    <p className="mt-1 text-[13px] leading-5 text-muted">{featuredItem.why_it_matters || "No context provided."}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-[12px] font-bold text-text">Recommended action</h4>
+                    <p className="mt-1 text-[13px] leading-5 text-muted">{featuredItem.recommended_action || "No recommendation provided."}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => openArticleReader(featuredItem.article_id)}
-                    className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-surface px-3 py-2 text-[13px] font-semibold text-text transition-colors hover:bg-surface-raised"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-[10px] border border-border bg-surface px-3 py-2 text-[13px] font-semibold text-text transition-colors hover:bg-surface-raised"
                   >
                     View Article <ArrowRight className="h-4 w-4" />
                   </button>
@@ -455,7 +565,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
             ) : (
               <div className="p-6 text-center text-muted">
                 <p className="text-[15px] font-medium">No intelligence matches these filters.</p>
-                <button type="button" onClick={() => { setSearch(""); setRiskFilter("All"); setTopicFilter("All"); setSentimentFilter("All"); }} className="mt-3 rounded-full border border-border bg-surface-raised px-3 py-1.5 text-[12px] font-medium text-text-body">
+                <button type="button" onClick={() => { setSearch(""); setRiskFilter("All"); setTopicFilter("All"); setSentimentFilter("All"); setImpactFilter("All"); }} className="mt-3 rounded-full border border-border bg-surface-raised px-3 py-1.5 text-[12px] font-medium text-text-body">
                   Clear filters
                 </button>
               </div>
@@ -519,6 +629,18 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                               {formatLabel(tag ?? "Other")}
                             </span>
                           ))}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-4 text-[11px] text-muted">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-1.5 w-1.5 rounded-full bg-${toneForRisk(item.urgency)}`} />
+                            <span>Urgency: {item.urgency.toLowerCase()}</span>
+                          </div>
+                          {item.competitor_mentions && item.competitor_mentions.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              <span>Mentions:</span>
+                              <span className="text-text-body">{item.competitor_mentions.join(", ")}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

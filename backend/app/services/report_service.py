@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import csv
 import io
+import logging
 from xml.sax.saxutils import escape
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -50,6 +51,10 @@ from app.models.event_cluster import (
 from app.models.generated_report import GeneratedReport
 from app.models.risk_assessment import RiskAssessment
 from app.models.risk_insight import RiskInsight
+from app.services.report_email_service import send_report_batch_email
+
+
+logger = logging.getLogger(__name__)
 REPORT_DISPLAY_TIMEZONE = ZoneInfo(
     "Asia/Kolkata"
 )
@@ -4788,6 +4793,8 @@ def _apply_report_configuration(report_data: dict) -> dict:
 def render_report(
     report_data: dict,
     file_format: str,
+    *,
+    include_details: bool = True,
 ) -> bytes:
     if file_format not in REPORT_FORMATS:
         raise ValueError(
@@ -4803,9 +4810,14 @@ def render_report(
         "csv": export_report_csv,
     }
 
-    return exporters[
-        file_format
-    ](_apply_report_configuration(report_data))
+    configured = copy.deepcopy(_apply_report_configuration(report_data))
+    if not include_details:
+        configured["articles"] = []
+        configured["highest_risk_stories"] = []
+        configured["alerts"] = []
+        configured["competitors"] = []
+
+    return exporters[file_format](configured)
 
 
 async def find_existing_report(
@@ -5080,6 +5092,10 @@ async def generate_report_batch(
     report_scope: str = "standard",
     article_ids: list[int] | None = None,
     business_impact_category: str | None = None,
+    include_details: bool = True,
+    report_template: str = "detailed",
+    formats: list[str] | tuple[str, ...] | None = None,
+    schedule_id: int | None = None,
 ) -> list[GeneratedReport]:
     """
     Generate all three report formats (PDF, XLSX, CSV) in a single batch
@@ -5095,10 +5111,18 @@ async def generate_report_batch(
     elif report_scope == "business_impact" and business_impact_category:
         scope_metadata["category"] = business_impact_category
 
+    selected_formats = tuple(formats) if formats is not None else REPORT_FORMATS
+    if not selected_formats or any(item not in REPORT_FORMATS for item in selected_formats):
+        raise ValueError("At least one supported report format is required.")
+    if len(selected_formats) != len(set(selected_formats)):
+        raise ValueError("Report formats must be unique.")
+
     records = []
-    for file_format in REPORT_FORMATS:
+    for file_format in selected_formats:
         record = GeneratedReport(
             company_id=company_id,
+            report_template=report_template,
+            schedule_id=schedule_id,
             report_type=report_type,
             file_format=file_format,
             period_start=period_start,
@@ -5136,7 +5160,11 @@ async def generate_report_batch(
         )
 
         for record in records:
-            content = render_report(report_data, record.file_format)
+            content = render_report(
+                report_data,
+                record.file_format,
+                include_details=include_details,
+            )
             extension = REPORT_EXTENSIONS[record.file_format]
             
             scope_slug = ""
@@ -5144,10 +5172,17 @@ async def generate_report_batch(
                 scope_slug = "-search_results"
             elif record.report_scope == "business_impact" and business_impact_category:
                 scope_slug = f"-impact_{business_impact_category}"
+            elif record.report_scope == "analytics_snapshot":
+                scope_slug = "-analytics_snapshot"
+            template_slug = (
+                f"-{record.report_template}"
+                if record.report_template != "detailed"
+                else ""
+            )
                 
             record.filename = (
                 f"company-{record.company_id}-"
-                f"{record.report_type}{scope_slug}-"
+                f"{record.report_type}{scope_slug}{template_slug}-"
                 f"{record.period_start.date().isoformat()}-"
                 f"{record.period_end.date().isoformat()}."
                 f"{extension}"
@@ -5164,6 +5199,19 @@ async def generate_report_batch(
         await db.commit()
         for r in records:
             await db.refresh(r)
+
+        try:
+            await send_report_batch_email(
+                db,
+                company_id=company_id,
+                records=records,
+            )
+        except Exception:
+            logger.exception(
+                "Report email delivery failed for company %s batch %s",
+                company_id,
+                batch_id,
+            )
 
         return records
 
