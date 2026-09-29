@@ -16,10 +16,8 @@ import {
   LockKeyhole,
   Package,
   Scale,
-  Search,
   ShieldAlert,
   Smile,
-  Sparkles,
   Trophy,
   UserRound,
   X,
@@ -28,11 +26,13 @@ import type { LucideIcon } from "lucide-react";
 
 import {
   AnalyticsOverview,
+  ClientConfiguration,
   DashboardArticleItem,
   getActiveCompany,
   getDashboardArticles,
   getAnalyticsOverview,
   generateReport,
+  SourceAnalyticsResponse,
 } from "@/lib/api";
 import {
   TimeRangeSelector,
@@ -69,9 +69,6 @@ function formatLabel(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
-}
 
 async function withRetries<T>(operation: () => Promise<T>, attempts = 3) {
   let lastError: unknown;
@@ -332,8 +329,8 @@ export default function AnalyticsPage() {
     useState<AnalyticsOverview | null>(null);
 
 
-  const [sources, setSources] = useState<any[] | null>(null);
-  const [config, setConfig] = useState<any | null>(null);
+  const [sources, setSources] = useState<SourceAnalyticsResponse["sources"] | null>(null);
+  const [config, setConfig] = useState<ClientConfiguration | null>(null);
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -484,13 +481,18 @@ export default function AnalyticsPage() {
     setExportError("");
     try {
       const range = resolveTimeRange(preset, preset === "custom" ? { customStart, customEnd } : {});
-      const { downloadReport } = await import("@/lib/api");
-      await downloadReport({
+      const element = document.querySelector(".analytics-page") as HTMLElement;
+      if (!element) throw new Error("Could not find analytics page element");
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imageData = canvas.toDataURL("image/png");
+
+      const { exportAnalyticsSnapshot } = await import("@/lib/api");
+      await exportAnalyticsSnapshot({
         company_id: companyId,
-        report_type: preset === "7d" ? "weekly" : preset === "30d" ? "monthly" : preset === "90d" ? "custom" : preset === "1y" ? "all_history" : "custom",
-        report_scope: "standard",
         start_date: range.start,
         end_date: range.end,
+        image_data: imageData,
       });
     } catch (cause) {
       setExportError(cause instanceof Error ? cause.message : "Export failed");

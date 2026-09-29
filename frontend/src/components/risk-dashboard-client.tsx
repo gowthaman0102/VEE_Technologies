@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
-  Bell, ChevronRight, ClipboardList, Gauge, ShieldAlert, Users, Lightbulb, CheckCircle
+  ChevronRight, Lightbulb, CheckCircle
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
-import { DashboardRiskAnalytics, getDashboardRiskAnalytics, getRiskTrend, getDashboardIntelligence, getDashboardCompanies, getCompanyConfiguration, getActiveCompany, getAnalyticsOverview } from "@/lib/api";
+import { DashboardRiskAnalytics, getDashboardRiskAnalytics, getRiskTrend, getDashboardIntelligence, getCompanyConfiguration, getActiveCompany } from "@/lib/api";
 import type { RiskTrendResponse, DashboardIntelligenceResponse, ClientConfiguration } from "@/lib/api";
 import { RiskScoreTrendCard } from "./risk-score-trend-card";
 import { EscalationHistoryCard } from "./escalation-history-card";
@@ -28,82 +27,6 @@ function riskColor(label: string): string {
   if (l.includes("high")) return "var(--color-high)";
   if (l.includes("medium")) return "var(--color-medium)";
   return "var(--color-low)";
-}
-
-// â”€â”€â”€ Animated number â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
-  const [display, setDisplay] = useState(value);
-  const prev = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (prev.current === null) { prev.current = value; setDisplay(value); return; }
-    if (prev.current === value) return;
-    const from = prev.current;
-    prev.current = value;
-    const start = performance.now();
-    const dur = 400;
-    let id = 0;
-    const step = (now: number) => {
-      const p = Math.min((now - start) / dur, 1);
-      const eased = 1 - Math.pow(2, -10 * p);
-      setDisplay(from + (value - from) * eased);
-      if (p < 1) id = requestAnimationFrame(step);
-      else setDisplay(value);
-    };
-    id = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(id);
-  }, [value]);
-
-  return <>{Number(display).toFixed(decimals)}</>;
-}
-
-// â”€â”€â”€ KPI Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-type KpiCardConfig = {
-  label: string;
-  value: number;
-  decimals?: number;
-  icon: LucideIcon;
-  iconBg: string;
-  iconColor: string;
-  onClick?: () => void;
-  animationDelay?: string;
-};
-
-function KpiCard({ label, value, decimals = 0, icon: Icon, iconBg, iconColor, onClick, animationDelay }: KpiCardConfig) {
-  const [changed, setChanged] = useState(false);
-  const prevValue = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (prevValue.current === null) { prevValue.current = value; return; }
-    if (prevValue.current === value) return;
-    prevValue.current = value;
-    setChanged(true);
-    const t = setTimeout(() => setChanged(false), 700);
-    return () => clearTimeout(t);
-  }, [value]);
-
-  const card = (
-    <div
-      className={`risk-kpi-enter flex items-start gap-4 rounded-xl border bg-surface p-5 shadow-[0_1px_2px_rgba(28,23,52,0.06)] transition-colors duration-150 hover:border-border-strong ${changed ? "ring-2 ring-primary-border/60" : "border-border"} ${onClick ? "cursor-pointer" : ""}`}
-      style={{ animationDelay }}
-    >
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
-        <Icon size={20} className={iconColor} strokeWidth={2.2} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-muted leading-tight">{label}</p>
-        <p className={`mt-1.5 text-[30px] font-bold leading-none tracking-tight text-text transition-transform duration-300 ${changed ? "scale-105" : "scale-100"}`}>
-          <AnimatedNumber value={value} decimals={decimals} />
-        </p>
-      </div>
-      {onClick && <ChevronRight size={16} className="mt-1 shrink-0 text-muted" />}
-    </div>
-  );
-
-  if (onClick) return <button type="button" onClick={onClick} className="text-left w-full">{card}</button>;
-  return card;
 }
 
 // â”€â”€â”€ SVG Vertical Bar Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -432,12 +355,7 @@ function ChartCard({
 
 // â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function formatRelative(date: Date): string {
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-  return `${Math.floor(diff / 3600)}h ago`;
-}
+
 
 // â”€â”€â”€ Modal State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -447,8 +365,8 @@ type ModalState = { isOpen: boolean; metric: string; value?: string; title: stri
 
 export function RiskDashboardClient({ initialData }: { initialData: DashboardRiskAnalytics }) {
   const [data, setData] = useState(initialData);
-  const [liveStatus, setLiveStatus] = useState<"live" | "delayed">("live");
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [, setLiveStatus] = useState<"live" | "delayed">("live");
+  const [, setLastUpdated] = useState<Date>(() => new Date());
   const [modal, setModal] = useState<ModalState>({ isOpen: false, metric: "", title: "", total: 0 });
 
   // ── Add-on state ──────────────────────────────────────────────────────────

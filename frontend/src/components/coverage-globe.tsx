@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useRef } from "react";
@@ -19,6 +19,17 @@ export type CoverageMarker = {
   isHQ?: boolean;
 };
 
+type GlobeInstance = {
+  getCoords?: (lat: number, lng: number, altitude?: number) => { x: number; y: number; z: number } | undefined;
+  camera?: () => THREE.Camera;
+  controls?: () => { autoRotate: boolean; autoRotateSpeed: number; enableZoom: boolean; minDistance: number; maxDistance: number; getDistance: () => number };
+  pointOfView?: (pov: { lat: number; lng: number; altitude: number }, duration?: number) => void;
+  scene?: () => THREE.Scene;
+  globeMaterial?: () => THREE.MeshStandardMaterial;
+  resumeAnimation?: () => void;
+  pauseAnimation?: () => void;
+};
+
 export function CoverageGlobe({
   markers,
   onMarkerClick,
@@ -26,7 +37,6 @@ export function CoverageGlobe({
   markers: CoverageMarker[];
   onMarkerClick?: (marker: CoverageMarker) => void;
 }) {
-  const [countries, setCountries] = useState<object[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const globeRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,9 +48,11 @@ export function CoverageGlobe({
     try {
       const canvas = document.createElement("canvas");
       const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-      if (!gl) setWebglSupported(false);
-    } catch (e) {
-      setWebglSupported(false);
+      if (!gl) {
+        requestAnimationFrame(() => setWebglSupported(false));
+      }
+    } catch {
+      requestAnimationFrame(() => setWebglSupported(false));
     }
   }, []);
 
@@ -49,12 +61,8 @@ export function CoverageGlobe({
     if (!containerRef.current) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        let width = entry.contentRect.width;
-        let height = entry.contentRect.height;
-        // Cap resolution scaling on smaller screens
-        if (width < 480) {
-          // You could dynamically adjust devicePixelRatio here if working with raw ThreeJS
-        }
+        const width = entry.contentRect.width;
+        const height = entry.contentRect.height;
         setDimensions({ width, height });
       }
     });
@@ -74,7 +82,7 @@ export function CoverageGlobe({
         } else {
           if (globeRef.current.pauseAnimation) globeRef.current.pauseAnimation();
         }
-      } catch (e) {
+      } catch {
         // Ignore if methods don't exist
       }
     };
@@ -98,23 +106,6 @@ export function CoverageGlobe({
     };
   }, []);
 
-  // Fetch topologies for continent outlines
-  useEffect(() => {
-    let cancelled = false;
-    fetch("https://unpkg.com/world-atlas@2/countries-110m.json")
-      .then((response) => {
-        if (!response.ok) throw new Error(`World map request failed: ${response.status}`);
-        return response.json();
-      })
-      .then((topology) => {
-        if (!cancelled) setCountries(topology.objects.countries.geometries);
-      })
-      .catch((error) => console.error("Unable to load world map boundaries", error));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const hqMarker = markers.find(m => m.isHQ);
   const [hqPos, setHqPos] = useState<{x: number, y: number, occluded: boolean} | null>(null);
 
@@ -124,7 +115,7 @@ export function CoverageGlobe({
     let animationFrameId: number;
     const updatePosition = () => {
       try {
-        const globe = globeRef.current as any;
+        const globe = globeRef.current as GlobeInstance | null;
         if (globe && globe.getCoords && globe.camera && dimensions.width > 0) {
           const coords = globe.getCoords(hqMarker.latitude, hqMarker.longitude, 0);
           const camera = globe.camera();
@@ -140,7 +131,9 @@ export function CoverageGlobe({
             }
           }
         }
-      } catch (e) {}
+      } catch {
+        // Ignore position calculation errors
+      }
       animationFrameId = requestAnimationFrame(updatePosition);
     };
     

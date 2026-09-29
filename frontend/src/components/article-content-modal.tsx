@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { getArticleDetail, ArticleDetail } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { focusRing } from "@/components/ui/button-styles";

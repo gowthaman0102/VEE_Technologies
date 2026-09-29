@@ -1,4 +1,6 @@
-export function PeriodComparisonStrip({ data }: { data: any }) {
+import type { AnalyticsOverview } from "@/lib/api";
+
+export function PeriodComparisonStrip({ data }: { data: AnalyticsOverview | null | undefined }) {
   if (!data?.comparison) return null;
   const comp = data.comparison;
 

@@ -367,7 +367,7 @@ export function CompaniesPageClient({
                 <div className="w-px h-8 bg-white/10"></div>
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] uppercase tracking-wide text-muted">Locations</span>
-                  <span className="font-semibold text-text whitespace-nowrap text-sm mt-0.5">{overview.official_location_count} <span className="text-muted font-normal">({overview.location_country_count} countries)</span></span>
+                  <span className="font-semibold text-text whitespace-nowrap text-sm mt-0.5">{overview.official_locations?.reduce((acc, loc) => acc + loc.locations.length, 0) || 0} <span className="text-muted font-normal">({overview.official_locations?.length || 0} countries)</span></span>
                 </div>
             </div>
           </section>

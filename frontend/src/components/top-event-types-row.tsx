@@ -58,7 +58,7 @@ export function TopEventTypesRow({
             })}
             {refreshError && (
               <span className="inline-flex items-center rounded-full bg-critical-bg px-3 py-1.5 text-xs font-medium text-critical">
-                couldn't refresh
+                couldn&apos;t refresh
               </span>
             )}
           </div>

@@ -336,3 +336,83 @@ async def read_competitor_analytics(
         company_id=company_id,
         competitors=data.get("competitors", []),
     )
+
+@router.get("/business-impact/articles")
+async def read_business_impact_articles(
+    category: str,
+    company_id: int | None = Query(default=None, ge=1),
+    start: datetime | None = None,
+    end: datetime | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    if company_id is None:
+        profile = await get_active_company_profile(db)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="No active company configured.")
+        company_id = profile.company_id
+
+    if start is None or end is None:
+        raise HTTPException(status_code=400, detail="start and end are required")
+
+    start, end = validate_time_window(start, end)
+    
+    from app.models.article import Article
+    from app.models.article_business_impact import ArticleBusinessImpact
+    from app.models.article_sentiment import ArticleSentiment
+    from app.models.risk_assessment import RiskAssessment
+    from sqlalchemy import select, func
+
+    article_time = func.coalesce(Article.published_at, Article.collected_at)
+    
+    base_stmt = (
+        select(Article)
+        .join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id)
+        .where(
+            ArticleBusinessImpact.company_id == company_id,
+            func.lower(ArticleBusinessImpact.primary_category) == category.lower(),
+            article_time >= start,
+            article_time <= end,
+        )
+    )
+
+    total = await db.scalar(select(func.count()).select_from(base_stmt.subquery()))
+    
+    stmt = (
+        base_stmt
+        .outerjoin(ArticleSentiment, (ArticleSentiment.article_id == Article.id) & (ArticleSentiment.company_id == company_id))
+        .outerjoin(RiskAssessment, (RiskAssessment.article_id == Article.id) & (RiskAssessment.company_id == company_id))
+        .add_columns(
+            ArticleSentiment.sentiment,
+            RiskAssessment.risk_level,
+            RiskAssessment.risk_score
+        )
+        .order_by(article_time.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+
+    rows = (await db.execute(stmt)).all()
+    
+    items = []
+    for row in rows:
+        article, sentiment, risk_level, risk_score = row
+        items.append({
+            "article_id": article.id,
+            "title": article.title,
+            "published_at": article.published_at,
+            "collected_at": article.collected_at,
+            "url": article.url,
+            "publisher_name": article.publisher_name,
+            "sentiment": sentiment,
+            "risk_level": risk_level,
+            "risk_score": risk_score,
+        })
+
+    return {
+        "total": total or 0,
+        "items": items,
+        "page": page,
+        "page_size": page_size
+    }

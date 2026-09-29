@@ -248,7 +248,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
       await generateReport({
         company_id: companyId,
         report_type: "all_history",
-        report_scope: "search_results",
+        report_scope: "intelligence_export",
         article_ids: filteredItems.map((result) => result.article_id),
       });
       setExportState("generated");
@@ -678,7 +678,7 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
                     <select
                       aria-label="Select articles per page"
                       value={pageSize}
-                      onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, sortOrder, Number(event.target.value))}
+                      onChange={(event) => handleFilterChange(search, riskFilter, topicFilter, sentimentFilter, impactFilter, sortOrder, Number(event.target.value))}
                       className="rounded-[8px] border border-border bg-surface-raised px-2 py-1.5 text-[12px] font-medium text-text-body"
                     >
                       {PAGE_SIZE_OPTIONS.map((option) => (

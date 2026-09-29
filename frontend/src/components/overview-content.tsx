@@ -1,9 +1,9 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ShieldAlert, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 import Link from "next/link";
 
@@ -14,14 +14,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   AnalyticsOverview,
   ArticleTrendPoint,
-  BusinessImpactResponse,
   DashboardArticleItem,
   DashboardArticleMetric,
   DashboardCompanyItem,
   DashboardOverview,
   DashboardIntelligenceItem,
   EventAnalyticsResponse,
-  SentimentTrendResponse,
   SourceAnalyticsResponse,
   getDashboardArticles,
   getDashboardCompanies,
@@ -308,16 +306,16 @@ export function OverviewContent({
   timeWindow: { start: string, end: string };
 }) {
   const [overview, setOverview] = useState<DashboardOverview>(initialOverview);
-  const [intelligence, setIntelligence] = useState<DashboardIntelligenceItem[]>(initialIntelligence);
-  const [analyticsOverview, setAnalyticsOverview] = useState<AnalyticsOverview>(initialAnalyticsOverview);
-  const [eventAnalytics, setEventAnalytics] = useState<EventAnalyticsResponse>(initialEventAnalytics);
-  const [sourceAnalytics, setSourceAnalytics] = useState<SourceAnalyticsResponse>(initialSourceAnalytics);
+  const [, setIntelligence] = useState<DashboardIntelligenceItem[]>(initialIntelligence);
+  const [, setAnalyticsOverview] = useState<AnalyticsOverview>(initialAnalyticsOverview);
+  const [, setEventAnalytics] = useState<EventAnalyticsResponse>(initialEventAnalytics);
+  const [, setSourceAnalytics] = useState<SourceAnalyticsResponse>(initialSourceAnalytics);
 
   // ── New widget state ──────────────────────────────────────────────────────
   const [trendPoints, setTrendPoints] = useState<ArticleTrendPoint[]>(initialTrendPoints);
   const [sentiment, setSentiment] = useState<SentimentSnapshot>(initialSentiment);
   const [categoryDistribution, setCategoryDistribution] = useState<Record<string, number>>(initialCategoryDistribution);
-  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(Date.now());
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
 
   // Per-widget error flags — keep last good data visible, show inline indicator
   const [trendError, setTrendError] = useState(false);
@@ -325,7 +323,7 @@ export function OverviewContent({
   const [categoryError, setCategoryError] = useState(false);
 
   const [liveStatus, setLiveStatus] = useState<"live" | "updating" | "delayed">("live");
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [selectedMetric, setSelectedMetric] = useState<SelectedMetric | null>(null);
   const [articles, setArticles] = useState<DashboardArticleItem[]>([]);
@@ -509,7 +507,7 @@ export function OverviewContent({
       {/* ── Footer note ───────────────────────────────────────────────────── */}
       <ScrollReveal direction="fade" delay={100} duration={800} threshold={0.1}>
         <p className="mt-6 text-xs text-muted">
-          Note: "Critical Signals" article list removed from Overview · full feed lives on the{" "}
+          Note: &quot;Critical Signals&quot; article list removed from Overview · full feed lives on the{" "}
           <Link href="/intelligence" className="font-semibold text-primary hover:underline">
             Intelligence page
           </Link>

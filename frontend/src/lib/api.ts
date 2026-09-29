@@ -942,7 +942,7 @@ export type ReportSchedule = {
   name: string;
   report_type: ReportScheduleType;
   time_mode: "media" | "ingestion";
-  report_scope: "standard" | "business_impact";
+  report_scope: "standard" | "business_impact" | "search_results" | "intelligence_export" | "analytics_snapshot";
   business_impact_category: string | null;
   report_template: ReportTemplate;
   formats: ReportFormat[];
@@ -1031,11 +1031,14 @@ export async function generateReport(args: {
   time_mode?: "media" | "ingestion";
   start_date?: string;
   end_date?: string;
-  report_scope?: "standard" | "search_results" | "business_impact";
+  report_scope?: "standard" | "search_results" | "business_impact" | "intelligence_export" | "analytics_snapshot";
   report_template?: ReportTemplate;
   include_details?: boolean;
   article_ids?: number[];
   business_impact_category?: string;
+  search_query?: string;
+  search_mode?: "keyword" | "semantic";
+  search_filters?: SearchFilters;
 }): Promise<GenerateReportResponse> {
   const response = await fetch(`${API_BASE_URL}/reports/generate`, {
     method: "POST",
@@ -1044,6 +1047,23 @@ export async function generateReport(args: {
   });
   if (!response.ok) throw new Error(`Report generation failed with status ${response.status}`);
   return response.json();
+}
+
+export async function exportAnalyticsSnapshot(args: {
+  company_id: number;
+  start_date: string;
+  end_date: string;
+  image_data: string;
+}): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/reports/analytics-snapshot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Analytics snapshot failed with status ${response.status}`);
+  }
 }
 
 export async function downloadReport(args: {

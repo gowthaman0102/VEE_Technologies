@@ -19,7 +19,7 @@ export default function Error({
       <div className="max-w-md space-y-6">
         <h2 className="text-2xl font-bold text-text">Unable to Connect</h2>
         <p className="text-text-body">
-          The dashboard couldn't connect to the backend services. This usually means the API is still starting up or isn't running.
+          The dashboard couldn&apos;t connect to the backend services. This usually means the API is still starting up or isn&apos;t running.
         </p>
         <div className="rounded-md bg-surface p-4 text-left text-sm text-muted overflow-auto border border-border">
           <code>{error.message}</code>

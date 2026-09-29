@@ -20,6 +20,7 @@ class ReportRequest(BaseModel):
         "search_results", 
         "business_impact",
         "analytics_snapshot",
+        "intelligence_export",
     ] = "standard"
     
     article_ids: list[int] | None = None
@@ -36,6 +37,11 @@ class ReportRequest(BaseModel):
         "market",
         "competitive"
     ] | None = None
+    
+    search_query: str | None = None
+    search_mode: Literal['keyword', 'semantic'] | None = None  
+    search_filters: dict | None = None
+    minimum_similarity: float | None = None
     
     start_date: datetime | None = None
     end_date: datetime | None = None
@@ -58,6 +64,7 @@ class ReportSummaryResponse(BaseModel):
     end_date: datetime
     total_articles: int
     total_events: int
+    critical_risk_count: int
     high_risk_count: int
     medium_risk_count: int
     low_risk_count: int

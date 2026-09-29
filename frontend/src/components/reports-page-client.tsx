@@ -60,9 +60,10 @@ const FORMAT_LABELS: Record<string, string> = {
   pdf: "PDF",
   xlsx: "Excel",
   csv: "CSV",
+  png: "PNG",
 };
 
-const FORMAT_KEYS = ["pdf", "xlsx", "csv"] as const;
+const FORMAT_KEYS = ["pdf", "xlsx", "csv", "png"] as const;
 
 function formatDateTime(value: string | null) {
   if (!value) return "—";
@@ -150,6 +151,7 @@ export function ReportsPageClient() {
   const [generating, setGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingBatch, setPendingBatch] = useState<ReportBatchHistoryItem | null>(null);
+  const [activeTab, setActiveTab] = useState<"standard" | "analytics" | "search" | "impact">("standard");
 
   const loadReports = useCallback(async (resolvedCompanyId: number) => {
     const reports = await getReportHistory(resolvedCompanyId);
@@ -814,7 +816,7 @@ export function ReportsPageClient() {
           ) : (() => {
             const standardReports = history.filter((b) => !b.report_scope || b.report_scope === "standard");
             const analyticsSnapshots = history.filter((b) => b.report_scope === "analytics_snapshot");
-            const searchReports = history.filter((b) => b.report_scope === "search_results");
+            const searchReports = history.filter((b) => b.report_scope === "search_results" || b.report_scope === "intelligence_export");
             const impactReports = history.filter((b) => b.report_scope === "business_impact");
 
             const renderBatchCard = (batch: ReportBatchHistoryItem) => {
@@ -822,7 +824,7 @@ export function ReportsPageClient() {
               const categoryLabel = batch.scope_metadata?.category
                 ? ` · ${String(batch.scope_metadata.category).replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}`
                 : "";
-              const searchLabel = batch.report_scope === "search_results"
+              const searchLabel = batch.report_scope === "search_results" || batch.report_scope === "intelligence_export"
                 ? " · Search & Intelligence Export"
                 : "";
               const snapshotLabel = batch.report_scope === "analytics_snapshot" ? "Analytics Snapshot · " : "";
@@ -875,8 +877,8 @@ export function ReportsPageClient() {
 
                   {(typeof batch.scope_metadata?.article_ids_count === "number" || typeof batch.scope_metadata?.category === "string") && (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {typeof batch.scope_metadata.article_ids_count === "number" && <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-body">{batch.scope_metadata.article_ids_count} articles</span>}
-                      {typeof batch.scope_metadata.category === "string" && <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-body">Category: {String(batch.scope_metadata.category).replace(/_/g, " ")}</span>}
+                       {typeof batch.scope_metadata.article_ids_count === "number" && <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-body">{batch.scope_metadata.article_ids_count} articles</span>}
+                       {typeof batch.scope_metadata.category === "string" && <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-body">Category: {String(batch.scope_metadata.category).replace(/_/g, " ")}</span>}
                     </div>
                   )}
 
@@ -943,88 +945,71 @@ export function ReportsPageClient() {
               );
             };
 
+            const TABS = [
+              { id: "standard", label: "Standard Reports", count: standardReports.length, icon: FileText, color: "text-primary bg-primary-soft" },
+              { id: "analytics", label: "Analytics Snapshots", count: analyticsSnapshots.length, icon: BarChart3, color: "text-primary bg-primary-soft" },
+              { id: "search", label: "Search Exports", count: searchReports.length, icon: Search, color: "text-primary bg-primary-soft" },
+              { id: "impact", label: "Business Impact", count: impactReports.length, icon: Sparkles, color: "text-[#2E7D32] bg-[#EEF7EE]" },
+            ] as const;
+
             return (
-              <>
-                {/* Standard Reports */}
-                <div className="mt-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                      <FileText className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <h4 className="text-[15px] font-semibold text-text">Standard Reports</h4>
-                    <span className="rounded-full bg-surface-raised border border-border px-2 py-0.5 text-[11px] font-medium text-muted">{standardReports.length}</span>
-                  </div>
-                  {standardReports.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
-                      <p className="text-sm text-muted">No standard reports yet. Generate one using the form above.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {standardReports.map(renderBatchCard)}
-                    </div>
-                  )}
+              <div className="mt-6">
+                <div className="flex space-x-1 rounded-xl bg-surface-raised p-1">
+                  {TABS.map(tab => {
+                    const active = activeTab === tab.id;
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${active ? "bg-white text-text shadow-sm" : "text-muted hover:bg-white/50 hover:text-text-body"}`}
+                      >
+                        <div className={`flex h-5 w-5 items-center justify-center rounded-md ${active ? tab.color : "bg-transparent"}`}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        {tab.label}
+                        <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] ${active ? "bg-surface-raised text-text-body" : "bg-surface text-muted"}`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Analytics Snapshots */}
-                <div className="mt-8">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                      <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <h4 className="text-[15px] font-semibold text-text">Analytics Snapshots</h4>
-                    <span className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[11px] font-medium text-muted">{analyticsSnapshots.length}</span>
-                  </div>
-                  {analyticsSnapshots.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
-                      <p className="text-sm text-muted">No analytics snapshots yet. Use Download snapshot on the Analytics page to save one here.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {analyticsSnapshots.map(renderBatchCard)}
-                    </div>
+                <div className="mt-6">
+                  {activeTab === "standard" && (
+                    standardReports.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No standard reports yet. Generate one using the form above.</div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">{standardReports.map(renderBatchCard)}</div>
+                    )
                   )}
-                </div>
 
-                {/* Search Result Reports */}
-                <div className="mt-8">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                      <Search className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <h4 className="text-[15px] font-semibold text-text">Search &amp; Intelligence Exports</h4>
-                    <span className="rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[11px] font-medium text-muted">{searchReports.length}</span>
-                  </div>
-                  {searchReports.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
-                      <p className="text-sm text-muted">No search result reports yet. Generate one from Search.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {searchReports.map(renderBatchCard)}
-                    </div>
+                  {activeTab === "analytics" && (
+                    analyticsSnapshots.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No analytics snapshots yet. Use Download snapshot on the Analytics page to save one here.</div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">{analyticsSnapshots.map(renderBatchCard)}</div>
+                    )
                   )}
-                </div>
 
-                {/* Business Impact Reports */}
-                <div className="mt-8">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#EEF7EE] text-[#2E7D32]">
-                      <Sparkles className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                    <h4 className="text-[15px] font-semibold text-text">Business Impact Reports</h4>
-                    <span className="rounded-full bg-surface-raised border border-border px-2 py-0.5 text-[11px] font-medium text-muted">{impactReports.length}</span>
-                  </div>
-                  {impactReports.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center">
-                      <p className="text-sm text-muted">No business impact reports yet. Generate one from the Analytics page.</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {impactReports.map(renderBatchCard)}
-                    </div>
+                  {activeTab === "search" && (
+                    searchReports.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No search result reports yet. Generate one from Search.</div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">{searchReports.map(renderBatchCard)}</div>
+                    )
+                  )}
+
+                  {activeTab === "impact" && (
+                    impactReports.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No business impact reports yet. Generate one from the Analytics page.</div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">{impactReports.map(renderBatchCard)}</div>
+                    )
                   )}
                 </div>
-              </>
+              </div>
             );
           })()}
         </section>

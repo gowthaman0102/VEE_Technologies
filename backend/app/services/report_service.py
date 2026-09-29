@@ -159,19 +159,23 @@ async def _get_report_articles(
             ArticleTriage.company_id == company_id,
             Article.id.in_(article_ids)
         )
-    else:
-        stmt = stmt.where(
+    elif report_scope == "business_impact" and business_impact_category:
+        stmt = stmt.join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id).where(
+            ArticleBusinessImpact.company_id == company_id,
+            func.lower(ArticleBusinessImpact.primary_category) == business_impact_category.lower(),
             article_time >= start_date,
             article_time < end_date,
             Article.collected_at <= snapshot_at,
             Article.source_name.in_(enabled_source_names),
         )
-        
-        if report_scope == "business_impact" and business_impact_category:
-            stmt = stmt.join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id).where(
-                ArticleBusinessImpact.company_id == company_id,
-                func.lower(ArticleBusinessImpact.primary_category) == business_impact_category.lower()
-            )
+    else:
+        stmt = stmt.join(ArticleTriage, ArticleTriage.article_id == Article.id).where(
+            ArticleTriage.company_id == company_id,
+            article_time >= start_date,
+            article_time < end_date,
+            Article.collected_at <= snapshot_at,
+            Article.source_name.in_(enabled_source_names),
+        )
 
     stmt = stmt.order_by(
         article_time.desc(),
@@ -5147,24 +5151,57 @@ async def generate_report_batch(
         await db.refresh(r)
 
     try:
-        report_data = await build_company_report(
-            db,
-            company_id=company_id,
-            start_date=period_start,
-            end_date=period_end,
-            snapshot_at=snapshot_at,
-            time_mode=time_mode,
-            report_scope=report_scope,
-            article_ids=article_ids,
-            business_impact_category=business_impact_category,
-        )
+        if report_scope == "analytics_snapshot":
+            report_data = {}
+        elif report_scope == "search_results":
+            report_data = await build_search_results_report_data(
+                db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode, article_ids=article_ids
+            )
+        elif report_scope == "business_impact":
+            report_data = await build_business_impact_report_data(
+                db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode, business_impact_category=business_impact_category
+            )
+        elif report_scope == "intelligence_export":
+            report_data = await build_intelligence_export_data(
+                db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode
+            )
+        else:
+            report_data = await build_company_report(
+                db,
+                company_id=company_id,
+                start_date=period_start,
+                end_date=period_end,
+                snapshot_at=snapshot_at,
+                time_mode=time_mode,
+                report_scope=report_scope,
+                article_ids=article_ids,
+                business_impact_category=business_impact_category,
+            )
 
         for record in records:
-            content = render_report(
-                report_data,
-                record.file_format,
-                include_details=include_details,
-            )
+            if report_scope == "analytics_snapshot":
+                continue
+
+            if report_scope in ("search_results", "business_impact"):
+                if record.file_format == "pdf":
+                    content = render_article_list_pdf(report_data)
+                elif record.file_format == "xlsx":
+                    content = render_article_list_xlsx(report_data)
+                else:
+                    content = render_article_list_csv(report_data)
+            elif report_scope == "intelligence_export":
+                if record.file_format == "pdf":
+                    content = render_intelligence_export_pdf(report_data)
+                elif record.file_format == "xlsx":
+                    content = render_intelligence_export_xlsx(report_data)
+                else:
+                    content = render_intelligence_export_csv(report_data)
+            else:
+                content = render_report(
+                    report_data,
+                    record.file_format,
+                    include_details=include_details,
+                )
             extension = REPORT_EXTENSIONS[record.file_format]
             
             scope_slug = ""
@@ -5192,7 +5229,7 @@ async def generate_report_batch(
             record.status = "success"
             record.generated_at = snapshot_at
             record.included_article_ids = [
-                row["article_id"] for row in report_data.get("articles", [])
+                row.get("article_id", row.get("id")) for row in report_data.get("articles", []) if isinstance(row, dict)
             ]
             record.error = None
 
@@ -5226,3 +5263,261 @@ async def generate_report_batch(
 
         await db.commit()
         raise
+
+
+async def build_search_results_report_data(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    snapshot_at: datetime,
+    time_mode: str = "media",
+    article_ids: list[int] | None = None,
+) -> dict:
+    articles = await _get_report_articles(
+        db,
+        company_id=company_id,
+        start_date=start_date,
+        end_date=end_date,
+        snapshot_at=snapshot_at,
+        time_mode=time_mode,
+        report_scope="search_results",
+        article_ids=article_ids,
+    )
+    company = await _get_company(db, company_id=company_id)
+    return {
+        "company_name": company.name if company else "Unknown",
+        "start_date": start_date,
+        "end_date": end_date,
+        "snapshot_at": snapshot_at,
+        "articles": [
+            {
+                "article_id": a.id,
+                "title": a.title,
+                "url": a.url,
+                "publisher_name": a.publisher_name,
+                "published_at": a.published_at,
+                "collected_at": a.collected_at,
+            }
+            for a in articles
+        ]
+    }
+
+async def build_business_impact_report_data(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    snapshot_at: datetime,
+    time_mode: str = "media",
+    business_impact_category: str | None = None,
+) -> dict:
+    articles = await _get_report_articles(
+        db,
+        company_id=company_id,
+        start_date=start_date,
+        end_date=end_date,
+        snapshot_at=snapshot_at,
+        time_mode=time_mode,
+        report_scope="business_impact",
+        business_impact_category=business_impact_category,
+    )
+    company = await _get_company(db, company_id=company_id)
+    return {
+        "company_name": company.name if company else "Unknown",
+        "start_date": start_date,
+        "end_date": end_date,
+        "snapshot_at": snapshot_at,
+        "category": business_impact_category,
+        "articles": [
+            {
+                "article_id": a.id,
+                "title": a.title,
+                "url": a.url,
+                "publisher_name": a.publisher_name,
+                "published_at": a.published_at,
+                "collected_at": a.collected_at,
+            }
+            for a in articles
+        ]
+    }
+
+async def build_intelligence_export_data(
+    db: AsyncSession,
+    *,
+    company_id: int,
+    start_date: datetime,
+    end_date: datetime,
+    snapshot_at: datetime,
+    time_mode: str = "media",
+) -> dict:
+    articles = await _get_report_articles(
+        db,
+        company_id=company_id,
+        start_date=start_date,
+        end_date=end_date,
+        snapshot_at=snapshot_at,
+        time_mode=time_mode,
+        report_scope="intelligence_export",
+    )
+    
+    if not articles:
+        article_ids = []
+    else:
+        article_ids = [a.id for a in articles]
+        
+    sentiments = _index_by_article(await _fetch_by_article_ids(db, ArticleSentiment, company_id=company_id, article_ids=article_ids))
+    risks = _index_by_article(await _fetch_by_article_ids(db, RiskAssessment, company_id=company_id, article_ids=article_ids))
+    impacts = _index_by_article(await _fetch_by_article_ids(db, ArticleBusinessImpact, company_id=company_id, article_ids=article_ids))
+    
+    company = await _get_company(db, company_id=company_id)
+    
+    enriched_articles = []
+    for a in articles:
+        sent = sentiments.get(a.id)
+        risk = risks.get(a.id)
+        imp = impacts.get(a.id)
+        
+        enriched_articles.append({
+            "article_id": a.id,
+            "title": a.title,
+            "url": a.url,
+            "publisher_name": a.publisher_name,
+            "published_at": a.published_at,
+            "collected_at": a.collected_at,
+            "sentiment": sent.sentiment if sent else "neutral",
+            "risk_level": risk.risk_level if risk else "low",
+            "risk_score": risk.risk_score if risk else 0.0,
+            "business_impact": imp.primary_category if imp else None,
+        })
+        
+    return {
+        "company_name": company.name if company else "Unknown",
+        "start_date": start_date,
+        "end_date": end_date,
+        "snapshot_at": snapshot_at,
+        "articles": enriched_articles
+    }
+
+def render_article_list_csv(report_data: dict) -> bytes:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At"])
+    for a in report_data.get("articles", []):
+        writer.writerow([
+            a.get("article_id", ""),
+            a.get("title", ""),
+            a.get("url", ""),
+            a.get("publisher_name", ""),
+            a.get("published_at", ""),
+            a.get("collected_at", "")
+        ])
+    return output.getvalue().encode("utf-8")
+
+def render_article_list_xlsx(report_data: dict) -> bytes:
+    import xlsxwriter
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet()
+    headers = ["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At"]
+    for col, h in enumerate(headers):
+        worksheet.write(0, col, h)
+    for row, a in enumerate(report_data.get("articles", []), start=1):
+        worksheet.write(row, 0, a.get("article_id", ""))
+        worksheet.write(row, 1, a.get("title", ""))
+        worksheet.write(row, 2, a.get("url", ""))
+        worksheet.write(row, 3, a.get("publisher_name", ""))
+        worksheet.write(row, 4, str(a.get("published_at", "")))
+        worksheet.write(row, 5, str(a.get("collected_at", "")))
+    workbook.close()
+    return output.getvalue()
+
+def render_article_list_pdf(report_data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+    from reportlab.lib.styles import getSampleStyleSheet
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph(f"Articles for {report_data.get('company_name', 'Unknown')}", styles['Title']))
+    story.append(Spacer(1, 12))
+    data = [["Title", "Publisher", "Published At"]]
+    for a in report_data.get("articles", []):
+        data.append([
+            str(a.get("title", ""))[:50],
+            str(a.get("publisher_name", "")),
+            str(a.get("published_at", ""))
+        ])
+    t = Table(data)
+    story.append(t)
+    doc.build(story)
+    return output.getvalue()
+
+def render_intelligence_export_csv(report_data: dict) -> bytes:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At", "Sentiment", "Risk Level", "Risk Score", "Business Impact"])
+    for a in report_data.get("articles", []):
+        writer.writerow([
+            a.get("article_id", ""),
+            a.get("title", ""),
+            a.get("url", ""),
+            a.get("publisher_name", ""),
+            a.get("published_at", ""),
+            a.get("collected_at", ""),
+            a.get("sentiment", ""),
+            a.get("risk_level", ""),
+            a.get("risk_score", ""),
+            a.get("business_impact", "")
+        ])
+    return output.getvalue().encode("utf-8")
+
+def render_intelligence_export_xlsx(report_data: dict) -> bytes:
+    import xlsxwriter
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet()
+    headers = ["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At", "Sentiment", "Risk Level", "Risk Score", "Business Impact"]
+    for col, h in enumerate(headers):
+        worksheet.write(0, col, h)
+    for row, a in enumerate(report_data.get("articles", []), start=1):
+        worksheet.write(row, 0, a.get("article_id", ""))
+        worksheet.write(row, 1, a.get("title", ""))
+        worksheet.write(row, 2, a.get("url", ""))
+        worksheet.write(row, 3, a.get("publisher_name", ""))
+        worksheet.write(row, 4, str(a.get("published_at", "")))
+        worksheet.write(row, 5, str(a.get("collected_at", "")))
+        worksheet.write(row, 6, a.get("sentiment", ""))
+        worksheet.write(row, 7, a.get("risk_level", ""))
+        worksheet.write(row, 8, a.get("risk_score", ""))
+        worksheet.write(row, 9, a.get("business_impact", ""))
+    workbook.close()
+    return output.getvalue()
+
+def render_intelligence_export_pdf(report_data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+    from reportlab.lib.styles import getSampleStyleSheet
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph(f"Intelligence Export for {report_data.get('company_name', 'Unknown')}", styles['Title']))
+    story.append(Spacer(1, 12))
+    data = [["Title", "Sentiment", "Risk Level", "Impact"]]
+    for a in report_data.get("articles", []):
+        data.append([
+            str(a.get("title", ""))[:50],
+            str(a.get("sentiment", "")),
+            str(a.get("risk_level", "")),
+            str(a.get("business_impact", ""))
+        ])
+    t = Table(data)
+    story.append(t)
+    doc.build(story)
+    return output.getvalue()
+
+

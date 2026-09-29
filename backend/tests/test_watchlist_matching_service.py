@@ -302,7 +302,7 @@ async def test_match_watchlist_items_honors_match_limit():
         title="RBI review",
         source_name="Reuters",
         url="https://example.com/30",
-        published_at=None,
+        published_at=None, collected_at=None,
         description=None,
         cleaned_content="RBI announced a review.",
         event_type="regulatory_action",

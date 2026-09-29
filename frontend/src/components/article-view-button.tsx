@@ -15,7 +15,6 @@ type ArticleViewButtonProps = {
 export function ArticleViewButton({
   articleId,
   sourceName,
-  sourceUrl,
   className = "",
 }: ArticleViewButtonProps) {
   const [showModal, setShowModal] = useState(false);

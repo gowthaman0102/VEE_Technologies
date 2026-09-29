@@ -18,6 +18,7 @@ function HeroVisual({ variant, imageSrc }: { variant: CosmicHeroVariant; imageSr
 
   return (
     <div className={`cosmic-hero-visual cosmic-hero-visual-${variant}`} aria-hidden="true">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={visualSrc} alt="" className="cosmic-hero-image" />
       <div className="cosmic-hero-bg cosmic-hero-bg-anim" />
       <div className="cosmic-hero-bg cosmic-hero-lines-anim" />
