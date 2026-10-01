@@ -4,12 +4,11 @@ import copy
 import csv
 import io
 import logging
+import re
 from xml.sax.saxutils import escape
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-
-from app.ingestion.sources import get_enabled_sources, get_sources_for_config
 
 from openpyxl import Workbook
 from openpyxl.styles import (
@@ -135,12 +134,7 @@ async def _get_report_articles(
     report_scope: str = "standard",
     article_ids: list[int] | None = None,
     business_impact_category: str | None = None,
-    enabled_source_names: list[str] | None = None,
 ) -> list[Article]:
-    enabled_source_names = enabled_source_names or [
-        source.name for source in get_enabled_sources()
-    ]
-
     if time_mode == "ingestion":
         article_time = Article.collected_at
     else:
@@ -154,11 +148,35 @@ async def _get_report_articles(
     if report_scope == "search_results":
         if not article_ids:
             return []
-        
+            
+        # 1. Remove accidental duplicate IDs while preserving order
+        seen = set()
+        ordered_unique_ids = []
+        for aid in article_ids:
+            if aid not in seen:
+                seen.add(aid)
+                ordered_unique_ids.append(aid)
+                
+        # 2. Fetch exactly those IDs and verify they belong to the requested/active company
         stmt = stmt.join(ArticleTriage, ArticleTriage.article_id == Article.id).where(
             ArticleTriage.company_id == company_id,
-            Article.id.in_(article_ids)
+            Article.id.in_(ordered_unique_ids)
         )
+        
+        # We don't apply the order_by here yet because we need to manually order it in python
+        # But we do need to execute it and validate count. Let's do that.
+        result = await db.execute(stmt)
+        fetched_articles = list(result.scalars().all())
+        
+        if len(fetched_articles) != len(ordered_unique_ids):
+            raise ValueError(f"Search snapshot could not be reproduced: expected {len(ordered_unique_ids)} articles but found {len(fetched_articles)}.")
+            
+        # Reorder to match incoming ordered_unique_ids
+        article_map = {a.id: a for a in fetched_articles}
+        ordered_articles = [article_map[aid] for aid in ordered_unique_ids]
+        
+        return ordered_articles
+        
     elif report_scope == "business_impact" and business_impact_category:
         stmt = stmt.join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id).where(
             ArticleBusinessImpact.company_id == company_id,
@@ -166,7 +184,6 @@ async def _get_report_articles(
             article_time >= start_date,
             article_time < end_date,
             Article.collected_at <= snapshot_at,
-            Article.source_name.in_(enabled_source_names),
         )
     else:
         stmt = stmt.join(ArticleTriage, ArticleTriage.article_id == Article.id).where(
@@ -174,7 +191,6 @@ async def _get_report_articles(
             article_time >= start_date,
             article_time < end_date,
             Article.collected_at <= snapshot_at,
-            Article.source_name.in_(enabled_source_names),
         )
 
     stmt = stmt.order_by(
@@ -185,6 +201,9 @@ async def _get_report_articles(
     raw_articles = list(
         (await db.execute(stmt)).scalars().all()
     )
+
+    if report_scope == "search_results":
+        return raw_articles
 
     unique_articles = []
     seen_external_ids = set()
@@ -713,13 +732,6 @@ async def build_company_report(
     client_config = None
     if isinstance(db, AsyncSession):
         client_config = await get_client_config(db, company_id)
-    enabled_source_names = [
-        source.name
-        for source in get_sources_for_config(client_config)
-    ] if client_config is not None else [
-        source.name for source in get_enabled_sources()
-    ]
-
     articles = await _get_report_articles(
         db,
         company_id=company_id,
@@ -730,7 +742,6 @@ async def build_company_report(
         report_scope=report_scope,
         article_ids=article_ids,
         business_impact_category=business_impact_category,
-        enabled_source_names=enabled_source_names,
     )
 
     article_ids = [
@@ -1049,6 +1060,13 @@ async def build_company_report(
             ),
         },
         {
+            "label": "Critical risk count",
+            "value": risk_summary.get(
+                "critical_risk_count",
+                0,
+            ),
+        },
+        {
             "label": "Positive sentiment",
             "value": sentiment_summary.get(
                 "positive",
@@ -1103,6 +1121,10 @@ async def build_company_report(
         ),
         "high_risk_count": risk_summary.get(
             "high_risk_count",
+            0,
+        ),
+        "critical_risk_count": risk_summary.get(
+            "critical_risk_count",
             0,
         ),
         "medium_risk_count": risk_summary.get(
@@ -1184,6 +1206,17 @@ async def build_company_report(
     return report_data
 
 
+def _report_metric_value(report_data: dict, label: str) -> object | None:
+    return next(
+        (
+            item.get("value")
+            for item in report_data.get("metrics", [])
+            if str(item.get("label", "")).casefold() == label.casefold()
+        ),
+        None,
+    )
+
+
 def report_rows(
     report_data: dict,
 ) -> list[tuple[str, str]]:
@@ -1213,6 +1246,12 @@ def report_rows(
             ].isoformat(),
         ),
         (
+            "date_basis",
+            "Published date (published_at, fallback to collected_at)"
+            if report_data.get("time_mode", "media") == "media"
+            else "Added to Nova Cops (collected_at)",
+        ),
+        (
             "total_articles",
             str(
                 report_data[
@@ -1227,6 +1266,35 @@ def report_rows(
                     "total_events"
                 ]
             ),
+        ),
+        (
+            "critical_risk_count",
+            str(
+                report_data.get(
+                    "critical_risk_count",
+                    risk.get("critical_risk_count", 0),
+                )
+            ),
+        ),
+        (
+            "processed_intelligence",
+            str(_report_metric_value(report_data, "Processed Intelligence") or 0),
+        ),
+        (
+            "sentiment_analyzed",
+            str(_report_metric_value(report_data, "Sentiment Analyzed") or 0),
+        ),
+        (
+            "risk_assessed",
+            str(_report_metric_value(report_data, "Risk Assessed") or 0),
+        ),
+        (
+            "business_impact_analyzed",
+            str(_report_metric_value(report_data, "Business Impact Analyzed") or 0),
+        ),
+        (
+            "event_assigned",
+            str(_report_metric_value(report_data, "Event Assigned") or 0),
         ),
         (
             "high_risk_count",
@@ -1471,7 +1539,7 @@ def _xlsx_format_timestamp(
     if value is None:
         return "Not available"
 
-    text = str(value).strip()
+    text = _repair_pdf_mojibake(str(value)).strip()
 
     return text or "Not available"
 
@@ -1610,6 +1678,13 @@ def export_report_xlsx(
         datetime.now(timezone.utc)
     )
 
+    summary["A6"] = "Date Basis"
+    summary["B6"] = (
+        "Published date (published_at, fallback to collected_at)"
+        if report_data.get("time_mode", "media") == "media"
+        else "Added to Nova Cops (collected_at)"
+    )
+
     summary["A7"] = "Executive Summary"
     summary.merge_cells(
         "A7:D7"
@@ -1653,6 +1728,11 @@ def export_report_xlsx(
                 0,
             ),
         ),
+        ("Processed Intelligence", _report_metric_value(report_data, "Processed Intelligence")),
+        ("Sentiment Analyzed", _report_metric_value(report_data, "Sentiment Analyzed")),
+        ("Risk Assessed", _report_metric_value(report_data, "Risk Assessed")),
+        ("Business Impact Analyzed", _report_metric_value(report_data, "Business Impact Analyzed")),
+        ("Event Assigned", _report_metric_value(report_data, "Event Assigned")),
         (
             "Total Events",
             report_data.get(
@@ -1664,6 +1744,13 @@ def export_report_xlsx(
             "High Risk",
             report_data.get(
                 "high_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Critical Risk",
+            report_data.get(
+                "critical_risk_count",
                 0,
             ),
         ),
@@ -2528,12 +2615,21 @@ def _pdf_safe_text(
     if value is None:
         return escape(fallback)
 
-    text = str(value).strip()
+    text = _repair_pdf_mojibake(str(value)).strip()
 
     if not text:
         return escape(fallback)
 
     return escape(text)
+
+
+def _repair_pdf_mojibake(text: str) -> str:
+    if not any(0x80 <= ord(character) <= 0x9F for character in text):
+        return text
+    try:
+        return text.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
 
 
 def _pdf_display_value(
@@ -2641,11 +2737,39 @@ def _pdf_paragraph(
     *,
     fallback: str = "Not available",
 ) -> Paragraph:
+    text = _repair_pdf_mojibake(str(value or ""))
+    cjk_ranges = (
+        (0x2E80, 0x9FFF),
+        (0xF900, 0xFAFF),
+        (0x3040, 0x30FF),
+        (0xAC00, 0xD7AF),
+    )
+
+    def is_cjk(character: str) -> bool:
+        codepoint = ord(character)
+        return any(start <= codepoint <= end for start, end in cjk_ranges)
+
+    safe_text = _pdf_safe_text(value, fallback=fallback)
+    if any(is_cjk(character) for character in text):
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+        if "HeiseiMin-W3" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3"))
+
+        parts = []
+        for character in text:
+            if character in {"—", "–"}:
+                parts.append("-")
+            elif is_cjk(character):
+                parts.extend(("<font name=\"HeiseiMin-W3\">", escape(character), "</font>"))
+            else:
+                parts.append(escape(character))
+        safe_text = "".join(parts)
+    else:
+        safe_text = safe_text.replace("—", "-").replace("–", "-")
     return Paragraph(
-        _pdf_safe_text(
-            value,
-            fallback=fallback,
-        ),
+        safe_text,
         style,
     )
 
@@ -2785,6 +2909,17 @@ def export_report_pdf(
     story.append(
         _pdf_paragraph(
             (
+                "Date Basis: Published date (published_at, fallback to collected_at)"
+                if report_data.get("time_mode", "media") == "media"
+                else "Date Basis: Added to Nova Cops (collected_at)"
+            ),
+            styles["small"],
+        )
+    )
+
+    story.append(
+        _pdf_paragraph(
+            (
                 "Generated: "
                 f"{generated_at:%d %b %Y %H:%M %Z}"
             ),
@@ -2854,6 +2989,11 @@ def export_report_pdf(
                 0,
             ),
         ),
+        ("Processed Intelligence", _report_metric_value(report_data, "Processed Intelligence")),
+        ("Sentiment Analyzed", _report_metric_value(report_data, "Sentiment Analyzed")),
+        ("Risk Assessed", _report_metric_value(report_data, "Risk Assessed")),
+        ("Business Impact Analyzed", _report_metric_value(report_data, "Business Impact Analyzed")),
+        ("Event Assigned", _report_metric_value(report_data, "Event Assigned")),
         (
             "Total Events",
             report_data.get(
@@ -2865,6 +3005,13 @@ def export_report_pdf(
             "High Risk",
             report_data.get(
                 "high_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Critical Risk",
+            report_data.get(
+                "critical_risk_count",
                 0,
             ),
         ),
@@ -3374,6 +3521,13 @@ def export_report_pdf(
             "High Risk",
             risk.get(
                 "high_risk_count",
+                0,
+            ),
+        ),
+        (
+            "Critical Risk",
+            risk.get(
+                "critical_risk_count",
                 0,
             ),
         ),
@@ -4755,6 +4909,54 @@ def export_report_pdf(
             )
         )
 
+    article_rows = report_data.get("articles", [])
+    if article_rows:
+        story.append(Paragraph("Complete Article Appendix", styles["section"]))
+        story.append(
+            _pdf_paragraph(
+                f"All {len(article_rows)} qualifying articles for the selected period.",
+                styles["small"],
+            )
+        )
+        story.append(Spacer(1, 0.1 * inch))
+        for index, article in enumerate(article_rows, start=1):
+            headline = article.get("title") or "Untitled article"
+            publisher = article.get("publisher_name") or article.get("source_name")
+            article_block = [
+                _pdf_paragraph(f"{index}. {headline}", styles["body"]),
+            ]
+            if publisher:
+                article_block.append(_pdf_paragraph(f"Publisher: {publisher}", styles["small"]))
+            article_block.append(
+                _pdf_paragraph(
+                    f"Published: {_pdf_display_value(article.get('published_at'))} | Added to Nova Cops: {_pdf_display_value(article.get('collected_at'))}",
+                    styles["small"],
+                )
+            )
+            url = article.get("url")
+            if url:
+                escaped_url = escape(str(url), {'"': "&quot;"})
+                if str(url).startswith(("http://", "https://")):
+                    article_block.append(
+                        Paragraph(
+                            f'URL: <link href="{escaped_url}" color="#2563EB">{escape(str(url))}</link>',
+                            styles["small"],
+                        )
+                    )
+                else:
+                    article_block.append(_pdf_paragraph(f"URL: {url}", styles["small"]))
+            for label, key in (
+                ("Sentiment", "sentiment"),
+                ("Risk Level", "risk_level"),
+                ("Risk Score", "risk_score"),
+                ("Business Impact", "business_impact_primary"),
+            ):
+                value = article.get(key)
+                if value is not None:
+                    article_block.append(_pdf_paragraph(f"{label}: {value}", styles["small"]))
+            article_block.append(Spacer(1, 0.08 * inch))
+            story.append(KeepTogether(article_block))
+
     document.build(
         story,
         onFirstPage=_pdf_page_footer,
@@ -4794,11 +4996,262 @@ def _apply_report_configuration(report_data: dict) -> dict:
 
     return configured
 
+
+def _compact_report_sections(report_data: dict, template: str) -> dict:
+    metrics = report_data.get("metrics", [])
+    processed = next(
+        (
+            item.get("value")
+            for item in metrics
+            if str(item.get("label", "")).casefold() == "processed intelligence"
+        ),
+        None,
+    )
+    sentiment = report_data.get("sentiment_balance", {})
+    risk = report_data.get("risk", {})
+    impacts = report_data.get("business_impact", {}).get(
+        "category_distribution",
+        report_data.get("business_impact", {}).get("primary_distribution", {}),
+    )
+    impact_rows = sorted(
+        impacts.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    alert_count = len(report_data.get("alerts", []))
+    common_metrics = [
+        ("Total Articles", report_data.get("total_articles")),
+        ("Processed Intelligence", processed),
+        ("Critical Risk", report_data.get("critical_risk_count")),
+        ("High Risk", report_data.get("high_risk_count")),
+    ]
+
+    if template == "executive":
+        facts = common_metrics + [
+            ("Medium Risk", report_data.get("medium_risk_count")),
+            ("Low Risk", report_data.get("low_risk_count")),
+            ("Sentiment Analyzed", sum(sentiment.values())),
+            ("Positive Sentiment", sentiment.get("positive")),
+            ("Neutral Sentiment", sentiment.get("neutral")),
+            ("Negative Sentiment", sentiment.get("negative")),
+            ("Average Risk Score", risk.get("average_risk_score")),
+            ("Highest Risk Score", risk.get("highest_risk_score")),
+            ("Alerts", alert_count),
+        ]
+        title = "Brief Summary"
+        impact_limit = 5
+        story_limit = 8
+        observations = []
+    else:
+        facts = common_metrics + [
+            ("Active Alerts", alert_count),
+            ("Dominant Sentiment", max(sentiment, key=sentiment.get) if any(sentiment.values()) else "No classifications"),
+        ]
+        title = "Board Summary"
+        impact_limit = 3
+        story_limit = 5
+        high_critical = (report_data.get("critical_risk_count") or 0) + (report_data.get("high_risk_count") or 0)
+        total_rated = sum(
+            report_data.get(key) or 0
+            for key in (
+                "critical_risk_count",
+                "high_risk_count",
+                "medium_risk_count",
+                "low_risk_count",
+            )
+        )
+        observations = [
+            f"Critical and high risk items: {high_critical} of {total_rated} assessed articles."
+        ]
+        if impact_rows:
+            category, count = impact_rows[0]
+            observations.append(f"Leading business-impact category: {category} ({count} articles).")
+        if alert_count:
+            observations.append(f"The reporting period contains {alert_count} alerts requiring review.")
+
+    return {
+        "title": title,
+        "facts": facts,
+        "impacts": impact_rows[:impact_limit],
+        "stories": report_data.get("highest_risk_stories", [])[:story_limit],
+        "observations": observations,
+        "date_basis": (
+            "Published date (published_at, falling back to collected_at)"
+            if report_data.get("time_mode", "media") == "media"
+            else "Added to Nova Cops (collected_at)"
+        ),
+    }
+
+
+def _render_compact_report_pdf(report_data: dict, template: str) -> bytes:
+    sections = _compact_report_sections(report_data, template)
+    output = io.BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=letter,
+        rightMargin=0.65 * inch,
+        leftMargin=0.65 * inch,
+        topMargin=0.65 * inch,
+        bottomMargin=0.65 * inch,
+        title=sections["title"],
+        author="AI Media Intelligence",
+    )
+    styles = _pdf_styles()
+    story = [
+        Paragraph(sections["title"], styles["title"]),
+        _pdf_paragraph(report_data.get("company_name"), styles["subtitle"]),
+        _pdf_paragraph(
+            f"Reporting Period: {_pdf_display_value(report_data.get('start_date'))} - {_pdf_display_value(report_data.get('end_date'))}",
+            styles["small"],
+        ),
+        _pdf_paragraph(f"Date Basis: {sections['date_basis']}", styles["small"]),
+        _pdf_paragraph(
+            f"Snapshot: {_pdf_display_value(report_data.get('snapshot_at'))}",
+            styles["small"],
+        ),
+        Spacer(1, 0.15 * inch),
+        Paragraph("Executive Summary", styles["section"]),
+        _pdf_paragraph(report_data.get("executive_summary"), styles["body"]),
+    ]
+
+    if sections["observations"]:
+        story.append(Paragraph("Deterministic Board Signals", styles["section"]))
+        story.extend(_pdf_paragraph(item, styles["body"]) for item in sections["observations"])
+
+    story.append(Paragraph("Key Measures", styles["section"]))
+    facts_table = Table(
+        [["Measure", "Value"]]
+        + [[label, _pdf_display_value(value)] for label, value in sections["facts"]],
+        colWidths=[3.5 * inch, 2.5 * inch],
+        repeatRows=1,
+    )
+    facts_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#16324F")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D1D5DB")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(facts_table)
+
+    if sections["impacts"]:
+        story.append(Paragraph("Major Business Impacts", styles["section"]))
+        for category, count in sections["impacts"]:
+            story.append(_pdf_paragraph(f"{category}: {count} articles", styles["body"]))
+
+    if sections["stories"]:
+        story.append(Paragraph("Material Stories", styles["section"]))
+        for index, item in enumerate(sections["stories"], start=1):
+            title = item.get("headline") or item.get("title") or "Untitled article"
+            risk_level = item.get("risk_level") or "Unrated"
+            risk_score = item.get("risk_score")
+            story.append(_pdf_paragraph(
+                f"{index}. {title} | {str(risk_level).title()} risk | score {_pdf_display_value(risk_score)}",
+                styles["body"],
+            ))
+
+    document.build(story, onFirstPage=_pdf_page_footer, onLaterPages=_pdf_page_footer)
+    return output.getvalue()
+
+
+def _render_compact_report_xlsx(report_data: dict, template: str) -> bytes:
+    sections = _compact_report_sections(report_data, template)
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Summary"
+    summary.append([sections["title"]])
+    summary.append(["Company", report_data.get("company_name")])
+    summary.append(["Period Start", _xlsx_format_timestamp(report_data.get("start_date"))])
+    summary.append(["Period End", _xlsx_format_timestamp(report_data.get("end_date"))])
+    summary.append(["Date Basis", sections["date_basis"]])
+    summary.append(["Snapshot", _xlsx_format_timestamp(report_data.get("snapshot_at"))])
+    summary.append([])
+    summary.append(["Executive Summary", report_data.get("executive_summary")])
+    summary.append([])
+    _xlsx_add_table(summary, ["Measure", "Value"], [[label, value if value is not None else "Not available"] for label, value in sections["facts"]], widths=[32, 28])
+    if sections["impacts"]:
+        summary.append([])
+        _xlsx_add_table(summary, ["Major Business Impact", "Articles"], sections["impacts"], widths=[32, 18])
+    if sections["observations"]:
+        summary.append([])
+        _xlsx_add_table(summary, ["Deterministic Board Signals"], [[item] for item in sections["observations"]], widths=[90])
+
+    stories = workbook.create_sheet("Material Stories")
+    story_rows = [
+        [
+            index,
+            item.get("headline") or item.get("title"),
+            item.get("publisher_name"),
+            item.get("risk_level"),
+            item.get("risk_score"),
+            item.get("url"),
+        ]
+        for index, item in enumerate(sections["stories"], start=1)
+    ]
+    _xlsx_add_table(
+        stories,
+        ["No.", "Headline", "Publisher", "Risk", "Score", "URL"],
+        story_rows,
+        widths=[8, 54, 24, 16, 12, 50],
+        empty_message="No risk-assessed stories in this period.",
+    )
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _render_compact_report_csv(report_data: dict, template: str) -> bytes:
+    sections = _compact_report_sections(report_data, template)
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(["record_type", "label", "value", "article_id", "title", "publisher", "risk_level", "risk_score", "url"])
+    writer.writerow(["metadata", "template", sections["title"]])
+    writer.writerow(["metadata", "company", report_data.get("company_name")])
+    writer.writerow(["metadata", "period_start", _csv_value(report_data.get("start_date"))])
+    writer.writerow(["metadata", "period_end", _csv_value(report_data.get("end_date"))])
+    writer.writerow(["metadata", "date_basis", sections["date_basis"]])
+    for label, value in sections["facts"]:
+        writer.writerow(["metric", label, _csv_value(value)])
+    for category, count in sections["impacts"]:
+        writer.writerow(["business_impact", category, count])
+    for observation in sections["observations"]:
+        writer.writerow(["board_signal", "observation", observation])
+    for item in sections["stories"]:
+        writer.writerow([
+            "material_story",
+            "",
+            "",
+            item.get("article_id"),
+            item.get("headline") or item.get("title"),
+            item.get("publisher_name"),
+            item.get("risk_level"),
+            item.get("risk_score"),
+            item.get("url"),
+        ])
+    return output.getvalue().encode("utf-8")
+
+
+def _csv_value(value: object | None) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return "" if value is None else value
+
+
+def _filename_slug(value: object | None, fallback: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value or "").casefold()).strip("-")
+    return slug[:80].strip("-") or fallback
+
+
 def render_report(
     report_data: dict,
     file_format: str,
     *,
     include_details: bool = True,
+    report_template: str = "detailed",
 ) -> bytes:
     if file_format not in REPORT_FORMATS:
         raise ValueError(
@@ -4806,6 +5259,17 @@ def render_report(
                 "Unsupported report format: "
                 f"{file_format}"
             )
+        )
+
+    if report_template in {"executive", "board_ready"}:
+        compact_exporters = {
+            "pdf": _render_compact_report_pdf,
+            "xlsx": _render_compact_report_xlsx,
+            "csv": _render_compact_report_csv,
+        }
+        return compact_exporters[file_format](
+            _apply_report_configuration(report_data),
+            report_template,
         )
 
     exporters = {
@@ -5100,6 +5564,11 @@ async def generate_report_batch(
     report_template: str = "detailed",
     formats: list[str] | tuple[str, ...] | None = None,
     schedule_id: int | None = None,
+    search_query: str | None = None,
+    search_mode: str | None = None,
+    search_filters: dict | None = None,
+    minimum_similarity: float | None = None,
+    scope_metadata: dict | None = None,
 ) -> list[GeneratedReport]:
     """
     Generate all three report formats (PDF, XLSX, CSV) in a single batch
@@ -5109,11 +5578,11 @@ async def generate_report_batch(
     snapshot_at = datetime.now(timezone.utc)
     batch_id = str(uuid.uuid4())
     
-    scope_metadata = {}
+    metadata = scope_metadata.copy() if scope_metadata else {}
     if report_scope == "search_results" and article_ids:
-        scope_metadata["article_ids_count"] = len(article_ids)
+        metadata["article_ids_count"] = len(article_ids)
     elif report_scope == "business_impact" and business_impact_category:
-        scope_metadata["category"] = business_impact_category
+        metadata["category"] = business_impact_category
 
     selected_formats = tuple(formats) if formats is not None else REPORT_FORMATS
     if not selected_formats or any(item not in REPORT_FORMATS for item in selected_formats):
@@ -5135,7 +5604,7 @@ async def generate_report_batch(
             snapshot_at=snapshot_at,
             time_mode=time_mode,
             report_scope=report_scope,
-            scope_metadata=scope_metadata or None,
+            scope_metadata=metadata or None,
             filename=None,
             content_type=None,
             content=None,
@@ -5157,13 +5626,20 @@ async def generate_report_batch(
             report_data = await build_search_results_report_data(
                 db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode, article_ids=article_ids
             )
+            logger.info(
+                f"Generated search report {batch_id} for company {company_id}: "
+                f"query='{search_query}', mode='{search_mode or 'keyword'}', "
+                f"requested article count={len(article_ids) if article_ids else 0}, "
+                f"validated article count={len(report_data.get('articles', []))}, "
+                f"generated formats={selected_formats}"
+            )
         elif report_scope == "business_impact":
             report_data = await build_business_impact_report_data(
                 db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode, business_impact_category=business_impact_category
             )
         elif report_scope == "intelligence_export":
             report_data = await build_intelligence_export_data(
-                db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode
+                db, company_id=company_id, start_date=period_start, end_date=period_end, snapshot_at=snapshot_at, time_mode=time_mode, scope_metadata=scope_metadata
             )
         else:
             report_data = await build_company_report(
@@ -5178,52 +5654,86 @@ async def generate_report_batch(
                 business_impact_category=business_impact_category,
             )
 
+        report_data["report_scope"] = report_scope
+        report_data["time_mode"] = time_mode
+        if report_scope == "search_results":
+            report_data["search_query"] = search_query
+            report_data["search_mode"] = search_mode or "keyword"
+
+        if report_scope == "standard":
+            metadata["time_mode"] = time_mode
+        elif report_scope == "search_results":
+            metadata.update({
+                "query": search_query,
+                "mode": search_mode or "keyword",
+                "filters": search_filters or {},
+                "minimum_similarity": minimum_similarity,
+                "article_count": len(report_data.get("articles", [])),
+            })
+        elif report_scope == "business_impact":
+            metadata.update({
+                "category": business_impact_category,
+                "article_count": len(report_data.get("articles", [])),
+            })
+        elif report_scope == "intelligence_export":
+            metadata.update({
+                "filters": scope_metadata or {},
+                "matching_total": len(report_data.get("articles", [])),
+                "article_count": len(report_data.get("articles", [])),
+            })
+
         for record in records:
+            record.scope_metadata = metadata or None
             if report_scope == "analytics_snapshot":
                 continue
 
-            if report_scope in ("search_results", "business_impact"):
+            if report_scope in (
+                "search_results",
+                "business_impact",
+                "intelligence_export",
+            ):
                 if record.file_format == "pdf":
                     content = render_article_list_pdf(report_data)
                 elif record.file_format == "xlsx":
                     content = render_article_list_xlsx(report_data)
                 else:
                     content = render_article_list_csv(report_data)
-            elif report_scope == "intelligence_export":
-                if record.file_format == "pdf":
-                    content = render_intelligence_export_pdf(report_data)
-                elif record.file_format == "xlsx":
-                    content = render_intelligence_export_xlsx(report_data)
-                else:
-                    content = render_intelligence_export_csv(report_data)
             else:
                 content = render_report(
                     report_data,
                     record.file_format,
                     include_details=include_details,
+                    report_template=record.report_template,
                 )
             extension = REPORT_EXTENSIONS[record.file_format]
             
-            scope_slug = ""
-            if record.report_scope == "search_results":
-                scope_slug = "-search_results"
-            elif record.report_scope == "business_impact" and business_impact_category:
-                scope_slug = f"-impact_{business_impact_category}"
-            elif record.report_scope == "analytics_snapshot":
-                scope_slug = "-analytics_snapshot"
-            template_slug = (
-                f"-{record.report_template}"
-                if record.report_template != "detailed"
-                else ""
-            )
-                
-            record.filename = (
-                f"company-{record.company_id}-"
-                f"{record.report_type}{scope_slug}{template_slug}-"
+            period_slug = (
                 f"{record.period_start.date().isoformat()}-"
-                f"{record.period_end.date().isoformat()}."
-                f"{extension}"
+                f"to-{record.period_end.date().isoformat()}"
             )
+            captured_slug = snapshot_at.strftime("%Y%m%dT%H%M%SZ")
+            if report_scope == "search_results":
+                filename_stem = (
+                    f"company-{record.company_id}-search-"
+                    f"{_filename_slug(search_query, 'results')}-{captured_slug}"
+                )
+            elif report_scope == "business_impact":
+                filename_stem = (
+                    f"company-{record.company_id}-business-impact-"
+                    f"{_filename_slug(business_impact_category, 'category')}-"
+                    f"{period_slug}"
+                )
+            elif report_scope == "intelligence_export":
+                filename_stem = f"company-{record.company_id}-intelligence-export-{captured_slug}"
+            elif report_scope == "analytics_snapshot":
+                filename_stem = f"company-{record.company_id}-analytics-snapshot-{period_slug}"
+            else:
+                filename_stem = (
+                    f"company-{record.company_id}-standard-{period_slug}-"
+                    f"{_filename_slug(record.report_template, 'detailed')}"
+                )
+
+            record.filename = f"{filename_stem}.{extension}"
             record.content_type = REPORT_CONTENT_TYPES[record.file_format]
             record.content = content
             record.status = "success"
@@ -5286,22 +5796,82 @@ async def build_search_results_report_data(
         article_ids=article_ids,
     )
     company = await _get_company(db, company_id=company_id)
+    
+    # Batch fetch enrichment data for the given articles
+    if not articles:
+        return {
+            "company_name": company.name if company else "Unknown",
+            "start_date": start_date,
+            "end_date": end_date,
+            "snapshot_at": snapshot_at,
+            "articles": [],
+        }
+
+    article_ids_list = [a.id for a in articles]
+    
+    # 1 article query + 1 sentiment + 1 risk + 1 business impact
+    # To keep it simple and performant without N+1, we will run separate fast lookups
+    
+    # Sentiments
+    sent_result = await db.execute(select(ArticleSentiment).where(
+        ArticleSentiment.company_id == company_id,
+        ArticleSentiment.article_id.in_(article_ids_list)
+    ))
+    # Keep only the newest per article if there are multiple somehow
+    sent_map = {}
+    for s in sent_result.scalars().all():
+        if s.article_id not in sent_map or s.id > sent_map[s.article_id].id:
+            sent_map[s.article_id] = s
+
+    # Risks (from RiskAssessment joined with ArticleTriage)
+    risk_result = await db.execute(
+        select(ArticleTriage.article_id, RiskAssessment)
+        .join(RiskAssessment, RiskAssessment.triage_id == ArticleTriage.id)
+        .where(
+            ArticleTriage.company_id == company_id,
+            ArticleTriage.article_id.in_(article_ids_list)
+        )
+    )
+    risk_map = {}
+    for aid, risk in risk_result.all():
+        if aid not in risk_map or risk.id > risk_map[aid].id:
+            risk_map[aid] = risk
+
+    # Business Impact
+    impact_result = await db.execute(select(ArticleBusinessImpact).where(
+        ArticleBusinessImpact.company_id == company_id,
+        ArticleBusinessImpact.article_id.in_(article_ids_list)
+    ))
+    impact_map = {}
+    for imp in impact_result.scalars().all():
+        if imp.article_id not in impact_map or imp.id > impact_map[imp.article_id].id:
+            impact_map[imp.article_id] = imp
+
+    enriched_articles = []
+    for a in articles:
+        sent = sent_map.get(a.id)
+        risk = risk_map.get(a.id)
+        impact = impact_map.get(a.id)
+        
+        enriched_articles.append({
+            "article_id": a.id,
+            "title": a.title,
+            "url": a.url,
+            "publisher_name": publisher_name(a.source_name, a.title, a.url),
+            "published_at": a.published_at,
+            "collected_at": a.collected_at,
+            "sentiment": sent.label if sent else "Not analyzed",
+            "business_impact": impact.primary_category if impact else "Not analyzed",
+            "risk_level": risk.risk_level if risk else "Not assessed",
+            "risk_score": risk.risk_score if risk else "",
+        })
+
     return {
         "company_name": company.name if company else "Unknown",
         "start_date": start_date,
         "end_date": end_date,
         "snapshot_at": snapshot_at,
-        "articles": [
-            {
-                "article_id": a.id,
-                "title": a.title,
-                "url": a.url,
-                "publisher_name": a.publisher_name,
-                "published_at": a.published_at,
-                "collected_at": a.collected_at,
-            }
-            for a in articles
-        ]
+        "articles": enriched_articles
     }
 
 async def build_business_impact_report_data(
@@ -5314,16 +5884,11 @@ async def build_business_impact_report_data(
     time_mode: str = "media",
     business_impact_category: str | None = None,
 ) -> dict:
-    articles = await _get_report_articles(
-        db,
-        company_id=company_id,
-        start_date=start_date,
-        end_date=end_date,
-        snapshot_at=snapshot_at,
-        time_mode=time_mode,
-        report_scope="business_impact",
-        business_impact_category=business_impact_category,
-    )
+    from app.services.analytics_service import get_business_impact_article_query
+    stmt = get_business_impact_article_query(company_id, business_impact_category, start_date, end_date)
+    # the report expects all articles in this category and period.
+    articles = list((await db.execute(stmt)).scalars().all())
+    
     company = await _get_company(db, company_id=company_id)
     return {
         "company_name": company.name if company else "Unknown",
@@ -5336,9 +5901,14 @@ async def build_business_impact_report_data(
                 "article_id": a.id,
                 "title": a.title,
                 "url": a.url,
-                "publisher_name": a.publisher_name,
+                "publisher_name": publisher_name(
+                    a.source_name,
+                    a.title,
+                    a.url,
+                ),
                 "published_at": a.published_at,
                 "collected_at": a.collected_at,
+                "business_impact": business_impact_category,
             }
             for a in articles
         ]
@@ -5352,47 +5922,80 @@ async def build_intelligence_export_data(
     end_date: datetime,
     snapshot_at: datetime,
     time_mode: str = "media",
+    scope_metadata: dict | None = None,
 ) -> dict:
-    articles = await _get_report_articles(
-        db,
-        company_id=company_id,
-        start_date=start_date,
-        end_date=end_date,
-        snapshot_at=snapshot_at,
-        time_mode=time_mode,
-        report_scope="intelligence_export",
+    result = await db.execute(
+        select(
+            Article,
+            ArticleTriage,
+            RiskAssessment,
+            RiskInsight,
+            ArticleSentiment,
+            ArticleBusinessImpact,
+        )
+        .join(ArticleTriage, ArticleTriage.article_id == Article.id)
+        .join(
+            RiskAssessment,
+            (RiskAssessment.triage_id == ArticleTriage.id)
+            & (RiskAssessment.company_id == ArticleTriage.company_id),
+        )
+        .join(
+            RiskInsight,
+            (RiskInsight.risk_assessment_id == RiskAssessment.id)
+            & (RiskInsight.company_id == ArticleTriage.company_id),
+        )
+        .outerjoin(
+            ArticleSentiment,
+            (ArticleSentiment.article_id == Article.id)
+            & (ArticleSentiment.company_id == ArticleTriage.company_id),
+        )
+        .outerjoin(
+            ArticleBusinessImpact,
+            (ArticleBusinessImpact.article_id == Article.id)
+            & (ArticleBusinessImpact.company_id == ArticleTriage.company_id),
+        )
+        .where(ArticleTriage.company_id == company_id)
+        .order_by(RiskInsight.updated_at.desc(), Article.id.desc())
     )
-    
-    if not articles:
-        article_ids = []
-    else:
-        article_ids = [a.id for a in articles]
-        
-    sentiments = _index_by_article(await _fetch_by_article_ids(db, ArticleSentiment, company_id=company_id, article_ids=article_ids))
-    risks = _index_by_article(await _fetch_by_article_ids(db, RiskAssessment, company_id=company_id, article_ids=article_ids))
-    impacts = _index_by_article(await _fetch_by_article_ids(db, ArticleBusinessImpact, company_id=company_id, article_ids=article_ids))
-    
+    rows = result.all()
     company = await _get_company(db, company_id=company_id)
-    
+
     enriched_articles = []
-    for a in articles:
-        sent = sentiments.get(a.id)
-        risk = risks.get(a.id)
-        imp = impacts.get(a.id)
-        
+    seen_article_ids: set[int] = set()
+    for article, triage, risk, insight, sentiment, impact in rows:
+        if article.id in seen_article_ids:
+            continue
+        seen_article_ids.add(article.id)
         enriched_articles.append({
-            "article_id": a.id,
-            "title": a.title,
-            "url": a.url,
-            "publisher_name": a.publisher_name,
-            "published_at": a.published_at,
-            "collected_at": a.collected_at,
-            "sentiment": sent.sentiment if sent else "neutral",
-            "risk_level": risk.risk_level if risk else "low",
-            "risk_score": risk.risk_score if risk else 0.0,
-            "business_impact": imp.primary_category if imp else None,
+            "article_id": article.id,
+            "title": article.title,
+            "headline": insight.headline,
+            "url": article.url,
+            "publisher_name": publisher_name(
+                article.source_name,
+                article.title,
+                article.url,
+            ),
+            "source_name": article.source_name,
+            "published_at": article.published_at,
+            "collected_at": article.collected_at,
+            "sentiment": sentiment.label if sentiment else None,
+            "risk_level": risk.risk_level,
+            "risk_score": risk.risk_score,
+            "business_impact": impact.primary_category if impact else None,
+            "topic": risk.monitoring_topic,
+            "event_type": triage.event_type,
+            "summary": triage.summary,
+            "why_it_matters": triage.why_it_matters,
+            "executive_summary": insight.executive_summary,
+            "company_name": triage.company_name,
         })
-        
+
+    enriched_articles = _filter_intelligence_export_articles(
+        enriched_articles,
+        scope_metadata or {},
+    )
+
     return {
         "company_name": company.name if company else "Unknown",
         "start_date": start_date,
@@ -5401,123 +6004,190 @@ async def build_intelligence_export_data(
         "articles": enriched_articles
     }
 
+
+def _filter_intelligence_export_articles(
+    articles: list[dict],
+    filters: dict,
+) -> list[dict]:
+    query = str(filters.get("search_filter") or "").strip().casefold()
+    risk_filter = str(filters.get("risk_filter") or "All")
+    topic_filter = str(filters.get("topic_filter") or "All")
+    sentiment_filter = str(filters.get("sentiment_filter") or "All")
+    impact_filter = str(filters.get("impact_filter") or "All")
+
+    def risk_key(value: str | None) -> str:
+        normalized = (value or "").casefold()
+        for level in ("critical", "high", "medium", "low"):
+            if level in normalized:
+                return level.title()
+        return "Other"
+
+    topic_patterns = {
+        "Regulatory Action": r"regulatory|compliance|legal|oversight|sanction|policy",
+        "Fraud Security": r"fraud|security|cyber|breach|phishing|malware|misuse",
+        "OpenAI": r"openai",
+    }
+
+    def published_key(article: dict) -> float:
+        published_at = article.get("published_at")
+        if not isinstance(published_at, datetime):
+            return float("-inf")
+        if published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=timezone.utc)
+        return published_at.timestamp()
+
+    filtered = []
+    for article in articles:
+        haystack = " ".join(
+            str(article.get(key) or "")
+            for key in (
+                "title", "headline", "publisher_name", "source_name",
+                "company_name", "topic", "event_type", "summary",
+                "executive_summary",
+            )
+        ).casefold()
+        if query and query not in haystack:
+            continue
+        if risk_filter != "All" and risk_key(article.get("risk_level")) != risk_filter.removesuffix(" Risk"):
+            continue
+        if sentiment_filter != "All" and (article.get("sentiment") or "").casefold() != sentiment_filter.casefold():
+            continue
+        if impact_filter != "All" and article.get("business_impact") != impact_filter:
+            continue
+        topic_text = " ".join(
+            str(article.get(key) or "")
+            for key in (
+                "topic", "event_type", "company_name", "title",
+                "summary", "why_it_matters",
+            )
+        )
+        if topic_filter == "Other":
+            if any(re.search(pattern, topic_text, re.IGNORECASE) for pattern in topic_patterns.values()):
+                continue
+        elif topic_filter in topic_patterns and not re.search(
+            topic_patterns[topic_filter], topic_text, re.IGNORECASE
+        ):
+            continue
+        filtered.append(article)
+
+    sort_order = filters.get("sort_order", "Latest first")
+    if sort_order == "Oldest first":
+        filtered.sort(key=published_key)
+    elif sort_order == "Highest risk first":
+        filtered.sort(key=lambda item: item.get("risk_score") or 0, reverse=True)
+    else:
+        filtered.sort(key=published_key, reverse=True)
+    return filtered
+
 def render_article_list_csv(report_data: dict) -> bytes:
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At"])
+    writer.writerow([
+        "Article ID", "Title", "URL", "Publisher", "Published At",
+        "Collected At", "Business Impact", "Sentiment", "Risk Level", "Risk Score",
+    ])
     for a in report_data.get("articles", []):
         writer.writerow([
             a.get("article_id", ""),
-            a.get("title", ""),
-            a.get("url", ""),
-            a.get("publisher_name", ""),
-            a.get("published_at", ""),
-            a.get("collected_at", "")
-        ])
-    return output.getvalue().encode("utf-8")
-
-def render_article_list_xlsx(report_data: dict) -> bytes:
-    import xlsxwriter
-    output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
-    worksheet = workbook.add_worksheet()
-    headers = ["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At"]
-    for col, h in enumerate(headers):
-        worksheet.write(0, col, h)
-    for row, a in enumerate(report_data.get("articles", []), start=1):
-        worksheet.write(row, 0, a.get("article_id", ""))
-        worksheet.write(row, 1, a.get("title", ""))
-        worksheet.write(row, 2, a.get("url", ""))
-        worksheet.write(row, 3, a.get("publisher_name", ""))
-        worksheet.write(row, 4, str(a.get("published_at", "")))
-        worksheet.write(row, 5, str(a.get("collected_at", "")))
-    workbook.close()
-    return output.getvalue()
-
-def render_article_list_pdf(report_data: dict) -> bytes:
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
-    from reportlab.lib.styles import getSampleStyleSheet
-    output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-    story.append(Paragraph(f"Articles for {report_data.get('company_name', 'Unknown')}", styles['Title']))
-    story.append(Spacer(1, 12))
-    data = [["Title", "Publisher", "Published At"]]
-    for a in report_data.get("articles", []):
-        data.append([
-            str(a.get("title", ""))[:50],
-            str(a.get("publisher_name", "")),
-            str(a.get("published_at", ""))
-        ])
-    t = Table(data)
-    story.append(t)
-    doc.build(story)
-    return output.getvalue()
-
-def render_intelligence_export_csv(report_data: dict) -> bytes:
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At", "Sentiment", "Risk Level", "Risk Score", "Business Impact"])
-    for a in report_data.get("articles", []):
-        writer.writerow([
-            a.get("article_id", ""),
-            a.get("title", ""),
+            a.get("headline") or a.get("title", ""),
             a.get("url", ""),
             a.get("publisher_name", ""),
             a.get("published_at", ""),
             a.get("collected_at", ""),
+            a.get("business_impact", ""),
             a.get("sentiment", ""),
             a.get("risk_level", ""),
             a.get("risk_score", ""),
-            a.get("business_impact", "")
         ])
     return output.getvalue().encode("utf-8")
 
-def render_intelligence_export_xlsx(report_data: dict) -> bytes:
-    import xlsxwriter
+def render_article_list_xlsx(report_data: dict) -> bytes:
     output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
-    worksheet = workbook.add_worksheet()
-    headers = ["Article ID", "Title", "URL", "Publisher", "Published At", "Collected At", "Sentiment", "Risk Level", "Risk Score", "Business Impact"]
-    for col, h in enumerate(headers):
-        worksheet.write(0, col, h)
-    for row, a in enumerate(report_data.get("articles", []), start=1):
-        worksheet.write(row, 0, a.get("article_id", ""))
-        worksheet.write(row, 1, a.get("title", ""))
-        worksheet.write(row, 2, a.get("url", ""))
-        worksheet.write(row, 3, a.get("publisher_name", ""))
-        worksheet.write(row, 4, str(a.get("published_at", "")))
-        worksheet.write(row, 5, str(a.get("collected_at", "")))
-        worksheet.write(row, 6, a.get("sentiment", ""))
-        worksheet.write(row, 7, a.get("risk_level", ""))
-        worksheet.write(row, 8, a.get("risk_score", ""))
-        worksheet.write(row, 9, a.get("business_impact", ""))
-    workbook.close()
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Article List"
+    headers = [
+        "Article ID", "Title", "URL", "Publisher", "Published At",
+        "Collected At", "Business Impact", "Sentiment", "Risk Level", "Risk Score",
+    ]
+    worksheet.append(headers)
+    for article in report_data.get("articles", []):
+        worksheet.append([
+            article.get("article_id", ""),
+            article.get("headline") or article.get("title", ""),
+            article.get("url", ""),
+            article.get("publisher_name", ""),
+            str(article.get("published_at", "")),
+            str(article.get("collected_at", "")),
+            article.get("business_impact", ""),
+            article.get("sentiment", ""),
+            article.get("risk_level", ""),
+            article.get("risk_score", ""),
+        ])
+    workbook.save(output)
     return output.getvalue()
 
-def render_intelligence_export_pdf(report_data: dict) -> bytes:
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
-    from reportlab.lib.styles import getSampleStyleSheet
+def render_article_list_pdf(report_data: dict) -> bytes:
     output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-    story.append(Paragraph(f"Intelligence Export for {report_data.get('company_name', 'Unknown')}", styles['Title']))
-    story.append(Spacer(1, 12))
-    data = [["Title", "Sentiment", "Risk Level", "Impact"]]
-    for a in report_data.get("articles", []):
-        data.append([
-            str(a.get("title", ""))[:50],
-            str(a.get("sentiment", "")),
-            str(a.get("risk_level", "")),
-            str(a.get("business_impact", ""))
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=letter,
+        rightMargin=0.65 * inch,
+        leftMargin=0.65 * inch,
+        topMargin=0.65 * inch,
+        bottomMargin=0.65 * inch,
+    )
+    styles = _pdf_styles()
+    articles = report_data.get("articles", [])
+    scope = report_data.get("report_scope")
+    if scope == "business_impact":
+        title = f"Business Impact - {report_data.get('category') or 'Category'}"
+    elif scope == "search_results":
+        title = "Search Results"
+    else:
+        title = "Intelligence Export"
+
+    story = [
+        Paragraph(escape(title), styles["title"]),
+        _pdf_paragraph(report_data.get("company_name"), styles["subtitle"]),
+        _pdf_paragraph(
+            f"Reporting Period: {_pdf_display_value(report_data.get('start_date'))} - {_pdf_display_value(report_data.get('end_date'))}",
+            styles["small"],
+        ),
+        _pdf_paragraph(f"Article Count: {len(articles)}", styles["small"]),
+    ]
+    if scope == "search_results":
+        story.extend([
+            _pdf_paragraph(f"Query: {report_data.get('search_query') or 'Not provided'}", styles["small"]),
+            _pdf_paragraph(f"Mode: {report_data.get('search_mode') or 'keyword'}", styles["small"]),
         ])
-    t = Table(data)
-    story.append(t)
-    doc.build(story)
+    if scope == "business_impact":
+        story.append(_pdf_paragraph(f"Category: {report_data.get('category') or 'Not specified'}", styles["small"]))
+    story.append(Spacer(1, 0.16 * inch))
+
+    for index, article in enumerate(articles, start=1):
+        headline = article.get("headline") or article.get("title") or "Untitled article"
+        story.append(_pdf_paragraph(f"{index}. {headline}", styles["body"]))
+        publisher = article.get("publisher_name") or article.get("source_name")
+        if publisher:
+            story.append(_pdf_paragraph(f"Publisher: {publisher}", styles["small"]))
+        story.append(_pdf_paragraph(f"Published: {_pdf_display_value(article.get('published_at'))}", styles["small"]))
+        story.append(_pdf_paragraph(f"Added to Nova Cops: {_pdf_display_value(article.get('collected_at'))}", styles["small"]))
+        for label, key in (("Business Impact", "business_impact"), ("Sentiment", "sentiment"), ("Risk", "risk_level"), ("Risk Score", "risk_score")):
+            value = article.get(key)
+            if value is not None:
+                story.append(_pdf_paragraph(f"{label}: {value}", styles["small"]))
+        url = article.get("url")
+        if url:
+            escaped_url = escape(str(url), {'"': "&quot;"})
+            if str(url).startswith(("http://", "https://")):
+                story.append(Paragraph(f'URL: <link href="{escaped_url}" color="#2563EB">{escape(str(url))}</link>', styles["small"]))
+            else:
+                story.append(_pdf_paragraph(f"URL: {url}", styles["small"]))
+        story.append(Spacer(1, 0.1 * inch))
+
+    doc.build(story, onFirstPage=_pdf_page_footer, onLaterPages=_pdf_page_footer)
     return output.getvalue()
+
 
 

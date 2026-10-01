@@ -42,6 +42,9 @@ export function SearchPageClient() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [resultQuery, setResultQuery] = useState("");
+  const [resultFilters, setResultFilters] = useState<SearchFilters>({});
+  const [resultMinimumSimilarity, setResultMinimumSimilarity] = useState<number | undefined>();
+  const [resultCount, setResultCount] = useState(0);
   const [mode, setMode] = useState<SearchMode>("keyword");
   const [resultMode, setResultMode] = useState<SearchMode>("keyword");
   const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>({});
@@ -238,8 +241,11 @@ export function SearchPageClient() {
           );
 
       setResults(data.results);
+      setResultCount(data.count);
       setResultMode(searchMode);
       setResultQuery(searchQuery.trim());
+      setResultFilters({ ...filters });
+      setResultMinimumSimilarity(resolvedMinimumSimilarity);
       setResultsOpen(true);
       saveHistoryEntries([{
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -421,9 +427,12 @@ export function SearchPageClient() {
       {resultsOpen && (
         <SearchResultsModal
           results={results}
+          totalCount={resultCount}
           companyId={companyId}
           mode={resultMode}
           query={resultQuery}
+          filters={resultFilters}
+          minimumSimilarity={resultMinimumSimilarity}
           sentiment={sentiment}
           riskLevel={riskLevel}
           publisherCountry={publisherCountry}
@@ -439,9 +448,12 @@ export function SearchPageClient() {
 
 function SearchResultsModal({
   results,
+  totalCount,
   companyId,
   mode,
   query,
+  filters,
+  minimumSimilarity,
   sentiment,
   riskLevel,
   onSentimentChange,
@@ -451,9 +463,12 @@ function SearchResultsModal({
   onClose,
 }: {
   results: SearchResult[];
+  totalCount: number;
   companyId: number | null;
   mode: SearchMode;
   query: string;
+  filters: SearchFilters;
+  minimumSimilarity?: number;
   sentiment: string;
   riskLevel: string;
   publisherCountry: string;
@@ -487,11 +502,30 @@ function SearchResultsModal({
     if (companyId === null || filtered.length === 0) return;
     setReportStatus("generating");
     try {
+      const reportFilters = { ...filters };
+      if (sentiment.trim()) reportFilters.sentiment = sentiment.trim();
+      else delete reportFilters.sentiment;
+      if (riskLevel.trim()) reportFilters.risk_level = riskLevel.trim();
+      else delete reportFilters.risk_level;
+      if (publisherCountry.trim()) reportFilters.publisher_country_code = publisherCountry.trim();
+      else delete reportFilters.publisher_country_code;
+
+      const orderedArticleIds = filtered.map((r) => r.article_id);
+
       await generateReport({
         company_id: companyId,
         report_type: "all_history",
         report_scope: "search_results",
-        article_ids: filtered.map((result) => result.article_id),
+        article_ids: orderedArticleIds,
+        scope_metadata: {
+          query: query.trim(),
+          mode: mode,
+          filters: reportFilters,
+          minimum_similarity: minimumSimilarity,
+          displayed_result_count: filtered.length,
+          article_count: filtered.length,
+          snapshot_at: new Date().toISOString()
+        }
       });
       setReportStatus("generated");
     } catch {
@@ -522,6 +556,9 @@ function SearchResultsModal({
                 ? `${filtered.length} result${filtered.length === 1 ? "" : "s"} found`
                 : "No articles found"}
             </h2>
+            {filtered.length > 0 && totalCount > filtered.length && (
+              <p className="mt-1 text-xs text-muted">Showing first {filtered.length} of {totalCount} total matches · Generated report will include all {totalCount}.</p>
+            )}
             {filtered.length === 0 && <p className="mt-1 text-sm text-muted">No articles matched &quot;{query.trim()}&quot;.</p>}
           </div>
           <div className="flex items-center gap-2">
@@ -626,6 +663,7 @@ function SearchResultsModal({
         <div className="min-h-0 space-y-4 overflow-y-auto bg-surface-raised p-4 sm:p-6">
           <SearchResultsList
             results={filtered}
+            totalCount={totalCount}
             companyId={companyId}
             mode={mode}
             query={query.trim()}
