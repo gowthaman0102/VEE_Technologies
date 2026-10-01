@@ -1,9 +1,15 @@
 from datetime import datetime, timezone
+import csv
+import io
+
+from openpyxl import load_workbook
+from pypdf import PdfReader
 
 from app.services.report_service import (
     export_report_csv,
     export_report_pdf,
     export_report_xlsx,
+    render_article_list_pdf,
     render_report,
 )
 from app.services.report_schedule_service import calculate_next_run_at
@@ -31,7 +37,7 @@ def test_report_renderers_produce_real_files():
     xlsx_content = export_report_xlsx(REPORT)
     pdf_content = export_report_pdf(REPORT)
 
-    assert csv_content.startswith(b"metric,value")
+    assert csv_content.startswith(b"row_type,metric_label")
     assert xlsx_content.startswith(b"PK")
     assert pdf_content.startswith(b"%PDF")
 
@@ -52,6 +58,105 @@ def test_summary_template_omits_article_details_but_keeps_aggregates():
     assert b"Detailed article title" not in summary
     assert b"total_articles,3" in summary
     assert report_data["articles"][0]["article_id"] == 17
+
+
+def test_standard_report_templates_have_distinct_compact_content():
+    report_data = {
+        **REPORT,
+        "company_name": "Example Co",
+        "time_mode": "media",
+        "critical_risk_count": 2,
+        "risk": {"average_risk_score": 68.5, "highest_risk_score": 91.0},
+        "business_impact": {
+            "category_distribution": {"cybersecurity": 6, "legal": 3},
+        },
+        "executive_summary": "Stored, deterministic summary.",
+        "metrics": [{"label": "Processed Intelligence", "value": 8}],
+        "articles": [
+            {"article_id": article_id, "title": f"Full appendix article {article_id}"}
+            for article_id in range(1, 11)
+        ],
+        "highest_risk_stories": [
+            {
+                "article_id": article_id,
+                "title": f"Priority story {article_id}",
+                "risk_level": "critical",
+                "risk_score": 90 - article_id,
+            }
+            for article_id in range(1, 11)
+        ],
+        "alerts": [{"id": 1, "title": "Stored alert"}],
+    }
+
+    brief = render_report(report_data, "csv", report_template="executive")
+    board = render_report(report_data, "csv", report_template="board_ready")
+    full = render_report(report_data, "csv", report_template="detailed")
+    brief_text = brief.decode("utf-8")
+    board_text = board.decode("utf-8")
+    full_text = full.decode("utf-8")
+
+    assert "Brief Summary" in brief_text
+    assert "Board Summary" in board_text
+    assert "board_signal" in board_text
+    assert "Full appendix article" not in brief_text
+    assert "Full appendix article" not in board_text
+    assert "Full appendix article 10" in full_text
+    assert "Priority story 8" in brief_text
+    assert "Priority story 9" not in brief_text
+    assert "Priority story 5" in board_text
+    assert "Priority story 6" not in board_text
+
+    brief_xlsx = load_workbook(
+        io.BytesIO(render_report(report_data, "xlsx", report_template="executive")),
+        read_only=True,
+    )
+    board_xlsx = load_workbook(
+        io.BytesIO(render_report(report_data, "xlsx", report_template="board_ready")),
+        read_only=True,
+    )
+    assert brief_xlsx.sheetnames == ["Summary", "Material Stories"]
+    assert board_xlsx.sheetnames == ["Summary", "Material Stories"]
+    assert render_report(report_data, "pdf", report_template="executive") != render_report(
+        report_data,
+        "pdf",
+        report_template="board_ready",
+    )
+
+
+def test_article_pdf_preserves_japanese_headline_and_em_dash():
+    pdf = render_article_list_pdf({
+        "company_name": "Example Co",
+        "report_scope": "search_results",
+        "search_query": "OpenAI",
+        "search_mode": "keyword",
+        "articles": [
+            {
+                "article_id": 1,
+                "title": "パトロンプラットフォーム Patreon — full headline",
+                "publisher_name": "Example News",
+                "url": "https://example.com/article",
+            },
+            {
+                "article_id": 2,
+                "title": "The Era of Token Abundance Is Coming — full headline",
+                "publisher_name": "Example News",
+                "url": "https://example.com/article-2",
+            },
+            {
+                "article_id": 3,
+                "title": "The Era of Token Abundance Is Coming " + bytes((0xE2, 0x80, 0x94)).decode("latin-1") + " mojibake headline",
+                "publisher_name": "Example News",
+                "url": "https://example.com/article-3",
+            },
+        ],
+    })
+    text = " ".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages)
+
+    assert "パトロンプラットフォーム Patreon" in text
+    assert "Patreon - full headline" in text
+    assert "The Era of Token Abundance Is Coming - full headline" in text
+    assert "The Era of Token Abundance Is Coming - mojibake headline" in text
+    assert "The Era of Token Abundance Is Coming - full headline" in text
 
 
 def test_report_schedule_next_run_uses_utc_cadence_fields():

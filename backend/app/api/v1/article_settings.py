@@ -44,12 +44,10 @@ async def list_article_categories(
     company_id: int | None = Query(default=None, ge=1),
     db: AsyncSession = Depends(get_db),
 ) -> ArticleCategoryListResponse:
-    global _ORIGINAL_LIST_ARTICLE_CATEGORIES
-    if _ORIGINAL_LIST_ARTICLE_CATEGORIES is None:
-        _ORIGINAL_LIST_ARTICLE_CATEGORIES = list_article_categories
-
     target = globals().get("list_article_categories")
+    print(f"DEBUG: target={target}, original={_ORIGINAL_LIST_ARTICLE_CATEGORIES}")
     if target is not _ORIGINAL_LIST_ARTICLE_CATEGORIES:
+        print(f"DEBUG: returning awaited target")
         return await target(company_id=company_id, db=db)
 
     resolved_company_id = company_id
@@ -84,10 +82,6 @@ async def create_article_category(
     payload: ArticleCategoryCreate,
     db: AsyncSession = Depends(get_db),
 ) -> ArticleCategoryResponse:
-    global _ORIGINAL_CREATE_ARTICLE_CATEGORY
-    if _ORIGINAL_CREATE_ARTICLE_CATEGORY is None:
-        _ORIGINAL_CREATE_ARTICLE_CATEGORY = create_article_category
-
     target = globals().get("create_article_category")
     if target is not _ORIGINAL_CREATE_ARTICLE_CATEGORY:
         return await target(payload=payload, db=db)
@@ -131,10 +125,6 @@ async def update_article_category(
     payload: ArticleCategoryUpdate,
     db: AsyncSession = Depends(get_db),
 ) -> ArticleCategoryResponse:
-    global _ORIGINAL_UPDATE_ARTICLE_CATEGORY
-    if _ORIGINAL_UPDATE_ARTICLE_CATEGORY is None:
-        _ORIGINAL_UPDATE_ARTICLE_CATEGORY = update_article_category
-
     target = globals().get("update_article_category")
     if target is not _ORIGINAL_UPDATE_ARTICLE_CATEGORY:
         return await target(category_id=category_id, payload=payload, db=db)
@@ -184,10 +174,6 @@ async def delete_article_category(
     category_id: int,
     db: AsyncSession = Depends(get_db),
 ) -> ArticleCategoryDeleteResponse:
-    global _ORIGINAL_DELETE_ARTICLE_CATEGORY
-    if _ORIGINAL_DELETE_ARTICLE_CATEGORY is None:
-        _ORIGINAL_DELETE_ARTICLE_CATEGORY = delete_article_category
-
     target = globals().get("delete_article_category")
     if target is not _ORIGINAL_DELETE_ARTICLE_CATEGORY:
         return await target(category_id=category_id, db=db)
@@ -202,3 +188,9 @@ async def delete_article_category(
     await db.delete(category)
     await db.commit()
     return ArticleCategoryDeleteResponse(deleted=True)
+
+_ORIGINAL_LIST_ARTICLE_CATEGORIES = list_article_categories
+_ORIGINAL_CREATE_ARTICLE_CATEGORY = create_article_category
+_ORIGINAL_UPDATE_ARTICLE_CATEGORY = update_article_category
+_ORIGINAL_DELETE_ARTICLE_CATEGORY = delete_article_category
+

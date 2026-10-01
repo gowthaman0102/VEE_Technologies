@@ -231,6 +231,7 @@ async def test_keyword_search_returns_enriched_results(
         source_name="Reuters",
         url="https://example.com/10",
         published_at=None,
+        collected_at=None,
     )
 
     db = AsyncMock()
@@ -295,6 +296,7 @@ async def test_keyword_search_allows_missing_enrichment(
         source_name="Example",
         url="https://example.com/11",
         published_at=None,
+        collected_at=None,
     )
 
     db = AsyncMock()

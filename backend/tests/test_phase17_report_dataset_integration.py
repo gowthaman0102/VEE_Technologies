@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -137,6 +137,7 @@ async def test_build_company_report_handles_zero_data_period(
         company_id=2,
         start_date=START,
         end_date=END,
+        snapshot_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
     )
 
     assert report["company_id"] == 2
@@ -227,11 +228,12 @@ async def test_report_summary_uses_only_configured_competitors(
 
     fetch_mock = AsyncMock(
         side_effect=[
-            [],                     # sentiment
-            [],                     # business impact
-            [competitor_mention],   # competitors
-            [],                     # risk
-            [],                     # risk insights
+            [],                     # triages
+            [],                     # sentiments
+            [],                     # impacts
+            [competitor_mention],   # competitor_mentions
+            [],                     # risks
+            [],                     # risk_insights
             [],                     # alerts
         ]
     )
@@ -271,6 +273,7 @@ async def test_report_summary_uses_only_configured_competitors(
         company_id=2,
         start_date=START,
         end_date=END,
+        snapshot_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
     )
 
     configured_mock.assert_awaited_once_with(

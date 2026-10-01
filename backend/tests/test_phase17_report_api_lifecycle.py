@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -43,6 +43,9 @@ def _record(
         id=123,
         company_id=2,
         report_type="custom",
+        report_template="detailed",
+        report_scope="standard",
+        scope_metadata={},
         file_format="pdf",
         filename=filename,
         content_type=content_type,
@@ -105,6 +108,58 @@ def test_delete_report_returns_not_found():
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+def test_analytics_snapshot_is_stored_with_range_metadata():
+    class SnapshotDB:
+        saved_report = None
+
+        async def get(self, model, company_id):
+            return SimpleNamespace(id=company_id)
+
+        def add(self, report):
+            self.saved_report = report
+
+        async def commit(self):
+            return None
+
+        async def refresh(self, report):
+            report.id = 456
+
+    database = SnapshotDB()
+
+    async def override_db():
+        yield database
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        response = client.post(
+            "/api/v1/reports/analytics-snapshot",
+            data={
+                "company_id": "2",
+                "period_start": "2026-09-01T00:00:00+00:00",
+                "period_end": "2026-09-02T00:00:00+00:00",
+                "time_mode": "media",
+                "preset": "90d",
+            },
+            files={
+                "snapshot": (
+                    "analytics.png",
+                    b"\x89PNG\r\n\x1a\nimage-bytes",
+                    "image/png",
+                ),
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert database.saved_report.report_scope == "analytics_snapshot"
+    assert database.saved_report.file_format == "png"
+    assert database.saved_report.content_type == "image/png"
+    assert database.saved_report.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert database.saved_report.scope_metadata["preset"] == "90d"
+    assert response.json()["filename"] == database.saved_report.filename
 
 
 def test_generate_report_returns_lifecycle_state(

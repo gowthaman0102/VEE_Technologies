@@ -42,7 +42,7 @@ async def semantic_search(
     db: AsyncSession,
     query: str,
     *,
-    limit: int = 10,
+    limit: int | None = 10,
     minimum_similarity: float | None = None,
     company_id: int | None = None,
     provider: EmbeddingProvider | None = None,
@@ -55,7 +55,7 @@ async def semantic_search(
             "Semantic search query cannot be empty."
         )
 
-    if limit < 1:
+    if limit is not None and limit < 1:
         raise ValueError(
             "Semantic search limit must be at least 1."
         )
@@ -227,13 +227,9 @@ async def semantic_search(
             == filters.event_cluster_id
         )
 
-    statement = (
-        statement
-        .order_by(
-            distance_expression.asc()
-        )
-        .limit(limit)
-    )
+    statement = statement.order_by(distance_expression.asc())
+    if limit is not None:
+        statement = statement.limit(limit)
 
     result = await db.execute(statement)
 

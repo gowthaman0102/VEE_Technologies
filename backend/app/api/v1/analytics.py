@@ -1,9 +1,17 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.models.article import Article
+from app.models.article_business_impact import ArticleBusinessImpact
+from app.models.article_sentiment import ArticleSentiment
+from app.models.article_triage import ArticleTriage
+from app.models.company import Company
+from app.models.risk_assessment import RiskAssessment
+from app.schemas.dashboard import DashboardArticleItem
 from app.schemas.analytics import (
     AnalyticsOverviewResponse,
     ArticleTrendResponse,
@@ -20,6 +28,7 @@ from app.services.analytics_service import (
     get_period_comparison,
     get_article_volume_over_time,
     get_business_impact_distribution,
+    get_business_impact_article_query,
     get_competitor_summary,
     get_event_summary,
     get_risk_summary,
@@ -27,6 +36,7 @@ from app.services.analytics_service import (
     get_source_summary,
     validate_time_window,
 )
+from app.utils.article_metadata import publisher_name
 
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -262,6 +272,92 @@ async def read_business_impact(
     )
 
 
+@router.get("/business-impact/articles")
+async def read_business_impact_articles(
+    response: Response,
+    company_id: int = Query(..., ge=1),
+    category: str = Query(..., min_length=1, max_length=50),
+    start: datetime = Query(...),
+    end: datetime = Query(...),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    if await db.get(Company, company_id) is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    start, end = validate_time_window(start, end)
+
+    membership_query = get_business_impact_article_query(
+        company_id,
+        category,
+        start,
+        end,
+    )
+    total = await db.scalar(
+        select(func.count()).select_from(
+            membership_query.order_by(None).subquery()
+        )
+    )
+    statement = (
+        membership_query
+        .outerjoin(
+            ArticleTriage,
+            (ArticleTriage.article_id == Article.id)
+            & (ArticleTriage.company_id == company_id),
+        )
+        .outerjoin(
+            ArticleSentiment,
+            (ArticleSentiment.article_id == Article.id)
+            & (ArticleSentiment.company_id == company_id),
+        )
+        .outerjoin(
+            RiskAssessment,
+            (RiskAssessment.article_id == Article.id)
+            & (RiskAssessment.company_id == company_id),
+        )
+        .add_columns(
+            ArticleTriage.event_type,
+            ArticleSentiment.label,
+            RiskAssessment.risk_level,
+            RiskAssessment.risk_score,
+            ArticleBusinessImpact.primary_category,
+        )
+        .order_by(
+            func.coalesce(Article.published_at, Article.collected_at).desc(),
+            Article.id.desc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = (await db.execute(statement)).all()
+    items = []
+    for row in rows:
+        article, event_type, sentiment, risk_level, risk_score, impact = row
+        items.append(
+            DashboardArticleItem(
+                article_id=article.id,
+                title=article.title,
+                source_name=article.source_name,
+                url=article.url,
+                published_at=article.published_at,
+                publisher_name=publisher_name(
+                    article.source_name,
+                    article.title,
+                    article.url,
+                ),
+                collected_at=article.collected_at,
+                event_type=event_type,
+                sentiment=sentiment,
+                risk_level=risk_level,
+                risk_score=risk_score,
+                business_impact=impact,
+            )
+        )
+
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return {"total": total or 0, "items": items}
+
+
 @router.get("/events", response_model=EventAnalyticsResponse)
 async def read_event_analytics(
     company_id: int | None = Query(default=None, ge=1),
@@ -337,82 +433,3 @@ async def read_competitor_analytics(
         competitors=data.get("competitors", []),
     )
 
-@router.get("/business-impact/articles")
-async def read_business_impact_articles(
-    category: str,
-    company_id: int | None = Query(default=None, ge=1),
-    start: datetime | None = None,
-    end: datetime | None = None,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-):
-    if company_id is None:
-        profile = await get_active_company_profile(db)
-        if profile is None:
-            raise HTTPException(status_code=404, detail="No active company configured.")
-        company_id = profile.company_id
-
-    if start is None or end is None:
-        raise HTTPException(status_code=400, detail="start and end are required")
-
-    start, end = validate_time_window(start, end)
-    
-    from app.models.article import Article
-    from app.models.article_business_impact import ArticleBusinessImpact
-    from app.models.article_sentiment import ArticleSentiment
-    from app.models.risk_assessment import RiskAssessment
-    from sqlalchemy import select, func
-
-    article_time = func.coalesce(Article.published_at, Article.collected_at)
-    
-    base_stmt = (
-        select(Article)
-        .join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id)
-        .where(
-            ArticleBusinessImpact.company_id == company_id,
-            func.lower(ArticleBusinessImpact.primary_category) == category.lower(),
-            article_time >= start,
-            article_time <= end,
-        )
-    )
-
-    total = await db.scalar(select(func.count()).select_from(base_stmt.subquery()))
-    
-    stmt = (
-        base_stmt
-        .outerjoin(ArticleSentiment, (ArticleSentiment.article_id == Article.id) & (ArticleSentiment.company_id == company_id))
-        .outerjoin(RiskAssessment, (RiskAssessment.article_id == Article.id) & (RiskAssessment.company_id == company_id))
-        .add_columns(
-            ArticleSentiment.sentiment,
-            RiskAssessment.risk_level,
-            RiskAssessment.risk_score
-        )
-        .order_by(article_time.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-
-    rows = (await db.execute(stmt)).all()
-    
-    items = []
-    for row in rows:
-        article, sentiment, risk_level, risk_score = row
-        items.append({
-            "article_id": article.id,
-            "title": article.title,
-            "published_at": article.published_at,
-            "collected_at": article.collected_at,
-            "url": article.url,
-            "publisher_name": article.publisher_name,
-            "sentiment": sentiment,
-            "risk_level": risk_level,
-            "risk_score": risk_score,
-        })
-
-    return {
-        "total": total or 0,
-        "items": items,
-        "page": page,
-        "page_size": page_size
-    }

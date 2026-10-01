@@ -151,7 +151,7 @@ export function ReportsPageClient() {
   const [generating, setGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingBatch, setPendingBatch] = useState<ReportBatchHistoryItem | null>(null);
-  const [activeTab, setActiveTab] = useState<"standard" | "analytics" | "search" | "impact">("standard");
+  const [activeTab, setActiveTab] = useState<"all" | "standard" | "analytics" | "search" | "intelligence" | "impact">("all");
 
   const loadReports = useCallback(async (resolvedCompanyId: number) => {
     const reports = await getReportHistory(resolvedCompanyId);
@@ -369,18 +369,11 @@ export function ReportsPageClient() {
       const result = await generateReport(payload);
       await loadReports(companyId);
 
-      const allSuccess = Object.values(result.formats).every((f) => f.status === "success");
-      const anyError = Object.values(result.formats).find((f) => f.error);
-
-      if (allSuccess) {
-        const message = `Report batch generated successfully (PDF, Excel, CSV). Period: ${formatDateTime(result.period_start)} → ${formatDateTime(result.period_end)}`;
-        setSuccessMessage(message);
-        toast.success(message);
-      } else if (anyError) {
-        setError(anyError.error ?? "Report generation failed for one or more formats.");
-        toast.error(anyError.error ?? "Report generation failed for one or more formats.");
+      if (result.error) {
+        setError(result.error ?? "Report generation failed.");
+        toast.error(result.error ?? "Report generation failed.");
       } else {
-        const message = "Report generation completed.";
+        const message = `Report batch generated successfully (PDF, Excel, CSV). Batch: ${result.batch_id ?? result.report_id}`;
         setSuccessMessage(message);
         toast.success(message);
       }
@@ -578,7 +571,7 @@ export function ReportsPageClient() {
                 <option value="board_ready">Board summary</option>
               </select>
               {reportTemplate === "board_ready" && (
-                <span className="mt-1 block text-xs text-muted">Board summary currently matches Brief summary; charts are not included yet.</span>
+                <span className="mt-1 block text-xs text-muted">A concise board view with deterministic risk, impact, alert, and material-story signals.</span>
               )}
             </label>
 
@@ -816,7 +809,8 @@ export function ReportsPageClient() {
           ) : (() => {
             const standardReports = history.filter((b) => !b.report_scope || b.report_scope === "standard");
             const analyticsSnapshots = history.filter((b) => b.report_scope === "analytics_snapshot");
-            const searchReports = history.filter((b) => b.report_scope === "search_results" || b.report_scope === "intelligence_export");
+            const searchReports = history.filter((b) => b.report_scope === "search_results");
+            const intelligenceReports = history.filter((b) => b.report_scope === "intelligence_export");
             const impactReports = history.filter((b) => b.report_scope === "business_impact");
 
             const renderBatchCard = (batch: ReportBatchHistoryItem) => {
@@ -824,11 +818,26 @@ export function ReportsPageClient() {
               const categoryLabel = batch.scope_metadata?.category
                 ? ` · ${String(batch.scope_metadata.category).replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}`
                 : "";
-              const searchLabel = batch.report_scope === "search_results" || batch.report_scope === "intelligence_export"
-                ? " · Search & Intelligence Export"
+              const scopeTitle = batch.report_scope === "analytics_snapshot"
+                ? "Analytics Snapshot"
+                : batch.report_scope === "search_results"
+                  ? "Search Report"
+                  : batch.report_scope === "intelligence_export"
+                    ? "Intelligence Export"
+                    : batch.report_scope === "business_impact"
+                      ? "Business Impact Report"
+                      : `Standard ${formatReportType(batch.report_type)}`;
+              const titleText = `${scopeTitle}${batch.report_scope === "business_impact" ? categoryLabel : ""} · ${formatCompactDateTime(batch.period_start)} → ${formatCompactDateTime(batch.period_end)}`;
+              const filters = batch.scope_metadata?.filters;
+              const visibleFormatKeys = batch.report_scope === "analytics_snapshot"
+                ? ["png"]
+                : FORMAT_KEYS.filter((formatKey) => formatKey !== "png");
+              const filterSummary = filters && typeof filters === "object"
+                ? Object.entries(filters as Record<string, unknown>)
+                    .filter(([, value]) => value && value !== "All")
+                    .map(([key, value]) => `${key.replace(/_/g, " ")}: ${String(value)}`)
+                    .join(" · ") || "All analyzed articles"
                 : "";
-              const snapshotLabel = batch.report_scope === "analytics_snapshot" ? "Analytics Snapshot · " : "";
-              const titleText = `${snapshotLabel}${formatReportType(batch.report_type)}${categoryLabel}${searchLabel} · ${formatCompactDateTime(batch.period_start)} → ${formatCompactDateTime(batch.period_end)}`;
 
               return (
                 <article
@@ -849,7 +858,7 @@ export function ReportsPageClient() {
                         <input
                           type="checkbox"
                           checked={selectedBatchIds.includes(batch.batch_id)}
-                          disabled={comparing || batch.status !== "success" || (selectedBatchIds.length >= 2 && !selectedBatchIds.includes(batch.batch_id))}
+                          disabled={comparing || batch.status !== "success" || batch.report_scope !== "standard" || (selectedBatchIds.length >= 2 && !selectedBatchIds.includes(batch.batch_id))}
                           onChange={(event) => {
                             const next = event.target.checked
                               ? [...selectedBatchIds, batch.batch_id]
@@ -870,8 +879,30 @@ export function ReportsPageClient() {
                     {batch.generated_at && (
                       <p>Generated {formatCompactDateTime(batch.generated_at)}</p>
                     )}
-                    {batch.report_template && (
+                    {batch.report_scope === "standard" && batch.report_template && (
                       <p className="capitalize">Template: {batch.report_template.replace(/_/g, " ")}</p>
+                    )}
+                    {batch.report_scope === "standard" && (
+                      <p>Date basis: {batch.scope_metadata?.time_mode === "ingestion" ? "Added to Nova Cops" : "Published"}</p>
+                    )}
+                    {batch.report_scope === "analytics_snapshot" && typeof batch.scope_metadata?.preset === "string" && (
+                      <p>Range: {String(batch.scope_metadata.preset)} · PNG snapshot</p>
+                    )}
+                    {batch.report_scope === "search_results" && (
+                      <p>
+                        {typeof batch.scope_metadata?.mode === "string" ? String(batch.scope_metadata.mode) : "Search"}
+                        {typeof batch.scope_metadata?.query === "string" ? ` · “${String(batch.scope_metadata.query)}”` : ""}
+                        {typeof batch.scope_metadata?.article_count === "number" ? ` · ${batch.scope_metadata.article_count} articles` : ""}
+                      </p>
+                    )}
+                    {batch.report_scope === "intelligence_export" && typeof batch.scope_metadata?.matching_total === "number" && (
+                      <p>Matching analyzed articles: {batch.scope_metadata.matching_total}</p>
+                    )}
+                    {batch.report_scope === "business_impact" && typeof batch.scope_metadata?.article_count === "number" && (
+                      <p>Articles in category: {batch.scope_metadata.article_count}</p>
+                    )}
+                    {batch.report_scope === "intelligence_export" && filterSummary && (
+                      <p className="break-words">Filters: {filterSummary}</p>
                     )}
                   </div>
 
@@ -891,7 +922,7 @@ export function ReportsPageClient() {
                   <div className="mt-4 border-t border-border pt-3" />
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {FORMAT_KEYS.map((formatKey) => {
+                    {visibleFormatKeys.map((formatKey) => {
                       const item = batch.formats[formatKey];
                       if (!item) return null;
 
@@ -946,10 +977,12 @@ export function ReportsPageClient() {
             };
 
             const TABS = [
+              { id: "all", label: "All", count: history.length, icon: FileText, color: "text-primary bg-primary-soft" },
               { id: "standard", label: "Standard Reports", count: standardReports.length, icon: FileText, color: "text-primary bg-primary-soft" },
               { id: "analytics", label: "Analytics Snapshots", count: analyticsSnapshots.length, icon: BarChart3, color: "text-primary bg-primary-soft" },
-              { id: "search", label: "Search Exports", count: searchReports.length, icon: Search, color: "text-primary bg-primary-soft" },
-              { id: "impact", label: "Business Impact", count: impactReports.length, icon: Sparkles, color: "text-[#2E7D32] bg-[#EEF7EE]" },
+              { id: "search", label: "Search Reports", count: searchReports.length, icon: Search, color: "text-primary bg-primary-soft" },
+              { id: "intelligence", label: "Intelligence Exports", count: intelligenceReports.length, icon: FileText, color: "text-primary bg-primary-soft" },
+              { id: "impact", label: "Business Impact Reports", count: impactReports.length, icon: Sparkles, color: "text-[#2E7D32] bg-[#EEF7EE]" },
             ] as const;
 
             return (
@@ -961,7 +994,7 @@ export function ReportsPageClient() {
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
+                        onClick={() => setActiveTab(tab.id)}
                         className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${active ? "bg-white text-text shadow-sm" : "text-muted hover:bg-white/50 hover:text-text-body"}`}
                       >
                         <div className={`flex h-5 w-5 items-center justify-center rounded-md ${active ? tab.color : "bg-transparent"}`}>
@@ -977,6 +1010,9 @@ export function ReportsPageClient() {
                 </div>
 
                 <div className="mt-6">
+                  {activeTab === "all" && (
+                    <div className="grid gap-4 md:grid-cols-2">{history.map(renderBatchCard)}</div>
+                  )}
                   {activeTab === "standard" && (
                     standardReports.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No standard reports yet. Generate one using the form above.</div>
@@ -998,6 +1034,14 @@ export function ReportsPageClient() {
                       <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No search result reports yet. Generate one from Search.</div>
                     ) : (
                       <div className="grid gap-4 md:grid-cols-2">{searchReports.map(renderBatchCard)}</div>
+                    )
+                  )}
+
+                  {activeTab === "intelligence" && (
+                    intelligenceReports.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border bg-surface-raised p-6 text-center text-sm text-muted">No intelligence exports yet. Export the filtered feed from Intelligence.</div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">{intelligenceReports.map(renderBatchCard)}</div>
                     )
                   )}
 

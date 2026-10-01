@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import and_, func, or_, select
@@ -206,7 +206,7 @@ async def match_watchlist_items(
                     source_name=row.source_name,
                     url=row.url,
                     published_at=row.published_at,
-                    collected_at=row.collected_at,
+                    collected_at=getattr(row, "collected_at", row.published_at),
                     event_type=row.event_type,
                     monitoring_topic=row.monitoring_topic,
                     risk_level=row.risk_level,

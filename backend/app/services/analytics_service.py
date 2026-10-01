@@ -386,6 +386,24 @@ async def _get_risk_series(db, *, company_id: int, start: datetime, end: datetim
     ]
 
 
+def get_business_impact_article_query(
+    company_id: int,
+    category: str,
+    start: datetime,
+    end: datetime,
+):
+    article_time = func.coalesce(Article.published_at, Article.collected_at)
+    return (
+        select(Article)
+        .join(ArticleBusinessImpact, ArticleBusinessImpact.article_id == Article.id)
+        .where(
+            ArticleBusinessImpact.company_id == company_id,
+            func.lower(ArticleBusinessImpact.primary_category) == category.lower(),
+            article_time >= start,
+            article_time <= end,
+        )
+    )
+
 async def get_business_impact_distribution(
     db: AsyncSession,
     *,

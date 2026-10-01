@@ -1,4 +1,4 @@
-﻿from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -10,7 +10,28 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_list_ingestion_sources():
+def test_list_ingestion_sources(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_active_company_profile",
+        AsyncMock(return_value=SimpleNamespace(company_id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_client_config",
+        AsyncMock(return_value=SimpleNamespace(id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_sources_for_config",
+        lambda config: [
+            SimpleNamespace(key="openai_official_news", name="test", source_type="test", language="en", enabled=True, category="test"),
+            SimpleNamespace(key="google_news_openai", name="test", source_type="test", language="en", enabled=True, category="test"),
+            SimpleNamespace(key="google_news_openai_chatgpt", name="test", source_type="test", language="en", enabled=True, category="test"),
+            SimpleNamespace(key="google_news_openai_research_safety", name="test", source_type="test", language="en", enabled=True, category="test"),
+            SimpleNamespace(key="google_news_openai_business", name="test", source_type="test", language="en", enabled=True, category="test"),
+            SimpleNamespace(key="newsapi_openai", name="test", source_type="test", language="en", enabled=True, category="test"),
+            SimpleNamespace(key="newsapi_openai_chatgpt", name="test", source_type="test", language="en", enabled=True, category="test"),
+        ]
+    )
     response = client.get(
         "/api/v1/ingestion/sources"
     )
@@ -40,6 +61,19 @@ def test_list_ingestion_sources():
 def test_run_selected_sources(
     monkeypatch,
 ):
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_active_company_profile",
+        AsyncMock(return_value=SimpleNamespace(company_id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_client_config",
+        AsyncMock(return_value=SimpleNamespace(id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_sources_for_config",
+        lambda config: [SimpleNamespace(key="google_news_openai", name="Google News - OpenAI", source_type="rss", language="en", enabled=True, category="news")]
+    )
     run_mock = AsyncMock(
         return_value=[
             SourceIngestionResult(
@@ -88,7 +122,20 @@ def test_run_selected_sources(
     run_mock.assert_awaited_once()
 
 
-def test_run_unknown_source():
+def test_run_unknown_source(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_active_company_profile",
+        AsyncMock(return_value=SimpleNamespace(company_id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_client_config",
+        AsyncMock(return_value=SimpleNamespace(id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_sources_for_config",
+        lambda config: []
+    )
     response = client.post(
         "/api/v1/ingestion/run",
         json={
@@ -108,6 +155,19 @@ def test_run_unknown_source():
 def test_run_single_source(
     monkeypatch,
 ):
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_active_company_profile",
+        AsyncMock(return_value=SimpleNamespace(company_id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_client_config",
+        AsyncMock(return_value=SimpleNamespace(id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_sources_for_config",
+        lambda config: [SimpleNamespace(key="newsapi_openai", name="NewsAPI - OpenAI", source_type="api", language="en", enabled=True, category="news")]
+    )
     run_mock = AsyncMock(
         return_value=[
             SourceIngestionResult(
@@ -146,7 +206,20 @@ def test_run_single_source(
     assert data["failures"] == 0
 
 
-def test_run_single_unknown_source():
+def test_run_single_unknown_source(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_active_company_profile",
+        AsyncMock(return_value=SimpleNamespace(company_id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_client_config",
+        AsyncMock(return_value=SimpleNamespace(id=2))
+    )
+    monkeypatch.setattr(
+        "app.api.v1.ingestion.get_sources_for_config",
+        lambda config: []
+    )
     response = client.post(
         "/api/v1/ingestion/run/"
         "does_not_exist",

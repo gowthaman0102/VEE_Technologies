@@ -47,6 +47,7 @@ class ReportRequest(BaseModel):
     end_date: datetime | None = None
     time_mode: Literal["media", "ingestion"] = "media"
     include_details: bool = True
+    scope_metadata: dict | None = None
 
 class ReportMetric(BaseModel):
     label: str
@@ -87,11 +88,12 @@ class ReportHistoryItem(BaseModel):
     status: str
     generated_at: datetime | None
     error: str | None
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 class ReportBatchHistoryItem(BaseModel):
     batch_id: str
+    id: int | None = None  # primary record id, for solo-batches
     company_id: int
     report_type: str
     report_template: str = "detailed"

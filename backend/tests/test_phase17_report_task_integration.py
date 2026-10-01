@@ -1,4 +1,4 @@
-﻿from types import SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -62,38 +62,14 @@ async def test_scheduled_reports_query_active_companies_only(
         lambda: FakeSessionContext(db),
     )
 
-    build_mock = AsyncMock(
-        return_value={
-            "company_id": 2,
-            "start_date": None,
-            "end_date": None,
-        }
+    generate_batch_mock = AsyncMock(
+        return_value=[SimpleNamespace(batch_id="test-batch")]
     )
 
     monkeypatch.setattr(
         report_tasks,
-        "build_company_report",
-        build_mock,
-    )
-
-    monkeypatch.setattr(
-        report_tasks,
-        "render_report",
-        MagicMock(
-            return_value=b"%PDF-test"
-        ),
-    )
-
-    persist_mock = AsyncMock(
-        return_value=SimpleNamespace(
-            id=501
-        )
-    )
-
-    monkeypatch.setattr(
-        report_tasks,
-        "persist_generated_report",
-        persist_mock,
+        "generate_report_batch",
+        generate_batch_mock,
     )
 
     result = await report_tasks._generate_scheduled_reports(
@@ -107,15 +83,13 @@ async def test_scheduled_reports_query_active_companies_only(
     assert "is_active" in compiled_sql
     assert "true" in compiled_sql
 
-    build_mock.assert_awaited_once()
+    generate_batch_mock.assert_awaited_once()
 
-    kwargs = build_mock.await_args.kwargs
+    kwargs = generate_batch_mock.await_args.kwargs
 
     assert kwargs["company_id"] == 2
 
-    persist_mock.assert_awaited_once()
-
     assert result == {
-        "generated_report_ids": [501],
+        "generated_batch_ids": ["test-batch"],
         "count": 1,
     }

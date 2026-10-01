@@ -39,7 +39,7 @@ async def keyword_search(
     *,
     query: str,
     company_id: int,
-    limit: int = 50,
+    limit: int | None = 50,
     filters: SearchFilters | None = None,
 ) -> list[KeywordSearchItem]:
     normalized = query.strip()
@@ -162,14 +162,12 @@ async def keyword_search(
             == filters.event_cluster_id
         )
 
-    stmt = (
-        stmt
-        .order_by(
-            Article.published_at.desc().nullslast(),
-            Article.id.desc(),
-        )
-        .limit(limit)
+    stmt = stmt.order_by(
+        Article.published_at.desc().nullslast(),
+        Article.id.desc(),
     )
+    if limit is not None:
+        stmt = stmt.limit(limit)
 
     articles = list(
         (await db.execute(stmt)).scalars().all()

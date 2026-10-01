@@ -249,7 +249,14 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
         company_id: companyId,
         report_type: "all_history",
         report_scope: "intelligence_export",
-        article_ids: filteredItems.map((result) => result.article_id),
+        scope_metadata: {
+          search_filter: search,
+          risk_filter: riskFilter,
+          topic_filter: topicFilter,
+          sentiment_filter: sentimentFilter,
+          impact_filter: impactFilter,
+          sort_order: sortOrder
+        },
       });
       setExportState("generated");
       router.push("/reports");

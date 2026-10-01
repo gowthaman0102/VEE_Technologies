@@ -212,6 +212,32 @@ export async function getAnalyticsOverview(
   return response.json();
 }
 
+export async function getBusinessImpactArticles(args: {
+  company_id: number;
+  category: string;
+  start: string;
+  end: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ total: number; items: DashboardArticleItem[] }> {
+  const params = new URLSearchParams({
+    company_id: String(args.company_id),
+    category: args.category,
+    start: args.start,
+    end: args.end,
+    page: String(args.page ?? 1),
+    page_size: String(args.page_size ?? 50),
+  });
+  const response = await fetch(
+    `${API_BASE_URL}/analytics/business-impact/articles?${params}`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new Error(`Business impact articles API failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
 export type EventAnalyticsResponse = {
   company_id: number;
   total_events: number;
@@ -630,6 +656,7 @@ export type ReportSummary = {
   end_date: string;
   total_articles: number;
   total_events: number;
+  critical_risk_count: number;
   high_risk_count: number;
   medium_risk_count: number;
   low_risk_count: number;
@@ -1013,16 +1040,12 @@ export async function saveReportRecipients(companyId: number, emails: string[]):
 }
 
 export type GenerateReportResponse = {
-  batch_id: string;
-  period_start: string;
-  period_end: string;
-  formats: Record<string, {
-    report_id: number;
-    status: string;
-    filename: string | null;
-    content_type: string | null;
-    error: string | null;
-  }>;
+  report_id: number;
+  status: string;
+  filename: string | null;
+  content_type: string | null;
+  error: string | null;
+  batch_id: string | null;
 };
 
 export async function generateReport(args: {
@@ -1039,6 +1062,8 @@ export async function generateReport(args: {
   search_query?: string;
   search_mode?: "keyword" | "semantic";
   search_filters?: SearchFilters;
+  minimum_similarity?: number;
+  scope_metadata?: Record<string, unknown>;
 }): Promise<GenerateReportResponse> {
   const response = await fetch(`${API_BASE_URL}/reports/generate`, {
     method: "POST",
@@ -1053,17 +1078,38 @@ export async function exportAnalyticsSnapshot(args: {
   company_id: number;
   start_date: string;
   end_date: string;
+  preset: string;
   image_data: string;
-}): Promise<void> {
+}): Promise<{ filename: string }> {
+  const formData = new FormData();
+  formData.append("company_id", args.company_id.toString());
+  formData.append("period_start", args.start_date);
+  formData.append("period_end", args.end_date);
+  formData.append("time_mode", "media");
+  formData.append("preset", args.preset);
+
+  // Convert base64 data URL to Blob
+  const byteString = atob(args.image_data.split(',')[1]);
+  const mimeString = args.image_data.split(',')[0].split(':')[1].split(';')[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  const blob = new Blob([ab], { type: mimeString });
+  
+  formData.append("snapshot", blob, "snapshot.png");
+
   const response = await fetch(`${API_BASE_URL}/reports/analytics-snapshot`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(args),
+    body: formData,
   });
 
   if (!response.ok) {
     throw new Error(`Analytics snapshot failed with status ${response.status}`);
   }
+
+  return response.json();
 }
 
 export async function downloadReport(args: {

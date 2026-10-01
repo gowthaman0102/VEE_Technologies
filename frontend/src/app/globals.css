@@ -464,3 +464,7 @@ select, input, textarea { color-scheme: light; }
   border-color: var(--sidebar-border);
 }
 
+
+
+/* html2canvas export fixes */
+[data-exporting="true"], [data-exporting="true"] * { animation: none !important; transition: none !important; }

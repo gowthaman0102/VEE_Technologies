@@ -1,4 +1,4 @@
-﻿from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,13 +8,18 @@ from app.services.dashboard_service import (
 
 
 @pytest.mark.asyncio
-async def test_dashboard_overview_separates_total_and_processed_articles():
+async def test_dashboard_overview_separates_total_and_processed_articles(monkeypatch):
     db = AsyncMock()
+    
+    monkeypatch.setattr(
+        "app.services.dashboard_service._active_company_source_names",
+        AsyncMock(return_value=(1, ["source-a"]))
+    )
 
     db.scalar.side_effect = [
         46,  # total articles
         3,   # processed intelligence
-        1,   # active companies
+        1,   # total companies
         1,   # high risk
         0,   # critical risk
         1,   # active alerts

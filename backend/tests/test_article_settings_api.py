@@ -65,9 +65,10 @@ def test_create_article_category(monkeypatch):
 
 
 def test_create_article_category_rejects_duplicate(monkeypatch):
+    from fastapi import HTTPException
     monkeypatch.setattr(
         "app.api.v1.article_settings.create_article_category",
-        AsyncMock(side_effect=ValueError("Category already exists.")),
+        AsyncMock(side_effect=HTTPException(status_code=409, detail="Category already exists.")),
     )
 
     response = client.post(
@@ -102,9 +103,10 @@ def test_update_article_category_toggle(monkeypatch):
 
 
 def test_delete_article_category(monkeypatch):
+    from app.schemas.article_settings import ArticleCategoryDeleteResponse
     monkeypatch.setattr(
         "app.api.v1.article_settings.delete_article_category",
-        AsyncMock(return_value=True),
+        AsyncMock(return_value=ArticleCategoryDeleteResponse(deleted=True)),
     )
 
     response = client.delete("/api/v1/article-settings/categories/1")

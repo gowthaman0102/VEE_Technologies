@@ -1,4 +1,4 @@
-﻿from copy import deepcopy
+from copy import deepcopy
 from datetime import datetime, timezone
 from io import BytesIO
 
@@ -293,7 +293,7 @@ def test_phase17_xlsx_nonempty_report_renders_real_rows() -> None:
     )
 
     assert (
-        workbook["Articles"]["L2"].value
+        workbook["Articles"]["N2"].value
         == 88.0
     )
 

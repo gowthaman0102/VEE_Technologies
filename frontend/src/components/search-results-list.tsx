@@ -8,12 +8,15 @@ import { SearchResult, downloadReport } from "@/lib/api";
 
 export function SearchResultsList({
   results,
+  totalCount,
   companyId,
   mode,
   query,
   embedded = false,
 }: {
   results: SearchResult[];
+  /** Backend total match count (may exceed results.length when capped at 50). */
+  totalCount?: number;
   companyId: number | null;
   mode: "keyword" | "semantic";
   query: string;
@@ -37,10 +40,20 @@ export function SearchResultsList({
     }
   }
 
+  const displayTotal = totalCount ?? results.length;
+  const isTruncated = totalCount !== undefined && totalCount > results.length;
+
   return (
     <section className={embedded ? "bg-surface" : "rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5"}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-sm font-bold text-text">Search results</h2><p className="mt-1 text-xs text-muted">{results.length} {mode} matches for “{query}”</p></div>
+        <div>
+          <h2 className="text-sm font-bold text-text">Search results</h2>
+          <p className="mt-1 text-xs text-muted">
+            {isTruncated
+              ? `${results.length} of ${displayTotal} ${mode} matches for "${query}" · showing first ${results.length}`
+              : `${displayTotal} ${mode} matches for "${query}"`}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor="search-export-format">Export format</label>
           <select id="search-export-format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)} className="h-9 rounded-lg border border-border bg-surface px-2 text-xs text-text"><option value="csv">CSV</option><option value="xlsx">XLSX</option><option value="pdf">PDF</option></select>

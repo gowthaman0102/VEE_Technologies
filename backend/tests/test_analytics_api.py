@@ -1,11 +1,61 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
+from app.db.session import get_db
 from app.main import app
 
 client = TestClient(app)
+
+
+def test_business_impact_articles_returns_company_scoped_total_and_page():
+    article = SimpleNamespace(
+        id=120,
+        title="Security incident",
+        source_name="Example News",
+        url="https://example.com/security",
+        published_at=datetime(2026, 9, 24, tzinfo=timezone.utc),
+        collected_at=datetime(2026, 9, 25, tzinfo=timezone.utc),
+    )
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(id=7)),
+        scalar=AsyncMock(return_value=153),
+        execute=AsyncMock(
+            return_value=SimpleNamespace(
+                all=lambda: [(article, "incident", "negative", "high", 72.0, "cybersecurity")]
+            )
+        ),
+    )
+    async def override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        start = datetime.now(timezone.utc) - timedelta(days=270)
+        end = datetime.now(timezone.utc)
+        response = client.get(
+            "/api/v1/analytics/business-impact/articles",
+            params={
+                "company_id": 7,
+                "category": "cybersecurity",
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "page": 2,
+                "page_size": 1,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["total"] == 153
+    assert len(result["items"]) == 1
+    assert result["items"][0]["article_id"] == 120
+    assert result["items"][0]["business_impact"] == "cybersecurity"
+    assert response.headers["Cache-Control"] == "no-store, no-cache, must-revalidate"
 
 
 def test_get_analytics_overview(monkeypatch):

@@ -9,6 +9,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   FileText,
   Heart,
@@ -29,7 +30,7 @@ import {
   ClientConfiguration,
   DashboardArticleItem,
   getActiveCompany,
-  getDashboardArticles,
+  getBusinessImpactArticles,
   getAnalyticsOverview,
   generateReport,
   SourceAnalyticsResponse,
@@ -224,6 +225,10 @@ function ImpactArticlesModal({
   companyId,
   startDate,
   endDate,
+  total,
+  page,
+  onPageChange,
+  error,
 }: {
   category: string;
   articles: DashboardArticleItem[];
@@ -232,6 +237,10 @@ function ImpactArticlesModal({
   companyId: number | null;
   startDate: string;
   endDate: string;
+  total: number;
+  page: number;
+  onPageChange: (page: number) => void;
+  error: string;
 }) {
   const [reportStatus, setReportStatus] = useState<"idle" | "generating" | "done" | "error">("idle");
   const [reportError, setReportError] = useState("");
@@ -271,12 +280,12 @@ function ImpactArticlesModal({
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Business Impact</p>
             <h2 id="impact-articles-title" className="mt-1 text-xl font-bold text-text">{formatLabel(category)} articles</h2>
-            <p className="mt-1 text-sm text-muted">{loading ? "Loading matching articles..." : `${articles.length} ${articles.length === 1 ? "article" : "articles"}`}</p>
+            <p className="mt-1 text-sm text-muted">{loading ? "Loading matching articles..." : `${total.toLocaleString()} ${total === 1 ? "article" : "articles"}`}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close articles" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-text transition-colors hover:bg-critical-bg hover:border-critical hover:text-critical focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"><X size={18} aria-hidden="true" /></button>
         </header>
         <div className="flex-1 overflow-y-auto bg-surface-raised px-5 py-5 sm:px-6">
-          {loading ? <div className="flex h-full items-center justify-center text-sm text-muted">Loading matching articles...</div> : articles.length === 0 ? <EmptyState title="No matching articles found." /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={article.article_id} article={article} />)}</div>}
+          {loading ? <div className="flex h-full items-center justify-center text-sm text-muted">Loading matching articles...</div> : error ? <div className="flex h-full items-center justify-center text-sm text-critical">{error}</div> : total === 0 ? <EmptyState title="No matching articles found." /> : <div className="space-y-3">{articles.map((article) => <ArticleRow key={article.article_id} article={article} />)}</div>}
         </div>
         <footer className="shrink-0 flex items-center justify-between gap-3 border-t border-border bg-surface-raised px-5 py-3 sm:px-6">
           <div className="text-sm">
@@ -287,6 +296,13 @@ function ImpactArticlesModal({
               <span className="text-critical">{reportError}</span>
             )}
           </div>
+          {total > 50 && (
+            <div className="flex items-center gap-2 text-xs text-muted">
+              <button type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1 || loading} aria-label="Previous page" className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface disabled:opacity-40"><ChevronLeft size={15} /></button>
+              <span>{page} / {Math.ceil(total / 50)}</span>
+              <button type="button" onClick={() => onPageChange(page + 1)} disabled={page >= Math.ceil(total / 50) || loading} aria-label="Next page" className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface disabled:opacity-40"><ChevronRight size={15} /></button>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -343,6 +359,9 @@ export default function AnalyticsPage() {
   const [showAllImpacts, setShowAllImpacts] = useState(false);
   const [impactArticles, setImpactArticles] = useState<DashboardArticleItem[]>([]);
   const [impactLoading, setImpactLoading] = useState(false);
+  const [impactTotal, setImpactTotal] = useState(0);
+  const [impactPage, setImpactPage] = useState(1);
+  const [impactError, setImpactError] = useState("");
 
   useEffect(() => {
     async function loadCompany() {
@@ -455,21 +474,27 @@ export default function AnalyticsPage() {
     },
   );
 
-  const openImpactArticles = async (category: string) => {
+  const openImpactArticles = async (category: string, page = 1) => {
+    if (companyId === null || data === null) return;
     setImpactCategory(category);
-    setImpactArticles([]);
+    setImpactPage(page);
     setImpactLoading(true);
+    setImpactError("");
     try {
-      const response = await getDashboardArticles("processed");
-      const normalizedCategory = category.toLowerCase();
-      const startTime = data ? new Date(data.start).getTime() : Number.NEGATIVE_INFINITY;
-      const endTime = data ? new Date(data.end).getTime() : Number.POSITIVE_INFINITY;
-      setImpactArticles(response.items.filter((article) => {
-        const articleTime = new Date(article.published_at ?? article.collected_at).getTime();
-        return article.business_impact?.toLowerCase() === normalizedCategory
-          && articleTime >= startTime
-          && articleTime <= endTime;
-      }));
+      const response = await getBusinessImpactArticles({
+        company_id: companyId,
+        category,
+        start: data.start,
+        end: data.end,
+        page,
+        page_size: 50,
+      });
+      setImpactArticles(response.items);
+      setImpactTotal(response.total);
+    } catch (cause) {
+      setImpactArticles([]);
+      setImpactTotal(0);
+      setImpactError(cause instanceof Error ? cause.message : "Unable to load matching articles.");
     } finally {
       setImpactLoading(false);
     }
@@ -483,17 +508,34 @@ export default function AnalyticsPage() {
       const range = resolveTimeRange(preset, preset === "custom" ? { customStart, customEnd } : {});
       const element = document.querySelector(".analytics-page") as HTMLElement;
       if (!element) throw new Error("Could not find analytics page element");
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(element, { scale: 2 });
+      element.setAttribute("data-exporting", "true");
+      const html2canvas = (await import("html2canvas-pro")).default;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight,
+        backgroundColor: "#F6F7FC",
+        ignoreElements: (candidate) => candidate.getAttribute("role") === "dialog",
+      });
+      element.removeAttribute("data-exporting");
       const imageData = canvas.toDataURL("image/png");
 
       const { exportAnalyticsSnapshot } = await import("@/lib/api");
-      await exportAnalyticsSnapshot({
+      const saved = await exportAnalyticsSnapshot({
         company_id: companyId,
         start_date: range.start,
         end_date: range.end,
+        preset,
         image_data: imageData,
       });
+      const downloadLink = document.createElement("a");
+      downloadLink.href = imageData;
+      downloadLink.download = saved.filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
     } catch (cause) {
       setExportError(cause instanceof Error ? cause.message : "Export failed");
     } finally {
@@ -516,19 +558,19 @@ export default function AnalyticsPage() {
       <div className="relative z-10 mx-auto w-full max-w-[1440px]">
         <CosmicPageHero variant="analytics" imageSrc="/analytics-hero.png" eyebrow="ANALYTICS" title={companyName ? `${companyName} Intelligence Trends` : "Intelligence Trends"} description="Explore stored media intelligence across configurable reporting periods." />
 
-        <div className="mt-4 flex justify-end gap-3 items-center">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+          <div className="rounded-2xl border border-border bg-surface px-3 py-2 shadow-[0_6px_18px_rgba(27,22,62,0.06)]">
+            <TimeRangeSelector value={preset} onChange={setPreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} includeCustom />
+          </div>
           {exportError && <span className="text-sm text-critical">{exportError}</span>}
           <button 
             type="button" 
             onClick={() => void handleDownload()} 
-            disabled={exporting}
+            disabled={exporting || loading || data === null || (preset === "custom" && (!customStart || !customEnd))}
             className="rounded-[10px] border border-primary px-4 py-2 text-[13px] font-bold text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
           >
             {exporting ? "Preparing..." : "Download snapshot"}
           </button>
-          <div className="rounded-2xl border border-border bg-surface px-3 py-2 shadow-[0_6px_18px_rgba(27,22,62,0.06)]">
-            <TimeRangeSelector value={preset} onChange={setPreset} customStart={customStart} customEnd={customEnd} onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} includeCustom={false} />
-          </div>
         </div>
 
         {error && (
@@ -621,6 +663,10 @@ export default function AnalyticsPage() {
           companyId={companyId}
           startDate={data?.start ?? ""}
           endDate={data?.end ?? ""}
+          total={impactTotal}
+          page={impactPage}
+          onPageChange={(page) => void openImpactArticles(impactCategory, page)}
+          error={impactError}
         />
       )}
     </main>

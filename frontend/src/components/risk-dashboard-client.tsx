@@ -2,7 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  ChevronRight, Lightbulb, CheckCircle
+  Bell,
+  ChevronRight,
+  ClipboardList,
+  Gauge,
+  Lightbulb,
+  CheckCircle,
+  ShieldAlert,
+  Users,
 } from "lucide-react";
 
 import { DashboardRiskAnalytics, getDashboardRiskAnalytics, getRiskTrend, getDashboardIntelligence, getCompanyConfiguration, getActiveCompany } from "@/lib/api";
@@ -16,6 +23,28 @@ import { RiskDrilldownModal } from "@/components/risk-drilldown-modal";
 import { chartColor } from "@/lib/chart-colors";
 import { PageAmbient } from "@/components/page-ambient";
 import { CosmicPageHero } from "@/components/cosmic-page-hero";
+import { useCountUp } from "@/hooks/use-count-up";
+import type { LucideIcon } from "lucide-react";
+
+// ─── KPI Card type ──────────────────────────────────────────────────────────
+
+type KpiCardConfig = {
+  label: string;
+  value: number;
+  decimals?: number;
+  icon: LucideIcon;
+  animationDelay: string;
+  iconBg: string;
+  iconColor: string;
+  onClick?: () => void;
+};
+
+// ─── Animated number component ───────────────────────────────────────────────
+
+function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
+  const animated = useCountUp(value, 650);
+  return <>{decimals > 0 ? animated.toFixed(decimals) : animated.toLocaleString()}</>;
+}
 
 // â”€â”€â”€ Color helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -38,6 +38,7 @@ async def test_semantic_search_returns_ranked_results():
                 9,
                 tzinfo=timezone.utc,
             ),
+            collected_at=None,
             distance=0.10,
         ),
         SimpleNamespace(
@@ -46,6 +47,7 @@ async def test_semantic_search_returns_ranked_results():
             source_name="source-b",
             url="https://example.com/2",
             published_at=None,
+            collected_at=None,
             distance=0.25,
         ),
     ]
@@ -121,6 +123,7 @@ async def test_semantic_search_filters_minimum_similarity():
             source_name="source-a",
             url="https://example.com/1",
             published_at=None,
+            collected_at=None,
             distance=0.10,
         ),
         SimpleNamespace(
@@ -129,6 +132,7 @@ async def test_semantic_search_filters_minimum_similarity():
             source_name="source-b",
             url="https://example.com/2",
             published_at=None,
+            collected_at=None,
             distance=0.60,
         ),
     ]
@@ -224,6 +228,7 @@ async def test_semantic_search_returns_company_enrichment(
             source_name="Reuters",
             url="https://example.com/10",
             published_at=None,
+            collected_at=None,
             distance=0.10,
         ),
     ]
@@ -292,6 +297,7 @@ async def test_semantic_search_allows_missing_company_enrichment(
             source_name="Example",
             url="https://example.com/11",
             published_at=None,
+            collected_at=None,
             distance=0.20,
         ),
     ]
