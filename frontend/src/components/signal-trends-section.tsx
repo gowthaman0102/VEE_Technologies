@@ -89,9 +89,10 @@ function AnimatedSparkline({
 
   useEffect(() => {
     if (!hasData) return;
-    setDashOffset(9999);
-    setDotsVisible(points.map(() => false));
-    setAreaOpacity(0);
+     
+    setTimeout(() => setDashOffset(9999), 0);
+    setTimeout(() => setDotsVisible(points.map(() => false)), 0);
+    setTimeout(() => setAreaOpacity(0), 0);
 
     // Measure actual path length after render
     const id = setTimeout(() => {
@@ -143,7 +144,7 @@ function AnimatedSparkline({
           <p className="mt-0.5 text-xs text-muted">Daily article intake across all monitored sources</p>
         </div>
         {refreshError ? (
-          <span className="shrink-0 rounded-full bg-critical-bg px-2 py-0.5 text-[11px] font-medium text-critical">couldn't refresh</span>
+          <span className="shrink-0 rounded-full bg-critical-bg px-2 py-0.5 text-[11px] font-medium text-critical">couldn&apos;t refresh</span>
         ) : (
           <span className="text-[11px] text-muted shrink-0">Updated {agoLabel}</span>
         )}
@@ -331,7 +332,7 @@ function AnimatedDonut({
           <p className="mt-0.5 text-xs text-muted">Current mix, today</p>
         </div>
         {refreshError ? (
-          <span className="shrink-0 rounded-full bg-critical-bg px-2 py-0.5 text-[11px] font-medium text-critical">couldn't refresh</span>
+          <span className="shrink-0 rounded-full bg-critical-bg px-2 py-0.5 text-[11px] font-medium text-critical">couldn&apos;t refresh</span>
         ) : (
           <span className="text-[11px] text-muted shrink-0">{agoLabel}</span>
         )}

@@ -99,6 +99,9 @@ async def _process_article_intelligence(
                 company_id=company_id,
             )
         alert = alert_result.alert if alert_result is not None else None
+        
+        from app.services.live_feed_service import publish_live_event
+        await publish_live_event("processing_completed", company_id, {"article_id": article_id})
 
         return {
             "article_id": result.article_id,

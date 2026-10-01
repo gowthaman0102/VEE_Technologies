@@ -28,9 +28,9 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
-    task_time_limit=(
-        settings.celery_task_time_limit_seconds
-    ),
+    broker_transport_options={"protocol": 2},
+    result_backend_transport_options={"protocol": 2},
+    task_time_limit=settings.celery_task_time_limit_seconds,
     task_soft_time_limit=(
         settings.celery_task_soft_time_limit_seconds
     ),
@@ -38,8 +38,12 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    "live-news-poll-every-5-minutes": {
+    "live-news-poll-interval": {
         "task": "ingestion.live_poll",
+        "schedule": float(settings.live_ingestion_interval_seconds),
+    },
+    "stale-feed-watchdog-every-5-minutes": {
+        "task": "system.stale_feed_watchdog",
         "schedule": 300.0,
     },
     "run-user-report-schedules-every-5-minutes": {

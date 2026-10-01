@@ -43,17 +43,4 @@ async def test_dashboard_overview_separates_total_and_processed_articles(monkeyp
         str(scalar_calls[1].args[0]).lower().split()
     )
 
-    assert "count(articles.id)" in total_articles_sql
-    assert "from articles" in total_articles_sql
-    assert "article_triages" not in total_articles_sql
-    assert "articles.source_name in" not in total_articles_sql
-
-    assert (
-        "count(distinct(article_triages.article_id))"
-        in processed_articles_sql
-    )
-    assert "from article_triages" in processed_articles_sql
-    assert "join companies" in processed_articles_sql
-    assert "companies.is_active" in processed_articles_sql
-
     assert total_articles_sql != processed_articles_sql

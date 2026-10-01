@@ -110,13 +110,20 @@ def _resolve_period(
         return start, reference
 
     if payload.report_type == "daily":
-        return reference - timedelta(days=1), reference
+        end = reference.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = end - timedelta(days=1)
+        return start, end
 
     if payload.report_type == "weekly":
-        return reference - timedelta(days=7), reference
+        end = reference.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = end - timedelta(days=end.weekday()) # Monday 00:00
+        start = end - timedelta(days=7)
+        return start, end
 
     if payload.report_type == "monthly":
-        return reference - timedelta(days=30), reference
+        end = reference.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start = (end - timedelta(days=1)).replace(day=1)
+        return start, end
 
     return reference - timedelta(hours=1), reference
 

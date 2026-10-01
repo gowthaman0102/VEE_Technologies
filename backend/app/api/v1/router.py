@@ -17,9 +17,13 @@ from app.api.v1.report_schedules import router as report_schedules_router
 from app.api.v1.semantic_search import router as semantic_search_router
 from app.api.v1.triage import router as triage_router
 from app.api.v1.watchlist import router as watchlist_router
-
+from app.api.v1.live import router as live_router
 
 api_router = APIRouter()
+
+api_router.include_router(
+    live_router
+)
 
 api_router.include_router(
     health_router,

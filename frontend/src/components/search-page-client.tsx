@@ -182,7 +182,29 @@ export function SearchPageClient() {
   }
 
   function saveHistoryEntries(entries: SearchHistoryEntry[]) {
-    const next = [...entries, ...history].slice(0, 20);
+    // Prevent duplicates by ID
+    const nextMap = new Map<string, SearchHistoryEntry>();
+    entries.forEach(e => nextMap.set(e.id, e));
+    history.forEach(e => { if (!nextMap.has(e.id)) nextMap.set(e.id, e); });
+    
+    // Allow more than 20 entries now since we have a view all modal, maybe limit to 100
+    const next = Array.from(nextMap.values()).slice(0, 100);
+    setHistory(next);
+    if (companyId !== null) {
+      window.localStorage.setItem(`search-history:${companyId}`, JSON.stringify(next));
+    }
+  }
+
+  function deleteHistoryEntry(id: string) {
+    const next = history.filter(e => e.id !== id);
+    setHistory(next);
+    if (companyId !== null) {
+      window.localStorage.setItem(`search-history:${companyId}`, JSON.stringify(next));
+    }
+  }
+
+  function clearHistory() {
+    const next = history.filter(e => e.saved); // keep only saved
     setHistory(next);
     if (companyId !== null) {
       window.localStorage.setItem(`search-history:${companyId}`, JSON.stringify(next));
@@ -407,6 +429,8 @@ export function SearchPageClient() {
               canSave={Boolean(query.trim()) && companyId !== null}
               onSave={saveCurrentSearch}
               onRerun={rerunSearch}
+              onDelete={deleteHistoryEntry}
+              onClearHistory={clearHistory}
             />
             <SearchModeComparison
               comparison={comparison}

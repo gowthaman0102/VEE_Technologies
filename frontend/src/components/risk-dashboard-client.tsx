@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Bell,
+  
   ChevronRight,
-  ClipboardList,
-  Gauge,
+  
+  
   Lightbulb,
   CheckCircle,
-  ShieldAlert,
-  Users,
+  
+  
 } from "lucide-react";
 
 import { DashboardRiskAnalytics, getDashboardRiskAnalytics, getRiskTrend, getDashboardIntelligence, getCompanyConfiguration, getActiveCompany } from "@/lib/api";
@@ -460,8 +460,13 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
 
   // ── Initial loads ─────────────────────────────────────────────────────────
   useEffect(() => {
-    void fetchRiskTrend(trendRange);
+     
+    setTimeout(() => fetchRiskTrend(trendRange), 0);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchIntel();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchConfig();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -521,34 +526,6 @@ export function RiskDashboardClient({ initialData }: { initialData: DashboardRis
     insightHeadline = "Moderate risk activity detected across monitored sources.";
     insightBody = `High-risk assessments represent ${highPct.toFixed(1)}% of all assessed intelligence.`;
   }
-
-  const kpis: KpiCardConfig[] = [
-    {
-      label: "Total Assessments", value: data.total_assessments, icon: ClipboardList, animationDelay: "0ms",
-      iconBg: "bg-blue-50", iconColor: "text-blue-500",
-      onClick: () => openDrilldown("total_assessments", "All Risk Assessments", data.total_assessments),
-    },
-    {
-      label: "Average Risk Score", value: data.average_risk_score, decimals: 1, icon: Gauge, animationDelay: "70ms",
-      iconBg: "bg-amber-50", iconColor: "text-amber-500",
-    },
-    {
-      label: "Highest Risk Score", value: data.highest_risk_score, decimals: 1, icon: ShieldAlert, animationDelay: "140ms",
-      iconBg: "bg-red-50", iconColor: "text-red-500",
-    },
-    {
-      label: "Human Review", value: data.human_review_count, icon: Users, animationDelay: "210ms",
-      iconBg: "bg-violet-50", iconColor: "text-violet-500",
-      onClick: () => openDrilldown("human_review", "Human Review Articles", data.human_review_count),
-    },
-    {
-      label: "Immediate Alerts", value: data.immediate_alert_count, icon: Bell, animationDelay: "280ms",
-      iconBg: data.immediate_alert_count > 0 ? "bg-high-bg" : "bg-primary-soft",
-      iconColor: data.immediate_alert_count > 0 ? "text-high" : "text-primary",
-      onClick: () => openDrilldown("immediate_alert", "Immediate Alert Articles", data.immediate_alert_count),
-    },
-  ];
-
   return (
     <main className="relative w-full min-h-screen overflow-hidden bg-surface-raised">
           <PageAmbient kind="risk" />

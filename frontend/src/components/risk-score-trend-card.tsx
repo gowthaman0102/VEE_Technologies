@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React from "react";
 import { RiskTrendResponse } from "@/lib/api";
 
 type Props = {
@@ -23,7 +23,7 @@ export function RiskScoreTrendCard({ data, range, onRangeChange, highThreshold, 
   const PAD_Y = 20;
 
   const maxRisk = 100;
-  const minRisk = 0;
+  
   
   const iW = W - PAD_X * 2;
   const iH = H - PAD_Y * 2;

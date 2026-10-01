@@ -28,12 +28,14 @@ class RiskTrendResponse(BaseModel):
     summary: dict[str, float | int] = Field(default_factory=lambda: {
         "average_risk_score": 0.0,
         "highest_risk_score": 0.0,
+        "critical_risk_count": 0,
         "high_risk_count": 0,
         "medium_risk_count": 0,
         "low_risk_count": 0,
     })
     average_risk_score: float = 0.0
     highest_risk_score: float = 0.0
+    critical_risk_count: int = 0
     high_risk_count: int = 0
     medium_risk_count: int = 0
     low_risk_count: int = 0

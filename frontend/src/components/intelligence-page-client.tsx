@@ -19,7 +19,7 @@ import {
   generateReport,
 } from "@/lib/api";
 import type { DashboardOverview, DashboardIntelligenceItem } from "@/lib/api";
-import { formatArticleTimestamp, formatLabel, formatRelativeTime } from "@/lib/format";
+import { formatArticleTimestamp, formatLabel } from "@/lib/format";
 import { PublisherLogo } from "@/components/publisher-logo";
 import { Badge, toneForRisk, toneForSentiment } from "@/components/ui/badge";
 import { PageAmbient } from "@/components/page-ambient";
@@ -33,7 +33,7 @@ type Props = {
   initialOverview: DashboardOverview;
 };
 
-type LiveStatus = "live" | "updating" | "delayed";
+
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20] as const;
 
@@ -103,8 +103,8 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
   const [impactFilter, setImpactFilter] = useState("All");
   const [sortOrder, setSortOrder] = useState("Latest first");
   const [page, setPage] = useState(1);
-  const [liveStatus, setLiveStatus] = useState<LiveStatus>("live");
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>(new Date());
+  
+  
   const [error, setError] = useState<string | null>(null);
   const [featuredArticleId, setFeaturedArticleId] = useState<number | null>(null);
   const [readerArticleId, setReaderArticleId] = useState<number | null>(null);
@@ -117,16 +117,16 @@ export function IntelligencePageClient({ initialItems, initialOverview }: Props)
 
   const fetchItems = async () => {
     try {
-      setLiveStatus("updating");
+      
       const data = await getDashboardIntelligence(10000);
       setItems(data.items);
-      setLastUpdatedAt(new Date());
-      setLiveStatus("live");
+      
+      
       setError(null);
     } catch (caughtError) {
       console.error("Failed to refresh intelligence feed", caughtError);
       setError("Unable to load Intelligence Feed.");
-      setLiveStatus("delayed");
+      
     }
   };
 

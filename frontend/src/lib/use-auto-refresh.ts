@@ -1,27 +1,25 @@
-﻿"use client";
+"use client";
 
 import {
   useEffect,
   useRef,
 } from "react";
-
+import { useLiveData } from "@/components/live-data-provider";
 
 type AutoRefreshOptions = {
   enabled?: boolean;
-  intervalMs?: number;
+  intervalMs?: number; // kept for backwards compatibility but ignored for live pushes
 };
-
 
 export function useAutoRefresh(
   refresh: () => Promise<void> | void,
   {
     enabled = true,
-    intervalMs = 60_000,
   }: AutoRefreshOptions = {},
 ) {
   const refreshRef = useRef(refresh);
   const runningRef = useRef(false);
-  const lastRefreshRef = useRef(0);
+  const { dataVersion } = useLiveData();
 
   useEffect(() => {
     refreshRef.current = refresh;
@@ -33,8 +31,6 @@ export function useAutoRefresh(
     }
 
     let cancelled = false;
-
-    lastRefreshRef.current = Date.now();
 
     async function runRefresh() {
       if (
@@ -49,31 +45,21 @@ export function useAutoRefresh(
 
       try {
         await refreshRef.current();
-
-        if (!cancelled) {
-          lastRefreshRef.current = Date.now();
-        }
       } finally {
         runningRef.current = false;
       }
     }
+    
+    // When dataVersion changes, trigger refresh
+    void runRefresh();
 
     function handleVisibilityChange() {
       if (
         document.visibilityState === "visible"
-        && Date.now() - lastRefreshRef.current
-          >= intervalMs
       ) {
         void runRefresh();
       }
     }
-
-    const interval = window.setInterval(
-      () => {
-        void runRefresh();
-      },
-      intervalMs,
-    );
 
     document.addEventListener(
       "visibilitychange",
@@ -83,8 +69,6 @@ export function useAutoRefresh(
     return () => {
       cancelled = true;
 
-      window.clearInterval(interval);
-
       document.removeEventListener(
         "visibilitychange",
         handleVisibilityChange,
@@ -92,6 +76,6 @@ export function useAutoRefresh(
     };
   }, [
     enabled,
-    intervalMs,
+    dataVersion, // Dependency on dataVersion replaces the interval
   ]);
 }

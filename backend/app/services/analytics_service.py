@@ -137,6 +137,9 @@ async def get_period_comparison(
         "risk_average_change_percent": percentage_change(
             current_risk["average_risk_score"], previous_risk["average_risk_score"]
         ),
+        "critical_risk_change_percent": percentage_change(
+            current_risk["critical_risk_count"], previous_risk["critical_risk_count"]
+        ),
         "event_count_change_percent": percentage_change(
             current_events["total_events"], previous_events["total_events"]
         ),
@@ -286,6 +289,12 @@ async def get_risk_summary(
             func.max(RiskAssessment.risk_score).label("highest_risk_score"),
             func.count(
                 case(
+                    (RiskAssessment.risk_level == "critical", 1),
+                    else_=None,
+                )
+            ).label("critical_risk_count"),
+            func.count(
+                case(
                     (RiskAssessment.risk_level == "high", 1),
                     else_=None,
                 )
@@ -319,6 +328,7 @@ async def get_risk_summary(
         return {
             "average_risk_score": 0.0,
             "highest_risk_score": 0.0,
+            "critical_risk_count": 0,
             "high_risk_count": 0,
             "medium_risk_count": 0,
             "low_risk_count": 0,
@@ -327,6 +337,7 @@ async def get_risk_summary(
     summary_payload = {
         "average_risk_score": float(row.average_risk_score or 0.0),
         "highest_risk_score": float(row.highest_risk_score or 0.0),
+        "critical_risk_count": int(row.critical_risk_count or 0),
         "high_risk_count": int(row.high_risk_count or 0),
         "medium_risk_count": int(row.medium_risk_count or 0),
         "low_risk_count": int(row.low_risk_count or 0),
@@ -338,6 +349,7 @@ async def get_risk_summary(
         "summary": summary_payload,
         "average_risk_score": summary_payload["average_risk_score"],
         "highest_risk_score": summary_payload["highest_risk_score"],
+        "critical_risk_count": summary_payload["critical_risk_count"],
         "high_risk_count": summary_payload["high_risk_count"],
         "medium_risk_count": summary_payload["medium_risk_count"],
         "low_risk_count": summary_payload["low_risk_count"],
@@ -377,6 +389,7 @@ async def _get_risk_series(db, *, company_id: int, start: datetime, end: datetim
             "period": period,
             "average_risk_score": sum(float(item.risk_score) for item in values) / len(values),
             "maximum_risk_score": max(float(item.risk_score) for item in values),
+            "critical_count": sum(item.risk_level == "critical" for item in values),
             "low_count": sum(item.risk_level == "low" for item in values),
             "medium_count": sum(item.risk_level == "medium" for item in values),
             "high_count": sum(item.risk_level == "high" for item in values),

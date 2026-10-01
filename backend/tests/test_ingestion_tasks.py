@@ -1,4 +1,4 @@
-﻿from types import SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -7,8 +7,25 @@ from app.tasks import ingestion_tasks
 
 
 class FakeSession:
+    def add(self, *args, **kwargs): pass
+    async def commit(self): pass
+    async def refresh(self, *args, **kwargs): pass
+    async def execute(self, *args, **kwargs): return AsyncMock(scalars=lambda: AsyncMock(all=lambda: []))()
+    def add(self, *args, **kwargs):
+        pass
+
+    async def commit(self):
+        pass
+        
+    async def refresh(self, *args, **kwargs):
+        pass
+
+    async def execute(self, *args, **kwargs):
+        from unittest.mock import AsyncMock
+        return AsyncMock(scalars=lambda: AsyncMock(all=lambda: []))()
+
     async def __aenter__(self):
-        return object()
+        return self
 
     async def __aexit__(
         self,

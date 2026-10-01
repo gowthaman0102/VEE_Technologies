@@ -8,6 +8,7 @@ import {
   Sidebar,
 } from "@/components/sidebar";
 import { AppToaster } from "@/components/ui/toast";
+import { LiveDataProvider } from "@/components/live-data-provider";
 
 import "./globals.css";
 
@@ -36,17 +37,19 @@ export default function RootLayout({
       className={nunitoSans.variable}
     >
       <body className="min-h-screen bg-canvas font-sans text-body antialiased">
-          <div className="flex min-h-screen">
-            <Sidebar />
+          <LiveDataProvider>
+            <div className="flex min-h-screen">
+              <Sidebar />
 
-            <div className="flex min-w-0 flex-1 flex-col">
-              <DashboardHeader />
-              <main className="flex-1">
-                {children}
-              </main>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <DashboardHeader />
+                <main className="flex-1">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
-          <AppToaster />
+            <AppToaster />
+          </LiveDataProvider>
       </body>
     </html>
   );

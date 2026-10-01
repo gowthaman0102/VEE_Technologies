@@ -8,8 +8,8 @@ export const navigation: NavigationItem[] = [
   { label: "Intelligence", href: "/intelligence", icon: Newspaper },
   { label: "Risk Analytics", href: "/risk", icon: ShieldAlert },
   { label: "Analytics", href: "/analytics", icon: TrendingUp },
-  { label: "Companies", href: "/companies", icon: Building2 },
   { label: "Search", href: "/search", icon: Search },
   { label: "Reports", href: "/reports", icon: FileText },
+  { label: "Companies", href: "/companies", icon: Building2 },
   { label: "Article Settings", href: "/watchlist", icon: Settings2 },
 ];

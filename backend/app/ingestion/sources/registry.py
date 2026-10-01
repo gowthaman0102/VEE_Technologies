@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import quote_plus
 
@@ -124,9 +124,8 @@ def get_sources_for_config(
     query_terms = [f'"{alias}"' for alias in config.aliases if alias.strip()]
     topic_terms = [topic.strip() for topic in config.monitoring_topics if topic.strip()]
     query = " OR ".join(query_terms)
-    if topic_terms:
-        query = f"({query}) AND ({' OR '.join(topic_terms)})"
-
+    # Removing the strict AND topic_terms requirement here to ensure we don't exclude general company news
+    # Topics are used in triage, not for restrictive source polling.
     if source_config.google_news_enabled and query:
         encoded_query = quote_plus(query)
         sources.append(

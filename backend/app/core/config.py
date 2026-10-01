@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     alert_delivery_max_retries: int = 3
     slack_webhook_url: str | None = None
 
+    live_ingestion_interval_seconds: int = 60
+
     report_email_smtp_host: str | None = None
     report_email_smtp_port: int = 587
     report_email_smtp_username: str | None = None
